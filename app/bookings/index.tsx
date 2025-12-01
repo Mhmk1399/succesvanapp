@@ -7,7 +7,7 @@ export default function BookingsList() {
         color: '#fff',
         fontSize: 24,
         fontWeight: 'bold',
-      }}>رزروهای من</Text>
+      }}>My Bookings</Text>
     </View>
   );
 }

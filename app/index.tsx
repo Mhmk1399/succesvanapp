@@ -1,26 +1,30 @@
 // app/index.tsx
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, SafeAreaView } from "react-native";
 import { Link } from "expo-router";
+import ReservationHero from "@/components/global/ReservationHero";
 
 export default function HomeScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Success Van Hire</Text>
-      <Text style={styles.subtitle}>رزرو آنلاین ون در چند ثانیه</Text>
+      {/* <Text style={styles.title}>Success Van Hire</Text>
+      <Text style={styles.subtitle}>Book your van online in seconds</Text>
 
       <View style={styles.buttons}>
-        <Link href="/vans/index" asChild>
+        <Link href="/vans" asChild>
           <Pressable style={styles.primaryButton}>
-            <Text style={styles.buttonText}>مشاهده ونها</Text>
+            <Text style={styles.buttonText}>View Vans</Text>
           </Pressable>
         </Link>
 
-        <Link href="/bookings/index" asChild>
+        <Link href="/bookings" asChild>
           <Pressable style={styles.secondaryButton}>
-            <Text style={styles.buttonText}>رزروهای من</Text>
+            <Text style={styles.buttonText}>My Bookings</Text>
           </Pressable>
         </Link>
-      </View>
+      </View> */}
+      <SafeAreaView style={styles.container}>
+        <ReservationHero />
+      </SafeAreaView>
     </View>
   );
 }
@@ -28,9 +32,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: "center",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#000",
   },
   title: {
     fontSize: 28,
