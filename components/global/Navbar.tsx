@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.82;
 
-type AppRoute = "/" | "/vans" | "/bookings";
+type AppRoute = "/" | "/vans" | "/dashboard";
 
 interface MenuItem {
   label: string;
@@ -50,7 +50,7 @@ const MENU_ITEMS: MenuItem[] = [
     label: "My Bookings",
     icon: "calendar-outline",
     activeIcon: "calendar",
-    route: "/bookings",
+    route: "/dashboard",
     description: "View reservations",
   },
 ];
@@ -211,7 +211,7 @@ export default function Navbar() {
     ]).start();
 
     closeMenu();
-    setTimeout(() => router.push(route), 200);
+    setTimeout(() => router.push(route as any), 200);
   };
 
   const menuButtonRotation = menuButtonRotate.interpolate({
@@ -423,7 +423,7 @@ export default function Navbar() {
 
               {/* CTA Button */}
               <Pressable
-                onPress={() => navigateTo("/bookings")}
+                onPress={() => navigateTo("/dashboard")}
                 onPressIn={() =>
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
                 }

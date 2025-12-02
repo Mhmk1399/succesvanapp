@@ -8,6 +8,7 @@ import {
   Dimensions,
   Animated,
   Platform,
+  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -53,20 +54,13 @@ export default function ReservationHero() {
   return (
     <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={[
-        styles.scrollContent,
-        { paddingTop: insets.top },
-      ]}
+      contentContainerStyle={[styles.scrollContent]}
       showsVerticalScrollIndicator={false}
     >
       <LinearGradient
         colors={["#0a0f1e", "#0f172b", "#1e293b"]}
         style={styles.heroContainer}
       >
-        {/* Decorative Elements */}
-        <View style={styles.decorativeCircle1} />
-        <View style={styles.decorativeCircle2} />
-
         {/* Content Container */}
         <View style={styles.heroContent}>
           {/* Title Section */}
@@ -79,14 +73,13 @@ export default function ReservationHero() {
               },
             ]}
           >
-            {/* Logo/Icon */}
+            {/* Logo */}
             <View style={styles.logoContainer}>
-              <LinearGradient
-                colors={[ACCENT, "#ff8c00"]}
-                style={styles.logoGradient}
-              >
-                <Ionicons name="car-sport" size={32} color="#fff" />
-              </LinearGradient>
+              <Image
+                source={require("@/assets/images/logo.png")}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
 
             {/* Main Title */}
@@ -100,7 +93,6 @@ export default function ReservationHero() {
             </View>
 
             {/* Subtitle */}
-            <Text style={styles.subTitle}>VEHICLE RESERVATION</Text>
 
             {/* Description */}
             <Text style={styles.description}>
@@ -113,19 +105,19 @@ export default function ReservationHero() {
             <View style={styles.features}>
               <View style={styles.feature}>
                 <View style={styles.featureIcon}>
-                  <Ionicons name="checkmark-circle" size={18} color={ACCENT} />
+                  <Ionicons name="checkmark-circle" size={12} color={ACCENT} />
                 </View>
                 <Text style={styles.featureText}>24/7 Available</Text>
               </View>
               <View style={styles.feature}>
                 <View style={styles.featureIcon}>
-                  <Ionicons name="shield-checkmark" size={18} color={ACCENT} />
+                  <Ionicons name="shield-checkmark" size={12} color={ACCENT} />
                 </View>
                 <Text style={styles.featureText}>Fully Insured</Text>
               </View>
               <View style={styles.feature}>
                 <View style={styles.featureIcon}>
-                  <Ionicons name="flash" size={18} color={ACCENT} />
+                  <Ionicons name="flash" size={12} color={ACCENT} />
                 </View>
                 <Text style={styles.featureText}>Instant Booking</Text>
               </View>
@@ -183,8 +175,8 @@ const styles = StyleSheet.create({
   },
   heroContainer: {
     minHeight: height - 100,
-    paddingVertical: 48,
     position: "relative",
+    marginTop: 24,
   },
 
   // Decorative Elements
@@ -222,29 +214,15 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   logoContainer: {
-    marginBottom: 8,
+    marginBottom: 2,
   },
-  logoGradient: {
-    width: 70,
+  logoImage: {
+    width: 120,
     height: 70,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
   },
   mainTitle: {
-    fontSize: 36,
-    fontWeight: "900",
+    fontSize: 32,
+    fontWeight: "700",
     color: "#ffffff",
     textAlign: "center",
     letterSpacing: 0.5,
@@ -253,7 +231,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginVertical: 8,
+    marginVertical: 2,
   },
   dividerLine: {
     width: 40,
@@ -286,31 +264,26 @@ const styles = StyleSheet.create({
   // Features
   features: {
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "center",
-    gap: 16,
+    gap: 4,
     marginTop: 12,
   },
   feature: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: "rgba(254,154,0,0.08)",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.2)",
+    paddingHorizontal: 2,
+    paddingVertical: 4,
   },
   featureIcon: {
-    width: 24,
-    height: 24,
+    width: 20,
+    height: 20,
     alignItems: "center",
     justifyContent: "center",
   },
   featureText: {
     color: "rgba(255,255,255,0.9)",
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "600",
   },
 

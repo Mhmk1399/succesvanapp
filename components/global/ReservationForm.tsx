@@ -1,5 +1,5 @@
 // components/ReservationForm.tsx
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -10,11 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Animated,
+  useColorScheme,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
 
 type ReservationFormProps = {
   isModal?: boolean;
@@ -24,22 +25,81 @@ type ReservationFormProps = {
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
 
+type PickerField =
+  | "pickupDate"
+  | "pickupTime"
+  | "returnDate"
+  | "returnTime"
+  | null;
+
 export default function ReservationForm({
   isModal,
   onClose,
 }: ReservationFormProps) {
-  const [pickupDate, setPickupDate] = useState("");
-  const [pickupTime, setPickupTime] = useState("");
-  const [returnDate, setReturnDate] = useState("");
-  const [returnTime, setReturnTime] = useState("");
+  const colorScheme = useColorScheme();
+  // تاریخ و ساعت‌ها به صورت Date | null
+  const [pickupDate, setPickupDate] = useState<Date | null>(null);
+  const [pickupTime, setPickupTime] = useState<Date | null>(null);
+  const [returnDate, setReturnDate] = useState<Date | null>(null);
+  const [returnTime, setReturnTime] = useState<Date | null>(null);
+
   const [location, setLocation] = useState("");
   const [passengers, setPassengers] = useState("");
 
-  // Focus states for input animations
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
+
+  // state مربوط به DateTimePicker
+  const [pickerField, setPickerField] = useState<PickerField>(null);
+  const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
+  const isPickerVisible = pickerField !== null;
+
+  const formatDate = (date: Date | null) => {
+    if (!date) return "DD/MM/YYYY";
+    const d = date.getDate().toString().padStart(2, "0");
+    const m = (date.getMonth() + 1).toString().padStart(2, "0");
+    const y = date.getFullYear().toString();
+    return `${d}/${m}/${y}`;
+  };
+
+  const formatTime = (date: Date | null) => {
+    if (!date) return "HH:MM";
+    const h = date.getHours().toString().padStart(2, "0");
+    const min = date.getMinutes().toString().padStart(2, "0");
+    return `${h}:${min}`;
+  };
+
+  const openPicker = async (field: PickerField, mode: "date" | "time") => {
+    await Haptics.selectionAsync();
+    setPickerField(field);
+    setPickerMode(mode);
+  };
+
+  const hidePicker = () => {
+    setPickerField(null);
+  };
+
+  const handleConfirm = (date: Date) => {
+    switch (pickerField) {
+      case "pickupDate":
+        setPickupDate(date);
+        break;
+      case "pickupTime":
+        setPickupTime(date);
+        break;
+      case "returnDate":
+        setReturnDate(date);
+        break;
+      case "returnTime":
+        setReturnTime(date);
+        break;
+    }
+    hidePicker();
+  };
 
   const handleSubmit = async () => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // اینجا می‌تونی ولیدیشن هم اضافه کنی بعداً
 
     Alert.alert(
       "✅ Reservation Submitted",
@@ -102,153 +162,203 @@ export default function ReservationForm({
     );
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.formContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Section Title */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionIconWrapper}>
-            <Ionicons name="calendar" size={20} color={ACCENT} />
-          </View>
-          <Text style={styles.sectionTitle}>Booking Details</Text>
-        </View>
+  const renderDateTimeField = (
+    label: string,
+    field: PickerField,
+    mode: "date" | "time",
+    icon: keyof typeof Ionicons.glyphMap,
+    value: Date | null
+  ) => {
+    const isActive = pickerField === field;
+    const displayValue =
+      mode === "date" ? formatDate(value) : formatTime(value);
+    const hasValue = value !== null;
 
-        {/* Pickup Date & Time */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Pickup Information</Text>
-          <View style={styles.row}>
-            <View style={styles.halfField}>
-              {renderInput(
-                "Date",
-                "DD/MM/YYYY",
-                pickupDate,
-                setPickupDate,
-                "calendar-outline",
-                "pickupDate"
-              )}
-            </View>
-            <View style={styles.halfField}>
-              {renderInput(
-                "Time",
-                "HH:MM",
-                pickupTime,
-                setPickupTime,
-                "time-outline",
-                "pickupTime"
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Return Date & Time */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Return Information</Text>
-          <View style={styles.row}>
-            <View style={styles.halfField}>
-              {renderInput(
-                "Date",
-                "DD/MM/YYYY",
-                returnDate,
-                setReturnDate,
-                "calendar-outline",
-                "returnDate"
-              )}
-            </View>
-            <View style={styles.halfField}>
-              {renderInput(
-                "Time",
-                "HH:MM",
-                returnTime,
-                setReturnTime,
-                "time-outline",
-                "returnTime"
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Location */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Location & Details</Text>
-          {renderInput(
-            "Pickup Location",
-            "e.g. NW London",
-            location,
-            setLocation,
-            "location-outline",
-            "location"
-          )}
-        </View>
-
-        {/* Passengers */}
-        <View style={styles.section}>
-          {renderInput(
-            "Number of Passengers",
-            "e.g. 3",
-            passengers,
-            setPassengers,
-            "people-outline",
-            "passengers",
-            "numeric"
-          )}
-        </View>
-
-        {/* Info Card */}
-        <View style={styles.infoCard}>
-          <Ionicons name="information-circle" size={20} color={ACCENT} />
-          <Text style={styles.infoText}>
-            All fields are required. We'll confirm your booking within 24 hours.
-          </Text>
-        </View>
-
-        {/* Buttons */}
-        <View style={styles.buttonContainer}>
-          <Pressable
-            onPress={handleSubmit}
-            onPressIn={() =>
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-            }
-            style={({ pressed }) => [
-              styles.submitButton,
-              pressed && styles.submitButtonPressed,
+    return (
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>{label}</Text>
+        <Pressable
+          onPress={() => openPicker(field, mode)}
+          style={({ pressed }) => [
+            styles.inputWrapper,
+            (pressed || isActive) && styles.inputWrapperFocused,
+          ]}
+        >
+          <Ionicons
+            name={icon}
+            size={18}
+            color={hasValue ? ACCENT : "rgba(255,255,255,0.4)"}
+            style={styles.inputIcon}
+          />
+          <Text
+            style={[
+              styles.input,
+              !hasValue && { color: "rgba(255,255,255,0.3)" },
             ]}
           >
-            <LinearGradient
-              colors={[ACCENT, "#ff8c00"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.submitGradient}
-            >
-              <Ionicons name="checkmark-circle" size={20} color={DARK} />
-              <Text style={styles.submitText}>Complete Reservation</Text>
-              <Ionicons name="arrow-forward" size={18} color={DARK} />
-            </LinearGradient>
-          </Pressable>
+            {displayValue}
+          </Text>
+          <Ionicons
+            name="chevron-down"
+            size={16}
+            color="rgba(255,255,255,0.5)"
+          />
+        </Pressable>
+      </View>
+    );
+  };
 
-          {isModal && onClose && (
+  return (
+    <>
+      {/* MODAL DATE/TIME PICKER */}
+      <DateTimePickerModal
+        isVisible={isPickerVisible}
+        mode={pickerMode}
+        onConfirm={handleConfirm}
+        onCancel={hidePicker}
+        is24Hour={true}
+        display="spinner"
+        themeVariant={colorScheme === "dark" ? "dark" : "light"}
+        accentColor={ACCENT}
+        textColor={colorScheme === "dark" ? "#fff" : DARK}
+      />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.formContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Pickup Date & Time */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Pickup Information</Text>
+            <View style={styles.row}>
+              <View style={styles.halfField}>
+                {renderDateTimeField(
+                  "Date",
+                  "pickupDate",
+                  "date",
+                  "calendar-outline",
+                  pickupDate
+                )}
+              </View>
+              <View style={styles.halfField}>
+                {renderDateTimeField(
+                  "Time",
+                  "pickupTime",
+                  "time",
+                  "time-outline",
+                  pickupTime
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Return Date & Time */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Return Information</Text>
+            <View style={styles.row}>
+              <View style={styles.halfField}>
+                {renderDateTimeField(
+                  "Date",
+                  "returnDate",
+                  "date",
+                  "calendar-outline",
+                  returnDate
+                )}
+              </View>
+              <View style={styles.halfField}>
+                {renderDateTimeField(
+                  "Time",
+                  "returnTime",
+                  "time",
+                  "time-outline",
+                  returnTime
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Location */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Location & Details</Text>
+            {renderInput(
+              "Pickup Location",
+              "e.g. NW London",
+              location,
+              setLocation,
+              "location-outline",
+              "location"
+            )}
+          </View>
+
+          {/* Passengers */}
+          <View style={styles.section}>
+            {renderInput(
+              "Number of Passengers",
+              "e.g. 3",
+              passengers,
+              setPassengers,
+              "people-outline",
+              "passengers",
+              "numeric"
+            )}
+          </View>
+
+          {/* Info Card */}
+          <View style={styles.infoCard}>
+            <Ionicons name="information-circle" size={20} color={ACCENT} />
+            <Text style={styles.infoText}>
+              All fields are required. We'll confirm your booking within 24
+              hours.
+            </Text>
+          </View>
+
+          {/* Buttons */}
+          <View style={styles.buttonContainer}>
             <Pressable
-              onPress={onClose}
+              onPress={handleSubmit}
               onPressIn={() =>
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
               }
               style={({ pressed }) => [
-                styles.cancelButton,
-                pressed && styles.cancelButtonPressed,
+                styles.submitButton,
+                pressed && styles.submitButtonPressed,
               ]}
             >
-              <Text style={styles.cancelText}>Cancel</Text>
+              <LinearGradient
+                colors={[ACCENT, "#ff8c00"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.submitGradient}
+              >
+                <Ionicons name="checkmark-circle" size={20} color={DARK} />
+                <Text style={styles.submitText}>Complete Reservation</Text>
+                <Ionicons name="arrow-forward" size={18} color={DARK} />
+              </LinearGradient>
             </Pressable>
-          )}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+            {isModal && onClose && (
+              <Pressable
+                onPress={onClose}
+                onPressIn={() =>
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                }
+                style={({ pressed }) => [
+                  styles.cancelButton,
+                  pressed && styles.cancelButtonPressed,
+                ]}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 
@@ -296,8 +406,8 @@ const styles = StyleSheet.create({
 
   // Row Layout
   row: {
-    flexDirection: "row",
-    gap: 16,
+    flexDirection: "column",
+    gap: 4,
   },
   halfField: {
     flex: 1,
@@ -323,7 +433,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 4,
     gap: 10,
-   },
+  },
   inputWrapperFocused: {
     backgroundColor: "rgba(254,154,0,0.08)",
     borderColor: ACCENT,
@@ -335,6 +445,7 @@ const styles = StyleSheet.create({
   },
   inputIcon: {
     marginLeft: 2,
+    marginRight: 4,
   },
   input: {
     flex: 1,

@@ -1,30 +1,35 @@
-import { View } from "react-native";
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
 import { Stack } from "expo-router";
-import "react-native-reanimated";
-
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import Navbar from "@/components/global/Navbar";
+import { useEffect } from "react";
+import * as Notifications from "expo-notifications";
 import DynamicIsland from "@/components/global/DynamicIsland";
 
+// Configure notification behavior
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+    
+  }),
+});
+
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(() => {
+    // Request notification permissions on app start
+    (async () => {
+      await Notifications.requestPermissionsAsync();
+    })();
+  }, []);
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <View style={{ flex: 1 }}>
-        <Navbar />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="vans/index" />
-          <Stack.Screen name="bookings/index" />
-        </Stack>
-        <DynamicIsland />
-      </View>
-    </ThemeProvider>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="vans/index" />
+        <Stack.Screen name="dashboard/index" />
+      </Stack>
+      <DynamicIsland />
+    </>
   );
 }

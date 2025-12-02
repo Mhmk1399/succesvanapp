@@ -1,9 +1,46 @@
-import { View, Text } from 'react-native';
+import React, { useState } from "react";
+import { View, StyleSheet } from "react-native";
+import VanList, { Van } from "@/components/global/vanlist";
+import { mockVans } from "@/data/mockVans";
+ import BookingModal from "@/components/global/BookingModal";
 
-export default function VansList() {
+export default function VansScreen() {
+  const [selectedVan, setSelectedVan] = useState<Van | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [bookingModalVisible, setBookingModalVisible] = useState(false);
+  const [bookingVan, setBookingVan] = useState<Van | null>(null);
+
+  const handleSelectVan = (van: Van) => {
+    setSelectedVan(van);
+    setDetailModalVisible(true);
+  };
+
+  const handleBookVan = (van: Van) => {
+    setBookingVan(van);
+    setBookingModalVisible(true);
+  };
+
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>Vans List</Text>
+    
+    <View style={styles.screen}>
+      <VanList
+        vans={mockVans}
+        onSelectVan={handleSelectVan}
+        onBookVan={handleBookVan}
+      />
+    
+      <BookingModal
+        visible={bookingModalVisible}
+        van={bookingVan}
+        onClose={() => setBookingModalVisible(false)}
+      />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#020617",
+  },
+});

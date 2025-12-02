@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import {
   View,
-  Text,
   StyleSheet,
   Pressable,
   Platform,
@@ -13,63 +12,71 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type NavItem = {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   activeIcon: keyof typeof Ionicons.glyphMap;
-  route: "/" | "/vans" | "/bookings";
+  route: "/" | "/vans" | "/dashboard";
 };
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Home", icon: "home-outline", activeIcon: "home", route: "/" },
   {
     label: "Reserve",
-    icon: "add-circle-outline",
+    icon: "add-circle-sharp",
     activeIcon: "add-circle",
-    route: "/bookings",
+    route: "/vans",
   },
   {
     label: "Profile",
     icon: "person-outline",
     activeIcon: "person",
-    route: "/vans",
+    route: "/dashboard",
   },
 ];
 
-const ACCENT = "#fe9a00";
-const ITEM_WIDTH = 70;
+const ACCENT = "#fe9800ff";
+const ITEM_WIDTH = 50;
+const ITEM_HEIGHT = 40;
+const GAP = 6;
 
 export default function DynamicIsland() {
   const router = useRouter();
   const pathname = usePathname();
   const activeIndex = NAV_ITEMS.findIndex((item) => item.route === pathname);
 
-  // Animations - ALL using useNativeDriver: true
+  // Main animations
   const entranceAnim = useRef(new Animated.Value(0)).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
 
-  // Indicator animation
+  // Indicator animations
   const indicatorX = useRef(new Animated.Value(0)).current;
   const indicatorScale = useRef(new Animated.Value(1)).current;
+  const indicatorOpacity = useRef(new Animated.Value(1)).current;
 
   // Per-item animations
   const itemAnims = useRef(
     NAV_ITEMS.map((_, i) => ({
       scale: new Animated.Value(1),
-      iconScale: new Animated.Value(i === activeIndex ? 1.1 : 1),
+      iconScale: new Animated.Value(i === activeIndex ? 1.15 : 0.8),
+      iconRotate: new Animated.Value(0),
       iconTranslateY: new Animated.Value(0),
-      labelOpacity: new Animated.Value(i === activeIndex ? 1 : 0),
-      labelTranslateY: new Animated.Value(i === activeIndex ? 0 : 5),
+      glowOpacity: new Animated.Value(i === activeIndex ? 1 : 0),
+      glowScale: new Animated.Value(1),
       pressScale: new Animated.Value(1),
     }))
   ).current;
 
   const prevIndexRef = useRef(activeIndex);
 
-  // Calculate indicator position
+  // Calculate indicator position - centered properly
   const getIndicatorPosition = (index: number) => {
-    return index * (ITEM_WIDTH + 4);
+    const padding = 8; // Inner padding
+    return padding + index * (ITEM_WIDTH + GAP);
   };
 
   // Entrance animation
@@ -80,23 +87,8 @@ export default function DynamicIsland() {
       friction: 12,
       useNativeDriver: true,
     }).start(() => {
-      // Start floating animation
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(floatAnim, {
-            toValue: 1,
-            duration: 2000,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-          Animated.timing(floatAnim, {
-            toValue: 0,
-            duration: 2000,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
+      // Start continuous animations
+      startContinuousAnimations();
     });
 
     // Set initial indicator position
@@ -105,64 +97,164 @@ export default function DynamicIsland() {
     }
   }, []);
 
+  const startContinuousAnimations = () => {
+    // Floating animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: 1,
+          duration: 2500,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 2500,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Subtle pulse for active indicator
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.03,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Subtle glow pulse
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+
+    // Glow pulse for active item
+    if (activeIndex >= 0) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(itemAnims[activeIndex].glowScale, {
+            toValue: 1.1,
+            duration: 1200,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(itemAnims[activeIndex].glowScale, {
+            toValue: 1,
+            duration: 1200,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+  };
+
   // Handle route changes
   useEffect(() => {
     const prevIndex = prevIndexRef.current;
     prevIndexRef.current = activeIndex;
 
     if (prevIndex !== activeIndex && prevIndex >= 0 && activeIndex >= 0) {
+      const direction = activeIndex > prevIndex ? 1 : -1;
+
+      // Enhanced haptic pattern
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      // Animate indicator position
-      Animated.spring(indicatorX, {
-        toValue: getIndicatorPosition(activeIndex),
-        tension: 150,
-        friction: 15,
-        useNativeDriver: true, // ✅ Native driver
-      }).start();
+      // Indicator slide with overshoot
+      Animated.sequence([
+        // Move to position with slight overshoot
+        Animated.timing(indicatorX, {
+          toValue: getIndicatorPosition(activeIndex) + direction * 8,
+          duration: 150,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        // Settle to final position
+        Animated.spring(indicatorX, {
+          toValue: getIndicatorPosition(activeIndex),
+          tension: 200,
+          friction: 15,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
-      // Elastic scale effect for indicator
+      // Indicator squeeze effect
       Animated.sequence([
         Animated.timing(indicatorScale, {
-          toValue: 1.08,
-          duration: 100,
-          useNativeDriver: true, // ✅ Native driver
+          toValue: 1.12,
+          duration: 120,
+          useNativeDriver: true,
         }),
         Animated.spring(indicatorScale, {
           toValue: 1,
           tension: 200,
           friction: 12,
-          useNativeDriver: true, // ✅ Native driver
+          useNativeDriver: true,
         }),
       ]).start();
 
-      // Collapse previous item
+      // Brief opacity flash
+      Animated.sequence([
+        Animated.timing(indicatorOpacity, {
+          toValue: 0.7,
+          duration: 80,
+          useNativeDriver: true,
+        }),
+        Animated.timing(indicatorOpacity, {
+          toValue: 1,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Deactivate previous item
       Animated.parallel([
+        // Scale down icon
         Animated.spring(itemAnims[prevIndex].iconScale, {
           toValue: 1,
           tension: 200,
           friction: 12,
           useNativeDriver: true,
         }),
-        Animated.timing(itemAnims[prevIndex].labelOpacity, {
+        // Fade out glow
+        Animated.timing(itemAnims[prevIndex].glowOpacity, {
           toValue: 0,
-          duration: 150,
-          useNativeDriver: true,
-        }),
-        Animated.timing(itemAnims[prevIndex].labelTranslateY, {
-          toValue: 5,
-          duration: 150,
+          duration: 200,
           useNativeDriver: true,
         }),
       ]).start();
 
-      // Expand current item
+      // Activate current item
       Animated.parallel([
-        // Icon bounce
+        // Icon bounce up
         Animated.sequence([
           Animated.timing(itemAnims[activeIndex].iconTranslateY, {
-            toValue: -6,
-            duration: 120,
+            toValue: -8,
+            duration: 150,
             easing: Easing.out(Easing.ease),
             useNativeDriver: true,
           }),
@@ -173,68 +265,88 @@ export default function DynamicIsland() {
             useNativeDriver: true,
           }),
         ]),
-        // Icon scale
+        // Icon scale pop
         Animated.sequence([
           Animated.timing(itemAnims[activeIndex].iconScale, {
-            toValue: 1.25,
-            duration: 120,
+            toValue: 1.35,
+            duration: 150,
             useNativeDriver: true,
           }),
           Animated.spring(itemAnims[activeIndex].iconScale, {
-            toValue: 1.1,
+            toValue: 1.15,
             tension: 200,
             friction: 8,
             useNativeDriver: true,
           }),
         ]),
-        // Label fade in
+        // Icon wiggle
         Animated.sequence([
-          Animated.delay(80),
-          Animated.parallel([
-            Animated.timing(itemAnims[activeIndex].labelOpacity, {
-              toValue: 1,
-              duration: 200,
-              useNativeDriver: true,
-            }),
-            Animated.spring(itemAnims[activeIndex].labelTranslateY, {
-              toValue: 0,
-              tension: 200,
-              friction: 12,
-              useNativeDriver: true,
-            }),
-          ]),
+          Animated.timing(itemAnims[activeIndex].iconRotate, {
+            toValue: direction * 10,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.spring(itemAnims[activeIndex].iconRotate, {
+            toValue: 0,
+            tension: 400,
+            friction: 8,
+            useNativeDriver: true,
+          }),
         ]),
+        // Fade in glow
+        Animated.timing(itemAnims[activeIndex].glowOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
   }, [activeIndex]);
 
   const handlePressIn = useCallback((index: number) => {
     Haptics.selectionAsync();
-    Animated.spring(itemAnims[index].pressScale, {
-      toValue: 0.9,
-      tension: 400,
-      friction: 10,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.spring(itemAnims[index].pressScale, {
+        toValue: 0.85,
+        tension: 400,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+      Animated.spring(itemAnims[index].scale, {
+        toValue: 0.9,
+        tension: 400,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   const handlePressOut = useCallback((index: number) => {
-    Animated.spring(itemAnims[index].pressScale, {
-      toValue: 1,
-      tension: 200,
-      friction: 10,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.spring(itemAnims[index].pressScale, {
+        toValue: 1,
+        tension: 200,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+      Animated.spring(itemAnims[index].scale, {
+        toValue: 1,
+        tension: 200,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   const handlePress = useCallback(
-    (route: string, index: number) => {
+    async (route: string, index: number) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+      // Quick tap animation
       Animated.sequence([
         Animated.timing(itemAnims[index].scale, {
-          toValue: 0.85,
-          duration: 50,
+          toValue: 0.8,
+          duration: 60,
           useNativeDriver: true,
         }),
         Animated.spring(itemAnims[index].scale, {
@@ -245,6 +357,15 @@ export default function DynamicIsland() {
         }),
       ]).start();
 
+      // Check auth for dashboard route
+      if (route === "/dashboard") {
+        const token = await AsyncStorage.getItem("authToken");
+        if (!token) {
+          router.push("/register" as any);
+          return;
+        }
+      }
+
       router.push(route as any);
     },
     [router]
@@ -252,6 +373,11 @@ export default function DynamicIsland() {
 
   const renderNavItem = (item: NavItem, index: number) => {
     const isActive = activeIndex === index;
+
+    const iconRotation = itemAnims[index].iconRotate.interpolate({
+      inputRange: [-10, 0, 10],
+      outputRange: ["-10deg", "0deg", "10deg"],
+    });
 
     return (
       <Animated.View
@@ -272,57 +398,36 @@ export default function DynamicIsland() {
           accessibilityLabel={item.label}
           accessibilityState={{ selected: isActive }}
         >
+          {/* Icon glow effect */}
+
+          {/* Icon */}
           <Animated.View
             style={[
-              styles.itemContent,
+              styles.iconContainer,
               {
-                transform: [{ scale: itemAnims[index].pressScale }],
+                transform: [
+                  {
+                    scale: Animated.multiply(
+                      itemAnims[index].iconScale,
+                      itemAnims[index].pressScale
+                    ),
+                  },
+                  { translateY: itemAnims[index].iconTranslateY },
+                  { rotate: iconRotation },
+                ],
               },
             ]}
           >
-            {/* Icon */}
-            <Animated.View
-              style={[
-                styles.iconContainer,
-                {
-                  transform: [
-                    { scale: itemAnims[index].iconScale },
-                    { translateY: itemAnims[index].iconTranslateY },
-                  ],
-                },
-              ]}
-            >
-              <Ionicons
-                name={isActive ? item.activeIcon : item.icon}
-                size={22}
-                color={isActive ? ACCENT : "rgba(255,255,255,0.5)"}
-              />
-            </Animated.View>
-
-            {/* Label (only visible when active) */}
-            <Animated.View
-              style={[
-                styles.labelContainer,
-                {
-                  opacity: itemAnims[index].labelOpacity,
-                  transform: [{ translateY: itemAnims[index].labelTranslateY }],
-                },
-              ]}
-            >
-              <Text style={styles.label} numberOfLines={1}>
-                {item.label}
-              </Text>
-            </Animated.View>
+            <Ionicons
+              name={isActive ? item.activeIcon : item.icon}
+              size={isActive ? 24 : 22}
+              color={isActive ? ACCENT : "rgba(255,255,255,0.3)"}
+            />
           </Animated.View>
         </Pressable>
       </Animated.View>
     );
   };
-
-  const floatY = floatAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -3],
-  });
 
   return (
     <Animated.View
@@ -330,68 +435,37 @@ export default function DynamicIsland() {
         styles.container,
         {
           opacity: entranceAnim,
-          transform: [
-            {
-              translateY: Animated.add(
-                entranceAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [60, 0],
-                }),
-                floatY
-              ),
-            },
-          ],
         },
       ]}
     >
-      {/* Ambient glow */}
-      <Animated.View
-        style={[
-          styles.ambientGlow,
-          {
-            opacity: entranceAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 0.4],
-            }),
-          },
-        ]}
-      />
-
       <View style={styles.islandWrapper}>
-        <BlurView intensity={80} tint="dark" style={styles.island}>
+        <BlurView intensity={85} tint="dark" style={styles.island}>
           {/* Glass highlight */}
           <LinearGradient
             colors={[
-              "rgba(255,255,255,0.12)",
-              "rgba(255,255,255,0.04)",
+              "rgba(255,255,255,0.15)",
+              "rgba(255,255,255,0.05)",
               "transparent",
             ]}
             start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 0.6 }}
+            end={{ x: 0.5, y: 0.7 }}
             style={styles.glassHighlight}
           />
 
           <View style={styles.inner}>
-            {/* Active indicator background - Fixed width, uses scaleX for effect */}
+            {/* Active indicator background */}
             <Animated.View
               style={[
                 styles.indicator,
                 {
+                  opacity: indicatorOpacity,
                   transform: [
                     { translateX: indicatorX },
-                    { scaleX: indicatorScale },
+                    { scale: Animated.multiply(indicatorScale, pulseAnim) },
                   ],
                 },
               ]}
-            >
-              <LinearGradient
-                colors={["rgba(254,154,0,0.25)", "rgba(254,154,0,0.1)"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.indicatorGradient}
-              />
-              <View style={styles.indicatorBorder} />
-            </Animated.View>
+            ></Animated.View>
 
             {/* Nav Items */}
             {NAV_ITEMS.map((item, index) => renderNavItem(item, index))}
@@ -414,30 +488,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 100,
   },
-  ambientGlow: {
-    position: "absolute",
-    width: 200,
-    height: 50,
-    backgroundColor: ACCENT,
-    borderRadius: 25,
-    top: 10,
+
+  islandWrapper: {
+    borderRadius: 30,
+    borderWidth: 1.5,
+    borderColor: "rgba(254,154,0,0.3)",
     ...Platform.select({
       ios: {
         shadowColor: ACCENT,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.6,
-        shadowRadius: 25,
-      },
-    }),
-  },
-  islandWrapper: {
-    borderRadius: 28,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
+        shadowRadius: 15,
       },
       android: {
         elevation: 15,
@@ -445,7 +506,7 @@ const styles = StyleSheet.create({
     }),
   },
   island: {
-    borderRadius: 26,
+    borderRadius: 28,
     overflow: "hidden",
   },
   glassHighlight: {
@@ -453,30 +514,29 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 30,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    height: 35,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   innerBorder: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 26,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.1)",
     pointerEvents: "none",
   },
   inner: {
     flexDirection: "row",
-    paddingHorizontal: 6,
-    paddingVertical: 8,
-    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    gap: GAP,
     position: "relative",
     alignItems: "center",
   },
   indicator: {
     position: "absolute",
-    left: 6,
     width: ITEM_WIDTH,
-    height: 52,
+    height: ITEM_HEIGHT,
     borderRadius: 24,
     overflow: "hidden",
   },
@@ -487,14 +547,14 @@ const styles = StyleSheet.create({
   indicatorBorder: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.3)",
+    borderWidth: 1.5,
   },
   itemWrapper: {
     width: ITEM_WIDTH,
-    height: 52,
+    height: ITEM_HEIGHT,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 10,
   },
   item: {
     flex: 1,
@@ -502,23 +562,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  itemContent: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 2,
+  iconGlow: {
+    position: "absolute",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: ACCENT,
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 12,
+      },
+    }),
   },
   iconContainer: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  labelContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  label: {
-    color: ACCENT,
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.3,
   },
 });
