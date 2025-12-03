@@ -91,7 +91,7 @@ export default function AuthScreen() {
       // Save mock token
       await AsyncStorage.setItem("authToken", "mock-token-" + Date.now());
       await AsyncStorage.setItem("userName", name || "User");
-      
+
       setIsSubmitting(false);
       Alert.alert(
         "✅ Success",
@@ -111,10 +111,7 @@ export default function AuthScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <LinearGradient
-        colors={["#020617", "#0f172a", "#1e293b"]}
-        style={StyleSheet.absoluteFill}
-      />
+    
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -130,7 +127,12 @@ export default function AuthScreen() {
             onPress={() => mode === "signup" && toggleMode()}
             style={[styles.modeBtn, mode === "login" && styles.modeBtnActive]}
           >
-            <Text style={[styles.modeText, mode === "login" && styles.modeTextActive]}>
+            <Text
+              style={[
+                styles.modeText,
+                mode === "login" && styles.modeTextActive,
+              ]}
+            >
               Login
             </Text>
           </Pressable>
@@ -138,7 +140,12 @@ export default function AuthScreen() {
             onPress={() => mode === "login" && toggleMode()}
             style={[styles.modeBtn, mode === "signup" && styles.modeBtnActive]}
           >
-            <Text style={[styles.modeText, mode === "signup" && styles.modeTextActive]}>
+            <Text
+              style={[
+                styles.modeText,
+                mode === "signup" && styles.modeTextActive,
+              ]}
+            >
               Sign Up
             </Text>
           </Pressable>
@@ -150,8 +157,18 @@ export default function AuthScreen() {
               <View style={styles.row}>
                 <View style={styles.half}>
                   <Text style={styles.label}>First Name</Text>
-                  <View style={[styles.inputWrapper, focusedInput === "name" && styles.inputFocused, errors.name && styles.inputError]}>
-                    <Ionicons name="person-outline" size={18} color={focusedInput === "name" ? ACCENT : "#9ca3af"} />
+                  <View
+                    style={[
+                      styles.inputWrapper,
+                      focusedInput === "name" && styles.inputFocused,
+                      errors.name && styles.inputError,
+                    ]}
+                  >
+                    <Ionicons
+                      name="person-outline"
+                      size={18}
+                      color={focusedInput === "name" ? ACCENT : "#9ca3af"}
+                    />
                     <TextInput
                       placeholder="John"
                       placeholderTextColor="#6b7280"
@@ -168,20 +185,33 @@ export default function AuthScreen() {
                       style={styles.input}
                     />
                   </View>
-                  {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+                  {errors.name && (
+                    <Text style={styles.errorText}>{errors.name}</Text>
+                  )}
                 </View>
 
                 <View style={styles.half}>
                   <Text style={styles.label}>Last Name</Text>
-                  <View style={[styles.inputWrapper, focusedInput === "lastName" && styles.inputFocused, errors.lastName && styles.inputError]}>
-                    <Ionicons name="person-outline" size={18} color={focusedInput === "lastName" ? ACCENT : "#9ca3af"} />
+                  <View
+                    style={[
+                      styles.inputWrapper,
+                      focusedInput === "lastName" && styles.inputFocused,
+                      errors.lastName && styles.inputError,
+                    ]}
+                  >
+                    <Ionicons
+                      name="person-outline"
+                      size={18}
+                      color={focusedInput === "lastName" ? ACCENT : "#9ca3af"}
+                    />
                     <TextInput
                       placeholder="Doe"
                       placeholderTextColor="#6b7280"
                       value={lastName}
                       onChangeText={(text) => {
                         setLastName(text);
-                        if (errors.lastName) setErrors({ ...errors, lastName: "" });
+                        if (errors.lastName)
+                          setErrors({ ...errors, lastName: "" });
                       }}
                       onFocus={() => {
                         Haptics.selectionAsync();
@@ -191,15 +221,27 @@ export default function AuthScreen() {
                       style={styles.input}
                     />
                   </View>
-                  {errors.lastName && <Text style={styles.errorText}>{errors.lastName}</Text>}
+                  {errors.lastName && (
+                    <Text style={styles.errorText}>{errors.lastName}</Text>
+                  )}
                 </View>
               </View>
             )}
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
-              <View style={[styles.inputWrapper, focusedInput === "email" && styles.inputFocused, errors.email && styles.inputError]}>
-                <Ionicons name="mail-outline" size={18} color={focusedInput === "email" ? ACCENT : "#9ca3af"} />
+              <View
+                style={[
+                  styles.inputWrapper,
+                  focusedInput === "email" && styles.inputFocused,
+                  errors.email && styles.inputError,
+                ]}
+              >
+                <Ionicons
+                  name="mail-outline"
+                  size={18}
+                  color={focusedInput === "email" ? ACCENT : "#9ca3af"}
+                />
                 <TextInput
                   placeholder="your@email.com"
                   placeholderTextColor="#6b7280"
@@ -218,15 +260,27 @@ export default function AuthScreen() {
                   autoCapitalize="none"
                 />
               </View>
-              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+              {errors.email && (
+                <Text style={styles.errorText}>{errors.email}</Text>
+              )}
             </View>
 
             {mode === "signup" && (
               <>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Phone</Text>
-                  <View style={[styles.inputWrapper, focusedInput === "phone" && styles.inputFocused, errors.phone && styles.inputError]}>
-                    <Ionicons name="call-outline" size={18} color={focusedInput === "phone" ? ACCENT : "#9ca3af"} />
+                  <View
+                    style={[
+                      styles.inputWrapper,
+                      focusedInput === "phone" && styles.inputFocused,
+                      errors.phone && styles.inputError,
+                    ]}
+                  >
+                    <Ionicons
+                      name="call-outline"
+                      size={18}
+                      color={focusedInput === "phone" ? ACCENT : "#9ca3af"}
+                    />
                     <TextInput
                       placeholder="+44 7700 900000"
                       placeholderTextColor="#6b7280"
@@ -244,25 +298,51 @@ export default function AuthScreen() {
                       keyboardType="phone-pad"
                     />
                   </View>
-                  {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+                  {errors.phone && (
+                    <Text style={styles.errorText}>{errors.phone}</Text>
+                  )}
                 </View>
 
                 <View style={styles.licenceSection}>
-                  <Text style={styles.sectionLabel}>Driving Licence (Optional)</Text>
+                  <Text style={styles.sectionLabel}>
+                    Driving Licence (Optional)
+                  </Text>
                   <View style={styles.licenceRow}>
-                    <Pressable onPress={() => pickImage("front")} style={styles.licenceBtn}>
+                    <Pressable
+                      onPress={() => pickImage("front")}
+                      style={styles.licenceBtn}
+                    >
                       {licenceFront ? (
-                        <Ionicons name="checkmark-circle" size={24} color={ACCENT} />
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={24}
+                          color={ACCENT}
+                        />
                       ) : (
-                        <Ionicons name="camera-outline" size={24} color="#9ca3af" />
+                        <Ionicons
+                          name="camera-outline"
+                          size={24}
+                          color="#9ca3af"
+                        />
                       )}
                       <Text style={styles.licenceBtnText}>Front</Text>
                     </Pressable>
-                    <Pressable onPress={() => pickImage("back")} style={styles.licenceBtn}>
+                    <Pressable
+                      onPress={() => pickImage("back")}
+                      style={styles.licenceBtn}
+                    >
                       {licenceBack ? (
-                        <Ionicons name="checkmark-circle" size={24} color={ACCENT} />
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={24}
+                          color={ACCENT}
+                        />
                       ) : (
-                        <Ionicons name="camera-outline" size={24} color="#9ca3af" />
+                        <Ionicons
+                          name="camera-outline"
+                          size={24}
+                          color="#9ca3af"
+                        />
                       )}
                       <Text style={styles.licenceBtnText}>Back</Text>
                     </Pressable>
@@ -280,12 +360,19 @@ export default function AuthScreen() {
                 isSubmitting && styles.submitBtnDisabled,
               ]}
             >
-              <LinearGradient colors={[ACCENT, "#ff8c00"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.submitGradient}>
+              <LinearGradient
+                colors={[ACCENT, "#ff8c00"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.submitGradient}
+              >
                 {isSubmitting ? (
                   <ActivityIndicator color={DARK} size="small" />
                 ) : (
                   <>
-                    <Text style={styles.submitText}>{mode === "login" ? "Login" : "Create Account"}</Text>
+                    <Text style={styles.submitText}>
+                      {mode === "login" ? "Login" : "Create Account"}
+                    </Text>
                     <Ionicons name="arrow-forward" size={20} color={DARK} />
                   </>
                 )}
@@ -304,30 +391,92 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", marginBottom: 40 },
   logo: { fontSize: 32, fontWeight: "900", color: "#fff", marginBottom: 8 },
   tagline: { fontSize: 14, color: ACCENT, fontWeight: "600" },
-  modeToggle: { flexDirection: "row", backgroundColor: "rgba(15,23,42,0.6)", borderRadius: 16, padding: 4, marginBottom: 24 },
-  modeBtn: { flex: 1, paddingVertical: 12, alignItems: "center", borderRadius: 12 },
+  modeToggle: {
+    flexDirection: "row",
+    backgroundColor: "rgba(15,23,42,0.6)",
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 24,
+  },
+  modeBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: 12,
+  },
   modeBtnActive: { backgroundColor: ACCENT },
   modeText: { fontSize: 15, fontWeight: "600", color: "#9ca3af" },
   modeTextActive: { color: DARK },
-  formCard: { borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "rgba(254,154,0,0.2)" },
+  formCard: {
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.2)",
+  },
   formContent: { padding: 24, backgroundColor: "rgba(15,23,42,0.4)" },
   inputGroup: { marginBottom: 20 },
   row: { flexDirection: "row", gap: 12, marginBottom: 20 },
   half: { flex: 1 },
   label: { fontSize: 14, fontWeight: "600", color: "#e5e7eb", marginBottom: 8 },
-  inputWrapper: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.05)", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.1)", borderRadius: 14, paddingHorizontal: 16, gap: 12, minHeight: 52 },
-  inputFocused: { backgroundColor: "rgba(254,154,0,0.08)", borderColor: ACCENT },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+    minHeight: 52,
+  },
+  inputFocused: {
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderColor: ACCENT,
+  },
   inputError: { borderColor: "#ef4444" },
-  input: { flex: 1, color: "#f9fafb", fontSize: 16, paddingVertical: 16, fontWeight: "500" },
-  errorText: { color: "#ef4444", fontSize: 13, marginTop: 6, marginLeft: 4, fontWeight: "500" },
-  sectionLabel: { fontSize: 14, fontWeight: "700", color: "#9ca3af", marginBottom: 12 },
+  input: {
+    flex: 1,
+    color: "#f9fafb",
+    fontSize: 16,
+    paddingVertical: 16,
+    fontWeight: "500",
+  },
+  errorText: {
+    color: "#ef4444",
+    fontSize: 13,
+    marginTop: 6,
+    marginLeft: 4,
+    fontWeight: "500",
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#9ca3af",
+    marginBottom: 12,
+  },
   licenceSection: { marginBottom: 20 },
   licenceRow: { flexDirection: "row", gap: 12 },
-  licenceBtn: { flex: 1, backgroundColor: "rgba(255,255,255,0.05)", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.1)", borderRadius: 14, paddingVertical: 20, alignItems: "center", gap: 8 },
+  licenceBtn: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
+    paddingVertical: 20,
+    alignItems: "center",
+    gap: 8,
+  },
   licenceBtnText: { color: "#e5e7eb", fontSize: 14, fontWeight: "600" },
   submitBtn: { borderRadius: 16, overflow: "hidden", marginTop: 8 },
   submitBtnPressed: { transform: [{ scale: 0.98 }] },
   submitBtnDisabled: { opacity: 0.6 },
-  submitGradient: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 20, minHeight: 56 },
+  submitGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 20,
+    minHeight: 56,
+  },
   submitText: { fontSize: 16, fontWeight: "800", color: DARK },
 });

@@ -1,5 +1,5 @@
 // components/ReservationForm.tsx
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,19 +11,20 @@ import {
   Platform,
   ScrollView,
   useColorScheme,
+  Modal,
+  Animated,
+  Dimensions,
+  PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-
-type ReservationFormProps = {
-  isModal?: boolean;
-  onClose?: () => void;
-};
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
+const { height } = Dimensions.get("window");
 
 type PickerField =
   | "pickupDate"
@@ -32,23 +33,193 @@ type PickerField =
   | "returnTime"
   | null;
 
-export default function ReservationForm({
-  isModal,
-  onClose,
-}: ReservationFormProps) {
+type ReservationFormProps = {
+  /** اگه خواستی بعداً این دکمه رو توی مودال دیگه استفاده کنی */
+  onCompleted?: () => void;
+};
+
+export default function ReservationForm({ onCompleted }: ReservationFormProps) {
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const translateY = useRef(new Animated.Value(height)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const shineAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(shineAnim, {
+        toValue: 1,
+        duration: 2500,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
+  const shineTranslate = shineAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-300, 600],
+  });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return gestureState.dy > 5;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          translateY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 50) {
+          closeSheet();
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            tension: 50,
+            friction: 9,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  const openSheet = async () => {
+    await Haptics.selectionAsync();
+    setSheetVisible(true);
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        tension: 55,
+        friction: 9,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeSheet = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: height,
+        duration: 260,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setSheetVisible(false);
+    });
+  };
+
+  return (
+    <>
+      {/* MAIN CTA BUTTON */}
+      <Pressable
+        onPress={openSheet}
+        style={({ pressed }) => [
+          styles.mainButton,
+          pressed && styles.mainButtonPressed,
+        ]}
+      >
+        <LinearGradient
+          colors={[ACCENT, "#ff8c00"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.mainButtonGradient}
+        >
+          <Animated.View
+            style={[
+              styles.shineEffect,
+              { transform: [{ translateX: shineTranslate }] },
+            ]}
+          >
+            <LinearGradient
+              colors={['transparent', 'rgba(255,255,255,0.4)', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+          <View style={[styles.mainButtonLeft, { zIndex: 2 }]}>
+            <Ionicons name="flash-outline" size={22} color={DARK} />
+            <Text style={styles.mainButtonText}>Quick Reservation</Text>
+          </View>
+          <View style={[styles.mainButtonRight, { zIndex: 2 }]}>
+            <Ionicons name="calendar-outline" size={16} color={DARK} />
+            <Text style={styles.mainButtonSubText}>Under 1 minute</Text>
+          </View>
+        </LinearGradient>
+      </Pressable>
+      
+
+      {/* BOTTOM SHEET MODAL */}
+      <Modal visible={sheetVisible} transparent animationType="none">
+        {/* Backdrop */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet}>
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: "rgba(0,0,0,0.2)",
+                opacity: backdropOpacity,
+              },
+            ]}
+          />
+        </Pressable>
+
+        {/* Sheet */}
+        <Animated.View
+          style={[
+            styles.sheetContainer,
+            {
+              transform: [{ translateY }],
+            },
+          ]}
+        >
+          <BlurView intensity={80} tint="dark" style={styles.blurContainer}>
+            <View {...panResponder.panHandlers} style={styles.handleArea}>
+              <View style={styles.sheetHandle} />
+            </View>
+
+            <ReservationSheetContent
+              onClose={closeSheet}
+              onCompleted={onCompleted}
+            />
+          </BlurView>
+        </Animated.View>
+      </Modal>
+    </>
+  );
+}
+
+/* ===================== SHEET CONTENT ===================== */
+
+type SheetContentProps = {
+  onClose: () => void;
+  onCompleted?: () => void;
+};
+
+function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const colorScheme = useColorScheme();
-  // تاریخ و ساعت‌ها به صورت Date | null
+
   const [pickupDate, setPickupDate] = useState<Date | null>(null);
   const [pickupTime, setPickupTime] = useState<Date | null>(null);
   const [returnDate, setReturnDate] = useState<Date | null>(null);
   const [returnTime, setReturnTime] = useState<Date | null>(null);
-
   const [location, setLocation] = useState("");
   const [passengers, setPassengers] = useState("");
-
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
-  // state مربوط به DateTimePicker
   const [pickerField, setPickerField] = useState<PickerField>(null);
   const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
   const isPickerVisible = pickerField !== null;
@@ -74,9 +245,7 @@ export default function ReservationForm({
     setPickerMode(mode);
   };
 
-  const hidePicker = () => {
-    setPickerField(null);
-  };
+  const hidePicker = () => setPickerField(null);
 
   const handleConfirm = (date: Date) => {
     switch (pickerField) {
@@ -98,9 +267,6 @@ export default function ReservationForm({
 
   const handleSubmit = async () => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    // اینجا می‌تونی ولیدیشن هم اضافه کنی بعداً
-
     Alert.alert(
       "✅ Reservation Submitted",
       "Your reservation has been successfully submitted!",
@@ -108,7 +274,8 @@ export default function ReservationForm({
         {
           text: "OK",
           onPress: () => {
-            if (isModal && onClose) onClose();
+            onCompleted?.();
+            onClose();
           },
         },
       ]
@@ -120,12 +287,9 @@ export default function ReservationForm({
     setFocusedInput(inputName);
   };
 
-  const handleBlur = () => {
-    setFocusedInput(null);
-  };
+  const handleBlur = () => setFocusedInput(null);
 
   const renderInput = (
-    label: string,
     placeholder: string,
     value: string,
     onChangeText: (text: string) => void,
@@ -134,27 +298,28 @@ export default function ReservationForm({
     keyboardType: "default" | "numeric" = "default"
   ) => {
     const isFocused = focusedInput === inputName;
-
     return (
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>{label}</Text>
+      <View style={sheetStyles.inputGroup}>
         <View
-          style={[styles.inputWrapper, isFocused && styles.inputWrapperFocused]}
+          style={[
+            sheetStyles.inputWrapper,
+            isFocused && sheetStyles.inputWrapperFocused,
+          ]}
         >
           <Ionicons
             name={icon}
             size={18}
             color={isFocused ? ACCENT : "rgba(255,255,255,0.4)"}
-            style={styles.inputIcon}
+            style={sheetStyles.inputIcon}
           />
           <TextInput
             placeholder={placeholder}
-            placeholderTextColor="rgba(255,255,255,0.3)"
+            placeholderTextColor="rgba(255,255,255,0.35)"
             value={value}
             onChangeText={onChangeText}
             onFocus={() => handleFocus(inputName)}
             onBlur={handleBlur}
-            style={styles.input}
+            style={sheetStyles.input}
             keyboardType={keyboardType}
           />
         </View>
@@ -163,11 +328,11 @@ export default function ReservationForm({
   };
 
   const renderDateTimeField = (
-    label: string,
     field: PickerField,
     mode: "date" | "time",
     icon: keyof typeof Ionicons.glyphMap,
-    value: Date | null
+    value: Date | null,
+    placeholder: string
   ) => {
     const isActive = pickerField === field;
     const displayValue =
@@ -175,42 +340,35 @@ export default function ReservationForm({
     const hasValue = value !== null;
 
     return (
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>{label}</Text>
-        <Pressable
-          onPress={() => openPicker(field, mode)}
-          style={({ pressed }) => [
-            styles.inputWrapper,
-            (pressed || isActive) && styles.inputWrapperFocused,
+      <Pressable
+        onPress={() => openPicker(field, mode)}
+        style={({ pressed }) => [
+          sheetStyles.inputWrapper,
+          (pressed || isActive) && sheetStyles.inputWrapperFocused,
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={18}
+          color={hasValue ? ACCENT : "rgba(255,255,255,0.4)"}
+          style={sheetStyles.inputIcon}
+        />
+        <Text
+          style={[
+            sheetStyles.input,
+            !hasValue && { color: "rgba(255,255,255,0.35)" },
           ]}
         >
-          <Ionicons
-            name={icon}
-            size={18}
-            color={hasValue ? ACCENT : "rgba(255,255,255,0.4)"}
-            style={styles.inputIcon}
-          />
-          <Text
-            style={[
-              styles.input,
-              !hasValue && { color: "rgba(255,255,255,0.3)" },
-            ]}
-          >
-            {displayValue}
-          </Text>
-          <Ionicons
-            name="chevron-down"
-            size={16}
-            color="rgba(255,255,255,0.5)"
-          />
-        </Pressable>
-      </View>
+          {hasValue ? displayValue : placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.5)" />
+      </Pressable>
     );
   };
 
   return (
     <>
-      {/* MODAL DATE/TIME PICKER */}
+      {/* DATE / TIME PICKER MODAL */}
       <DateTimePickerModal
         isVisible={isPickerVisible}
         mode={pickerMode}
@@ -229,65 +387,78 @@ export default function ReservationForm({
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.formContainer}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={sheetStyles.container}
         >
-          {/* Pickup Date & Time */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Pickup Information</Text>
-            <View style={styles.row}>
-              <View style={styles.halfField}>
+          {/* Header */}
+          <View style={sheetStyles.headerRow}>
+            <View>
+              <Text style={sheetStyles.sheetTitle}>Quick Reservation</Text>
+              <Text style={sheetStyles.sheetSubtitle}>
+                Just a few details to get started
+              </Text>
+            </View>
+            <Pressable onPress={onClose} style={sheetStyles.closeBtn}>
+              <Ionicons name="close" size={22} color="#e5e7eb" />
+            </Pressable>
+          </View>
+
+          {/* AI VOICE BUTTON */}
+          <VoiceAIButton />
+
+          {/* PICKUP / RETURN */}
+          <View style={sheetStyles.section}>
+            <Text style={sheetStyles.sectionLabel}>Pickup</Text>
+            <View style={sheetStyles.row}>
+              <View style={sheetStyles.half}>
                 {renderDateTimeField(
-                  "Date",
                   "pickupDate",
                   "date",
                   "calendar-outline",
-                  pickupDate
+                  pickupDate,
+                  "Pickup date"
                 )}
               </View>
-              <View style={styles.halfField}>
+              <View style={sheetStyles.half}>
                 {renderDateTimeField(
-                  "Time",
                   "pickupTime",
                   "time",
                   "time-outline",
-                  pickupTime
+                  pickupTime,
+                  "Time"
                 )}
               </View>
             </View>
           </View>
 
-          {/* Return Date & Time */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Return Information</Text>
-            <View style={styles.row}>
-              <View style={styles.halfField}>
+          <View style={sheetStyles.section}>
+            <Text style={sheetStyles.sectionLabel}>Return</Text>
+            <View style={sheetStyles.row}>
+              <View style={sheetStyles.half}>
                 {renderDateTimeField(
-                  "Date",
                   "returnDate",
                   "date",
                   "calendar-outline",
-                  returnDate
+                  returnDate,
+                  "Return date"
                 )}
               </View>
-              <View style={styles.halfField}>
+              <View style={sheetStyles.half}>
                 {renderDateTimeField(
-                  "Time",
                   "returnTime",
                   "time",
                   "time-outline",
-                  returnTime
+                  returnTime,
+                  "Time"
                 )}
               </View>
             </View>
           </View>
 
-          {/* Location */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Location & Details</Text>
+          {/* LOCATION & PASSENGERS (MINIMAL) */}
+          <View style={sheetStyles.section}>
             {renderInput(
-              "Pickup Location",
-              "e.g. NW London",
+              "Pickup location (e.g. NW London)",
               location,
               setLocation,
               "location-outline",
@@ -295,11 +466,9 @@ export default function ReservationForm({
             )}
           </View>
 
-          {/* Passengers */}
-          <View style={styles.section}>
+          <View style={sheetStyles.section}>
             {renderInput(
-              "Number of Passengers",
-              "e.g. 3",
+              "Number of passengers",
               passengers,
               setPassengers,
               "people-outline",
@@ -308,53 +477,25 @@ export default function ReservationForm({
             )}
           </View>
 
-          {/* Info Card */}
-          <View style={styles.infoCard}>
-            <Ionicons name="information-circle" size={20} color={ACCENT} />
-            <Text style={styles.infoText}>
-              All fields are required. We'll confirm your booking within 24
-              hours.
-            </Text>
-          </View>
-
-          {/* Buttons */}
-          <View style={styles.buttonContainer}>
+          {/* SUBMIT */}
+          <View style={sheetStyles.buttonsRow}>
             <Pressable
               onPress={handleSubmit}
-              onPressIn={() =>
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-              }
               style={({ pressed }) => [
-                styles.submitButton,
-                pressed && styles.submitButtonPressed,
+                sheetStyles.submitButton,
+                pressed && sheetStyles.submitButtonPressed,
               ]}
             >
               <LinearGradient
                 colors={[ACCENT, "#ff8c00"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={styles.submitGradient}
+                style={sheetStyles.submitGradient}
               >
                 <Ionicons name="checkmark-circle" size={20} color={DARK} />
-                <Text style={styles.submitText}>Complete Reservation</Text>
-                <Ionicons name="arrow-forward" size={18} color={DARK} />
+                <Text style={sheetStyles.submitText}>Confirm Reservation</Text>
               </LinearGradient>
             </Pressable>
-
-            {isModal && onClose && (
-              <Pressable
-                onPress={onClose}
-                onPressIn={() =>
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                }
-                style={({ pressed }) => [
-                  styles.cancelButton,
-                  pressed && styles.cancelButtonPressed,
-                ]}
-              >
-                <Text style={styles.cancelText}>Cancel</Text>
-              </Pressable>
-            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -362,66 +503,340 @@ export default function ReservationForm({
   );
 }
 
-const styles = StyleSheet.create({
-  formContainer: {
-    padding: 24,
-    paddingBottom: 40,
-  },
+/* ===================== VOICE + AI BUTTON ===================== */
 
-  // Section Header
-  sectionHeader: {
+function VoiceAIButton() {
+  const [recording, setRecording] = useState(false);
+  const bars = [0, 1, 2, 3, 4, 5];
+  const barAnims = useRef(bars.map(() => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    if (recording) {
+      barAnims.forEach((anim, index) => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 260 + index * 60,
+              useNativeDriver: false,
+            }),
+            Animated.timing(anim, {
+              toValue: 0,
+              duration: 260 + index * 60,
+              useNativeDriver: false,
+            }),
+          ])
+        ).start();
+      });
+    } else {
+      barAnims.forEach((anim) => {
+        anim.stopAnimation(() => {
+          anim.setValue(0);
+        });
+      });
+    }
+  }, [recording]);
+
+  const toggleRecording = async () => {
+    await Haptics.impactAsync(
+      recording
+        ? Haptics.ImpactFeedbackStyle.Light
+        : Haptics.ImpactFeedbackStyle.Medium
+    );
+    setRecording((prev) => !prev);
+
+    // 🔊 اینجا می‌تونی رکورد صدا رو شروع/متوقف کنی
+    // - با expo-av: Audio.Recording
+    // - بعد بفرستی سرور/Cloud Function که هوش مصنوعی متن رو استخراج کنه
+    // - بعد متن رو مپ کنی به فیلدهای فرم
+  };
+
+  return (
+    <Pressable
+      onPress={toggleRecording}
+      style={({ pressed }) => [
+        sheetStyles.voiceButton,
+        pressed && { transform: [{ scale: 0.97 }] },
+        recording && sheetStyles.voiceButtonActive,
+      ]}
+    >
+      <View style={sheetStyles.voiceLeft}>
+        <View style={sheetStyles.voiceIconWrapper}>
+          <Ionicons
+            name={recording ? "stop-circle" : "mic-circle-outline"}
+            size={26}
+            color={DARK}
+          />
+        </View>
+        <View>
+          <Text style={sheetStyles.voiceTitle}>
+            {recording ? "Listening..." : "Fill with Voice + AI"}
+          </Text>
+          <Text style={sheetStyles.voiceSubtitle}>
+            Just tell us pickup, return & passengers
+          </Text>
+        </View>
+      </View>
+
+      {/* Waveform */}
+      <View style={sheetStyles.waveWrapper}>
+        {bars.map((_, index) => {
+          const h = barAnims[index].interpolate({
+            inputRange: [0, 1],
+            outputRange: [4, 18], // ارتفاع سینوسی‌طور
+          });
+          return (
+            <Animated.View
+              key={index}
+              style={[
+                sheetStyles.waveBar,
+                {
+                  height: h,
+                  opacity: recording ? 1 : 0.4,
+                },
+              ]}
+            />
+          );
+        })}
+      </View>
+    </Pressable>
+  );
+}
+
+/* ===================== STYLES ===================== */
+
+const styles = StyleSheet.create({
+  mainButton: {
+    marginHorizontal: 20,
+    marginVertical: 16,
+    borderRadius: 999,
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 14,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  mainButtonPressed: {
+    opacity: 0.95,
+    transform: [{ scale: 0.98 }],
+  },
+  mainButtonGradient: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 32,
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  sectionIconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(254,154,0,0.15)",
+  shineEffect: {
+    position: 'absolute',
+    top: 0,
+    left: -100,
+    width: 200,
+    height: '100%',
+    zIndex: 1,
+  },
+  mainButtonLeft: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.3)",
+    gap: 10,
   },
-  sectionTitle: {
-    color: "#fff",
-    fontSize: 20,
+  mainButtonText: {
+    color: DARK,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  mainButtonRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(15,23,42,0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  mainButtonSubText: {
+    color: DARK,
+    fontSize: 11,
     fontWeight: "700",
   },
 
-  // Sections
-  section: {
-    marginBottom: 28,
+  sheetContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: height * 0.8,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: "hidden",
+    borderColor: "rgba(254,154,0,0.2)",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
-  sectionLabel: {
-    color: "rgba(255,255,255,0.6)",
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 16,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+  blurContainer: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,0.3)",
+  },
+  handleArea: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(148,163,184,0.7)",
+  },
+});
+
+const sheetStyles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    color: "#f9fafb",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  sheetSubtitle: {
+    color: "#9ca3af",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+      },
+    }),
   },
 
-  // Row Layout
-  row: {
-    flexDirection: "column",
-    gap: 4,
+  /* Voice button */
+  voiceButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginBottom: 18,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+    }),
   },
-  halfField: {
+  voiceButtonActive: {
+    borderColor: ACCENT,
+    backgroundColor: "rgba(254,154,0,0.12)",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  voiceLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  voiceIconWrapper: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    backgroundColor: ACCENT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  voiceTitle: {
+    color: "#f9fafb",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  voiceSubtitle: {
+    color: "#9ca3af",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  waveWrapper: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 3,
+    paddingLeft: 12,
+  },
+  waveBar: {
+    width: 3,
+    borderRadius: 999,
+    backgroundColor: ACCENT,
+  },
+
+  section: {
+    marginBottom: 18,
+  },
+  sectionLabel: {
+    color: "#9ca3af",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  half: {
     flex: 1,
   },
 
-  // Input Group
   inputGroup: {
-    gap: 10,
-  },
-  label: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 14,
-    fontWeight: "600",
-    marginLeft: 4,
+    marginBottom: 12,
   },
   inputWrapper: {
     flexDirection: "row",
@@ -430,103 +845,73 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.1)",
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+    }),
   },
   inputWrapperFocused: {
-    backgroundColor: "rgba(254,154,0,0.08)",
     borderColor: ACCENT,
-    shadowColor: ACCENT,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: "rgba(254,154,0,0.08)",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+      },
+    }),
   },
   inputIcon: {
     marginLeft: 2,
-    marginRight: 4,
   },
   input: {
     flex: 1,
-    color: "#fff",
-    fontSize: 15,
-    paddingVertical: 14,
+    color: "#f9fafb",
+    fontSize: 14,
+    paddingVertical: 8,
     fontWeight: "500",
   },
 
-  // Info Card
-  infoCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    backgroundColor: "rgba(254,154,0,0.08)",
-    borderLeftWidth: 3,
-    borderLeftColor: ACCENT,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 28,
-  },
-  infoText: {
-    flex: 1,
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 13,
-    lineHeight: 20,
-  },
-
-  // Buttons
-  buttonContainer: {
-    gap: 12,
+  buttonsRow: {
     marginTop: 8,
   },
   submitButton: {
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: "hidden",
     ...Platform.select({
       ios: {
         shadowColor: ACCENT,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.4,
         shadowRadius: 12,
       },
       android: {
-        elevation: 8,
+        elevation: 6,
       },
     }),
   },
   submitButtonPressed: {
-    transform: [{ scale: 0.98 }],
     opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
   submitGradient: {
-    flexDirection: "row",
+    paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingVertical: 18,
-    paddingHorizontal: 24,
+    flexDirection: "row",
+    gap: 8,
   },
   submitText: {
     color: DARK,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-  cancelButton: {
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.15)",
-  },
-  cancelButtonPressed: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    transform: [{ scale: 0.98 }],
-  },
-  cancelText: {
-    color: "rgba(255,255,255,0.8)",
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "800",
   },
 });

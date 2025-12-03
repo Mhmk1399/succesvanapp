@@ -8,3 +8,5 @@
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }
+// #fe9a00 orange
+// #0f172b slate
