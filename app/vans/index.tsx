@@ -6,14 +6,12 @@ import BookingModal from "@/components/global/BookingModal";
 import { LinearGradient } from "expo-linear-gradient";
 
 export default function VansScreen() {
-  const [selectedVan, setSelectedVan] = useState<Van | null>(null);
-  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [, setSelectedVan] = useState<Van | null>(null);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
   const [bookingVan, setBookingVan] = useState<Van | null>(null);
 
   const handleSelectVan = (van: Van) => {
     setSelectedVan(van);
-    setDetailModalVisible(true);
   };
 
   const handleBookVan = (van: Van) => {
@@ -24,7 +22,7 @@ export default function VansScreen() {
   return (
     <View style={styles.screen}>
       <LinearGradient
-        colors={["#0f172b", "#0f172b"]}
+        colors={["#fe9a00", "#0f172b"]}
         style={StyleSheet.absoluteFill}
       />
       <VanList

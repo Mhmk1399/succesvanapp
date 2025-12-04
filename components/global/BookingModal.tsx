@@ -227,7 +227,7 @@ export default function BookingModal({
 
       const { sound } = await Audio.Sound.createAsync(
         require("@/assets/sounds/Iphone.mp3"),
-        { shouldPlay: true, volume: 1.0 },
+        { shouldPlay: true, volume: 0.7 },
         (status) => {
           if (status.isLoaded && status.didJustFinish) {
             sound.unloadAsync();
@@ -566,7 +566,7 @@ export default function BookingModal({
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.2)",
   },
   modalContainer: {
     position: "absolute",
@@ -574,15 +574,25 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: height * 0.85,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     overflow: "hidden",
-    borderWidth: 1,
     borderColor: "rgba(254,154,0,0.2)",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   blurContainer: {
     flex: 1,
-    backgroundColor: "rgba(15,23,42,0.1)",
+    backgroundColor: "rgba(2,6,23,0.6)",
     paddingTop: 12,
   },
   handleArea: {
@@ -592,8 +602,8 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: "#475569",
-    borderRadius: 2,
+    backgroundColor: "rgba(148,163,184,0.7)",
+    borderRadius: 999,
     marginBottom: 12,
   },
   vanImageCard: {
@@ -661,31 +671,41 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     marginBottom: 20,
   },
   title: {
     fontSize: 20,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#f9fafb",
   },
   closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
     alignItems: "center",
     justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+      },
+    }),
   },
   form: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
   inputGroup: {
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#e5e7eb",
     marginBottom: 8,
@@ -697,29 +717,45 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.1)",
     borderRadius: 14,
-    paddingHorizontal: 16,
-    gap: 12,
-    minHeight: 52,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+    }),
   },
   inputFocused: {
     backgroundColor: "rgba(254,154,0,0.08)",
     borderColor: ACCENT,
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+      },
+    }),
   },
   input: {
     flex: 1,
     color: "#f9fafb",
-    fontSize: 16,
-    paddingVertical: 16,
+    fontSize: 14,
+    paddingVertical: 8,
     fontWeight: "500",
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     color: "#9ca3af",
     textTransform: "uppercase",
     letterSpacing: 1,
     marginTop: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   row: {
     flexDirection: "row",
@@ -730,11 +766,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   submitBtn: {
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: "hidden",
     marginTop: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   submitBtnPressed: {
+    opacity: 0.9,
     transform: [{ scale: 0.98 }],
   },
   submitBtnDisabled: {
@@ -751,12 +799,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingVertical: 20,
-    minHeight: 56,
+    gap: 8,
+    paddingVertical: 14,
   },
   submitText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
     color: DARK,
   },

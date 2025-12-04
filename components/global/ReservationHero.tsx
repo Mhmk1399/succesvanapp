@@ -20,18 +20,22 @@ const VAN_IMAGES = [
   require("@/assets/images/van.png"),
   require("@/assets/images/van.png"),
   require("@/assets/images/van.png"),
-]; // بعداً می‌تونی اینجا ون‌های مختلف بزاری
+];
 
 export default function ReservationHero() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const titleScale = useRef(new Animated.Value(0.8)).current;
   const descFade = useRef(new Animated.Value(0)).current;
+  const badgeFade = useRef(new Animated.Value(0)).current;
+  const statsScale = useRef(new Animated.Value(0)).current;
 
-  const vanX = useRef(new Animated.Value(width)).current; // شروع ون، خارج از سمت راست
+  const vanX = useRef(new Animated.Value(width)).current;
+  const particle1 = useRef(new Animated.Value(0)).current;
+  const particle2 = useRef(new Animated.Value(0)).current;
+  const particle3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // انیمیشن ورود متن‌ها
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -61,25 +65,86 @@ export default function ReservationHero() {
       }),
     ]).start();
 
-    // انیمیشن لوپ حرکت ون: از راست میاد وسط، می‌ایسته، از چپ خارج میشه، دوباره از راست شروع می‌کنه
+    Animated.sequence([
+      Animated.delay(500),
+      Animated.timing(badgeFade, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.sequence([
+      Animated.delay(700),
+      Animated.spring(statsScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(particle1, {
+            toValue: 1,
+            duration: 3000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(particle1, {
+            toValue: 0,
+            duration: 3000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(particle2, {
+            toValue: 1,
+            duration: 4000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(particle2, {
+            toValue: 0,
+            duration: 4000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(particle3, {
+            toValue: 1,
+            duration: 3500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(particle3, {
+            toValue: 0,
+            duration: 3500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    ).start();
+
     Animated.loop(
       Animated.sequence([
-        // شروع هر دور: ون از راست بیرون صفحه
         Animated.timing(vanX, {
           toValue: width,
           duration: 0,
           useNativeDriver: true,
         }),
-        // حرکت از راست تا وسط
         Animated.timing(vanX, {
           toValue: 0,
           duration: 800,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
-        // مکث وسط صفحه
         Animated.delay(800),
-        // خروج به سمت چپ
         Animated.timing(vanX, {
           toValue: -width,
           duration: 800,
@@ -90,16 +155,69 @@ export default function ReservationHero() {
     ).start();
   }, []);
 
-  // برای سادگی، همیشه از تصویر اول استفاده می‌کنیم (بعداً می‌تونی ایندکس رو هم انیمیت کنی)
   const currentVan = VAN_IMAGES[0];
+
+  const particle1Y = particle1.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -30],
+  });
+
+  const particle2Y = particle2.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -40],
+  });
+
+  const particle3Y = particle3.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -35],
+  });
 
   return (
     <View style={styles.container}>
-      {/* بک‌گراند گرادینت خیلی لطیف */}
       <LinearGradient
         colors={["#fe9a00", "#0f172b"]}
         style={StyleSheet.absoluteFill}
       />
+
+      <Animated.View
+        style={[
+          styles.particle,
+          {
+            top: 100,
+            left: 30,
+            opacity: particle1,
+            transform: [{ translateY: particle1Y }],
+          },
+        ]}
+      >
+        <Ionicons name="star" size={12} color="rgba(254,154,0,0.4)" />
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.particle,
+          {
+            top: 150,
+            right: 40,
+            opacity: particle2,
+            transform: [{ translateY: particle2Y }],
+          },
+        ]}
+      >
+        <Ionicons name="sparkles" size={16} color="rgba(254,154,0,0.5)" />
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.particle,
+          {
+            top: 200,
+            left: width - 60,
+            opacity: particle3,
+            transform: [{ translateY: particle3Y }],
+          },
+        ]}
+      >
+        <Ionicons name="star" size={10} color="rgba(254,154,0,0.3)" />
+      </Animated.View>
 
       <Animated.View
         style={[
@@ -110,7 +228,6 @@ export default function ReservationHero() {
           },
         ]}
       >
-        {/* لوگو */}
         <View style={styles.logoContainer}>
           <Image
             source={require("@/assets/images/logo.png")}
@@ -119,7 +236,18 @@ export default function ReservationHero() {
           />
         </View>
 
-        {/* عنوان Success Van Hire */}
+        <Animated.View
+          style={[
+            styles.trustBadge,
+            {
+              opacity: badgeFade,
+            },
+          ]}
+        >
+          <Ionicons name="shield-checkmark" size={14} color={ACCENT} />
+          <Text style={styles.trustText}>Trusted by 10,000+ customers</Text>
+        </Animated.View>
+
         <Animated.Text
           style={[
             styles.title,
@@ -131,7 +259,6 @@ export default function ReservationHero() {
           Success Van Hire
         </Animated.Text>
 
-        {/* توضیحات */}
         <Animated.Text
           style={[
             styles.description,
@@ -144,7 +271,6 @@ export default function ReservationHero() {
           for moving, deliveries and business needs.
         </Animated.Text>
 
-        {/* ون وسط صفحه با انیمیشن حرکت افقی */}
         <View style={styles.vanOuter}>
           <Animated.View
             style={[
@@ -162,26 +288,26 @@ export default function ReservationHero() {
           </Animated.View>
         </View>
 
-        {/* فیچرها */}
+        <Animated.View
+          style={[
+            styles.statsRow,
+            {
+              transform: [{ scale: statsScale }],
+            },
+          ]}
+        >
+          <StatItem number="500+" label="Vans" />
+          <View style={styles.statDivider} />
+          <StatItem number="10K+" label="Happy Clients" />
+          <View style={styles.statDivider} />
+          <StatItem number="24/7" label="Support" />
+        </Animated.View>
+
         <View style={styles.featureRow}>
           <Feature icon="checkmark-circle" label="24/7 Service" />
           <Feature icon="shield-checkmark" label="Fully Insured" />
           <Feature icon="flash" label="Instant Booking" />
           <Feature icon="car-sport" label="Modern Fleet" />
-        </View>
-
-        {/* تیزر زیر هرو */}
-        <View style={styles.teaser}>
-          <LinearGradient
-            colors={[ACCENT + "18", ACCENT + "05"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.teaserGradient}
-          >
-            <Ionicons name="sparkles" size={16} color={ACCENT} />
-            <Text style={styles.teaserText}>Here You Can book your van</Text>
-            <Ionicons name="arrow-down" size={16} color={ACCENT} />
-          </LinearGradient>
         </View>
       </Animated.View>
     </View>
@@ -195,6 +321,15 @@ function Feature({ icon, label }: { icon: any; label: string }) {
         <Ionicons name={icon} size={16} color={ACCENT} />
       </View>
       <Text style={styles.featureText}>{label}</Text>
+    </View>
+  );
+}
+
+function StatItem({ number, label }: { number: string; label: string }) {
+  return (
+    <View style={styles.statItem}>
+      <Text style={styles.statNumber}>{number}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
@@ -236,7 +371,10 @@ const styles = StyleSheet.create({
   },
   logo: {
     width: 150,
-    height: 90,
+    height: 60,
+    backgroundColor: "rgba(169, 93, 12, 0.1)",
+    borderRadius: 20,
+    paddingHorizontal: 10,
   },
   title: {
     fontSize: 34,
@@ -258,8 +396,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 10,
   },
-
-  // ون
   vanOuter: {
     height: 130,
     width: "100%",
@@ -269,7 +405,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   vanWrapper: {
-    width: width, // چون انیمیشن تو کل عرض صفحه انجام میشه
+    width: width,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -277,12 +413,11 @@ const styles = StyleSheet.create({
     width: 220,
     height: 120,
   },
-
   featureRow: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 10,
-    marginTop: 12,
+    marginTop: 4,
     flexWrap: "wrap",
   },
   feature: {
@@ -321,7 +456,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.3,
   },
-
   teaser: {
     marginTop: 18,
     borderRadius: 999,
@@ -353,5 +487,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     letterSpacing: 0.5,
+  },
+  particle: {
+    position: "absolute",
+    zIndex: 5,
+  },
+  trustBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "rgba(254,154,0,0.15)",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  trustText: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    backgroundColor: "rgba(15,23,42,0.2)",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginVertical: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  statItem: {
+    alignItems: "center",
+  },
+  statNumber: {
+    color: ACCENT,
+    fontSize: 20,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  statLabel: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: "rgba(255,255,255,0.2)",
   },
 });

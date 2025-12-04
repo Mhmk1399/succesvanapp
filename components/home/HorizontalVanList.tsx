@@ -105,7 +105,7 @@ export default function HorizontalVanList({
         snapToInterval={CARD_WIDTH + CARD_SPACING}
         decelerationRate="fast"
         contentContainerStyle={{
-          paddingHorizontal: (width - CARD_WIDTH) / 2,
+          paddingHorizontal: 10,
           paddingVertical: 8,
         }}
         onScroll={Animated.event(
@@ -206,7 +206,9 @@ function VanCard({ van, index, scale, opacity, onPress }: VanCardProps) {
             <View style={styles.specDivider} />
             <View style={styles.specItem}>
               <Ionicons name="car-sport" size={14} color={ACCENT} />
-              <Text style={styles.specText}>{van.gear === "manual,automatic" ? "Auto" : van.gear}</Text>
+              <Text style={styles.specText}>
+                {van.gear === "manual,automatic" ? "Auto" : van.gear}
+              </Text>
             </View>
             <View style={styles.specDivider} />
             <View style={styles.specItem}>
@@ -236,7 +238,6 @@ function VanCard({ van, index, scale, opacity, onPress }: VanCardProps) {
 const styles = StyleSheet.create({
   container: {
     marginVertical: 24,
-    
   },
   header: {
     flexDirection: "row",

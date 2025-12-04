@@ -8,11 +8,12 @@ import {
   Pressable,
   Animated,
   RefreshControl,
- } from "react-native";
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 40;
@@ -42,6 +43,7 @@ export default function VanList({
   onSelectVan,
   onBookVan,
 }: VanListProps) {
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -119,10 +121,16 @@ export default function VanList({
       <Animated.View
         style={[styles.staticHeader, { opacity: staticHeaderOpacity }]}
       >
-        <Text style={styles.title}>
-          Choose Your{"\n"}
-          <Text style={styles.titleAccent}>Perfect Van</Text>
-        </Text>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.back();
+          }}
+          style={styles.backButton}
+        >
+          <Ionicons name="chevron-back" size={28} color="#f9fafb" />
+        </Pressable>
+        <Text style={styles.title}>Choose Your Van</Text>
         <Text style={styles.subtitle}>
           Find the ideal van for your needs from our modern fleet.
         </Text>
@@ -302,7 +310,6 @@ function Chip({ icon, label }: ChipProps) {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    backgroundColor: "#020617",
     flex: 1,
     marginTop: 36,
   },
@@ -315,16 +322,22 @@ const styles = StyleSheet.create({
   },
   floatingHeader: {
     position: "absolute",
-    top: 0,
+    top: -40,
     left: 0,
     right: 0,
     zIndex: 10,
   },
   blurHeader: {
     paddingVertical: 16,
-    paddingTop: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(254,154,0,0.2)",
+    paddingTop: 50,
+    position: "relative",
+  },
+  backButton: {
+    position: "absolute",
+    left: -10,
+    top: -5,
+    zIndex: 999,
+    padding: 8,
   },
   floatingTitle: {
     color: "#f9fafb",
@@ -338,19 +351,20 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   title: {
-    color: "#f9fafb",
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "900",
+    color: "#fff",
     textAlign: "center",
   },
   titleAccent: {
     color: ACCENT,
   },
   subtitle: {
-    color: "#9ca3af",
+    color: "#fffffff5",
     fontSize: 13,
-    marginTop: 8,
+    marginTop: 4,
     textAlign: "center",
+    paddingHorizontal: 60,
   },
 
   cardWrapper: {

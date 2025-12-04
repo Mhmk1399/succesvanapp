@@ -56,7 +56,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
 
   const shineTranslate = shineAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-300, 600],
+    outputRange: [-400, 800],
   });
 
   const panResponder = useRef(
@@ -144,7 +144,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
             ]}
           >
             <LinearGradient
-              colors={['transparent', 'rgba(255,255,255,0.4)', 'transparent']}
+              colors={["transparent", "rgba(255,255,255,0.4)", "transparent"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={StyleSheet.absoluteFill}
@@ -160,7 +160,6 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
           </View>
         </LinearGradient>
       </Pressable>
-      
 
       {/* BOTTOM SHEET MODAL */}
       <Modal visible={sheetVisible} transparent animationType="none">
@@ -608,8 +607,7 @@ function VoiceAIButton() {
 const styles = StyleSheet.create({
   mainButton: {
     marginHorizontal: 20,
-    marginVertical: 16,
-    borderRadius: 999,
+     borderRadius: 999,
     overflow: "hidden",
     ...Platform.select({
       ios: {
@@ -633,16 +631,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 14,
     paddingHorizontal: 18,
-    position: 'relative',
-    overflow: 'hidden',
+    position: "relative",
+    overflow: "hidden",
   },
   shineEffect: {
-    position: 'absolute',
-    top: 0,
-    left: -100,
-    width: 200,
-    height: '100%',
+    position: "absolute",
+    top: -50,
+    left: -200,
+    width: 300,
+    height: 200,
     zIndex: 1,
+    transform: [{ rotate: "25deg" }],
   },
   mainButtonLeft: {
     flexDirection: "row",

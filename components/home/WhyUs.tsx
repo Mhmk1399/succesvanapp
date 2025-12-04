@@ -81,14 +81,6 @@ export default function WhyUs() {
           ))}
         </ScrollView>
       </View>
-
-      <View style={styles.stats}>
-        <StatItem number="500+" label="Happy Clients" />
-        <View style={styles.statDivider} />
-        <StatItem number="1000+" label="Bookings" />
-        <View style={styles.statDivider} />
-        <StatItem number="24/7" label="Support" />
-      </View>
     </View>
   );
 }
@@ -98,7 +90,7 @@ type FeatureCardProps = {
   index: number;
 };
 
-function FeatureCard({ feature, index }: FeatureCardProps) {
+function FeatureCard({ feature }: FeatureCardProps) {
   const scale = useRef(new Animated.Value(0)).current;
   const rotate = useRef(new Animated.Value(0)).current;
 
@@ -171,30 +163,9 @@ type StatItemProps = {
   label: string;
 };
 
-function StatItem({ number, label }: StatItemProps) {
-  const scale = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.spring(scale, {
-      toValue: 1,
-      delay: 400,
-      tension: 50,
-      friction: 7,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  return (
-    <Animated.View style={[styles.statItem, { transform: [{ scale }] }]}>
-      <Text style={styles.statNumber}>{number}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </Animated.View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 48,
+    paddingVertical: 24,
   },
   header: {
     alignItems: "center",

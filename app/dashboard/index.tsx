@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   Pressable,
   ScrollView,
   Modal,
@@ -17,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
 import UserReservations, { Reservation } from "@/components/dashboard/reserve";
 import UserProfileCard from "@/components/dashboard/profile";
+import { LinearGradient } from "expo-linear-gradient";
 
 const ACCENT = "#fe9a00";
 
@@ -77,14 +77,23 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <>
       <View style={styles.container}>
-        {/* Header داخل صفحه (اگه Navbar بالا داری، میتونی اینو سادهتر کنی) */}
+        <LinearGradient
+          colors={["#fe9a00", "#0f172b"]}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.header}>
-          <View style={styles.headerTitleRow}>
-            <Ionicons name="person-circle-outline" size={26} color={ACCENT} />
-            <Text style={styles.headerTitle}>My Account</Text>
-          </View>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.back();
+            }}
+            style={styles.backButton}
+          >
+            <Ionicons name="chevron-back" size={28} color="#f9fafb" />
+          </Pressable>
+          <Text style={styles.headerTitle}>My Account</Text>
           <Pressable
             onPress={() => {
               Haptics.selectionAsync();
@@ -92,7 +101,7 @@ export default function ProfileScreen() {
             }}
             style={styles.logoutButton}
           >
-            <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+            <Ionicons name="log-out-outline" size={22} color="#ef4444" />
           </Pressable>
         </View>
 
@@ -228,38 +237,44 @@ export default function ProfileScreen() {
           </BlurView>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
+  // safe: {
+  //   // flex: 1,
+  //   // backgroundColor: "#020617",
+  // },
   container: {
     flex: 1,
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    marginTop: 40,
     paddingBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  headerTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    columnGap: 8,
-  },
-  logoutButton: {
+  backButton: {
     padding: 8,
+    zIndex: 10,
   },
   headerTitle: {
     color: "#f9fafb",
     fontSize: 20,
     fontWeight: "700",
+    position: "absolute",
+    left: 0,
+    right: 0,
+    textAlign: "center",
+    zIndex: 1,
+    marginBottom:12
+  },
+  logoutButton: {
+    padding: 8,
+    zIndex: 10,
   },
   tabsRow: {
     flexDirection: "row",

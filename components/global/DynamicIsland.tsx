@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -46,6 +46,16 @@ export default function DynamicIsland() {
   const router = useRouter();
   const pathname = usePathname();
   const activeIndex = NAV_ITEMS.findIndex((item) => item.route === pathname);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Check auth status
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = await AsyncStorage.getItem("authToken");
+      setIsAuthenticated(!!token);
+    };
+    checkAuth();
+  }, [pathname]);
 
   // Main animations
   const entranceAnim = useRef(new Animated.Value(0)).current;
@@ -374,6 +384,14 @@ export default function DynamicIsland() {
   const renderNavItem = (item: NavItem, index: number) => {
     const isActive = activeIndex === index;
 
+    // Change icon for Profile/Login based on auth status
+    let displayIcon = item.icon;
+    let displayActiveIcon = item.activeIcon;
+    if (item.route === "/dashboard" && !isAuthenticated) {
+      displayIcon = "log-in-outline";
+      displayActiveIcon = "log-in";
+    }
+
     const iconRotation = itemAnims[index].iconRotate.interpolate({
       inputRange: [-10, 0, 10],
       outputRange: ["-10deg", "0deg", "10deg"],
@@ -419,7 +437,7 @@ export default function DynamicIsland() {
             ]}
           >
             <Ionicons
-              name={isActive ? item.activeIcon : item.icon}
+              name={isActive ? displayActiveIcon : displayIcon}
               size={isActive ? 24 : 22}
               color={isActive ? ACCENT : "rgba(255,255,255,0.3)"}
             />
@@ -486,7 +504,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: "center",
-    zIndex: 100,
+    zIndex: 999,
   },
 
   islandWrapper: {

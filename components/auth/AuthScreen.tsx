@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -36,6 +37,19 @@ export default function AuthScreen() {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [buttonWidth, setButtonWidth] = useState(0);
+  const indicatorX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (buttonWidth > 0) {
+      Animated.spring(indicatorX, {
+        toValue: mode === "login" ? 0 : 0.98,
+        tension: 60,
+        friction: 16,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [mode, buttonWidth]);
 
   const toggleMode = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -111,8 +125,6 @@ export default function AuthScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-    
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -121,11 +133,40 @@ export default function AuthScreen() {
           <Text style={styles.logo}>Success Van</Text>
           <Text style={styles.tagline}>Premium Van Rental</Text>
         </View>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.back();
+          }}
+          style={styles.backButton}
+        >
+          <Ionicons name="chevron-back" size={28} color="#f9fafb" />
+        </Pressable>
 
         <View style={styles.modeToggle}>
+          <Animated.View
+            style={[
+              styles.modeIndicator,
+              {
+                transform: [
+                  {
+                    translateX: indicatorX.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, buttonWidth],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
           <Pressable
             onPress={() => mode === "signup" && toggleMode()}
-            style={[styles.modeBtn, mode === "login" && styles.modeBtnActive]}
+            style={styles.modeBtn}
+            onLayout={(e) => {
+              if (buttonWidth === 0) {
+                setButtonWidth(e.nativeEvent.layout.width);
+              }
+            }}
           >
             <Text
               style={[
@@ -138,7 +179,7 @@ export default function AuthScreen() {
           </Pressable>
           <Pressable
             onPress={() => mode === "login" && toggleMode()}
-            style={[styles.modeBtn, mode === "signup" && styles.modeBtnActive]}
+            style={styles.modeBtn}
           >
             <Text
               style={[
@@ -387,26 +428,46 @@ export default function AuthScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { padding: 20, paddingTop: 60 },
+  scrollContent: { paddingHorizontal: 20, marginTop: 46 },
   header: { alignItems: "center", marginBottom: 40 },
-  logo: { fontSize: 32, fontWeight: "900", color: "#fff", marginBottom: 8 },
-  tagline: { fontSize: 14, color: ACCENT, fontWeight: "600" },
+  logo: { fontSize: 32, fontWeight: "900", color: "#fff", marginBottom: 4 },
+  tagline: { fontSize: 14, color: "#ece6e6ff", fontWeight: "600" },
   modeToggle: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.6)",
-    borderRadius: 16,
+    backgroundColor: "rgba(15,23,42,0.9)",
+    borderRadius: 999,
     padding: 4,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.5)",
+    position: "relative",
+  },
+  modeIndicator: {
+    position: "absolute",
+    top: 4,
+    left: 4,
+    right: "50%",
+    bottom: 4,
+    backgroundColor: ACCENT,
+    borderRadius: 999,
+  },
+  backButton: {
+    position: "absolute",
+    left: 10,
+    top: -3,
+    zIndex: 999,
+    padding: 8,
   },
   modeBtn: {
     flex: 1,
+    justifyContent: "center",
     paddingVertical: 12,
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: 999,
+    zIndex: 1,
   },
-  modeBtnActive: { backgroundColor: ACCENT },
-  modeText: { fontSize: 15, fontWeight: "600", color: "#9ca3af" },
-  modeTextActive: { color: DARK },
+  modeText: { fontSize: 14, fontWeight: "600", color: "#e5e7eb" },
+  modeTextActive: { color: "#0f172a" },
   formCard: {
     borderRadius: 24,
     overflow: "hidden",

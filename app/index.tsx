@@ -5,6 +5,7 @@ import ReservationHero from "@/components/global/ReservationHero";
 import HorizontalVanList from "@/components/home/HorizontalVanList";
 import WhyUs from "@/components/home/WhyUs";
 import FAQ from "@/components/home/FAQ";
+import Footer from "@/components/global/Footer";
 import { mockVans } from "@/data/mockVans";
 import ReservationForm from "@/components/global/ReservationForm";
 import { useState } from "react";
@@ -40,6 +41,7 @@ export default function HomeScreen() {
       />
       <WhyUs />
       <FAQ />
+      <Footer />
     </ScrollView>
   );
 }
