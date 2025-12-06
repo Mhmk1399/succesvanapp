@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -10,114 +10,141 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { authService } from "@/services/authService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
 
-type AuthMode = "login" | "signup";
+type Step = "phone" | "code" | "register";
 
 export default function AuthScreen() {
   const router = useRouter();
-  const [mode, setMode] = useState<AuthMode>("login");
+  const { refreshUser } = useAuth();
+  const [step, setStep] = useState<Step>("phone");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [licenceFront, setLicenceFront] = useState<string | null>(null);
-  const [licenceBack, setLicenceBack] = useState<string | null>(null);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [buttonWidth, setButtonWidth] = useState(0);
-  const indicatorX = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    if (buttonWidth > 0) {
-      Animated.spring(indicatorX, {
-        toValue: mode === "login" ? 0 : 0.98,
-        tension: 60,
-        friction: 16,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [mode, buttonWidth]);
-
-  const toggleMode = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setMode(mode === "login" ? "signup" : "login");
-    setErrors({});
-  };
-
-  const pickImage = async (type: "front" | "back") => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 10],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (type === "front") {
-        setLicenceFront(result.assets[0].uri);
-      } else {
-        setLicenceBack(result.assets[0].uri);
-      }
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (mode === "signup") {
-      if (!name.trim()) newErrors.name = "First name required";
-      if (!lastName.trim()) newErrors.lastName = "Last name required";
-      if (!phone.trim()) newErrors.phone = "Phone required";
-      else if (phone.length < 10) newErrors.phone = "Invalid phone";
-    }
-
-    if (!email.trim()) newErrors.email = "Email required";
-    else if (!email.includes("@")) newErrors.email = "Invalid email";
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) {
+  const handleSendCode = async () => {
+    if (!phone.trim()) {
+      setErrors({ phone: "Phone required" });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
     setIsSubmitting(true);
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    setTimeout(async () => {
-      // Save mock token
-      await AsyncStorage.setItem("authToken", "mock-token-" + Date.now());
-      await AsyncStorage.setItem("userName", name || "User");
-
+    try {
+      console.log("Sending code to:", phone);
+      const result = await authService.sendCode(phone);
+      console.log("Result:", result);
+      if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (result.data?.code) {
+          Alert.alert("Dev Code", `Your code: ${result.data.code}`);
+        }
+        setStep("code");
+      } else {
+        Alert.alert("Error", result.message || "Failed to send code");
+      }
+    } catch (error: any) {
+      console.error("Send code error:", error);
+      Alert.alert("Error", error.message || "Network error");
+    } finally {
       setIsSubmitting(false);
-      Alert.alert(
-        "✅ Success",
-        mode === "login" ? "Logged in!" : "Account created!",
-        [
-          {
-            text: "OK",
-            onPress: () => router.push("/dashboard" as any),
-          },
-        ]
-      );
-    }, 1500);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!code.trim()) {
+      setErrors({ code: "Code required" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await authService.verifyCode(phone, code);
+      if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (result.data.userExists) {
+          await refreshUser();
+          const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
+          if (pendingVan) {
+            await AsyncStorage.removeItem("pendingBookingVan");
+            Alert.alert("✅ Success", "Logged in! Redirecting to booking...", [
+              { text: "OK", onPress: () => router.push("/vans" as any) },
+            ]);
+          } else {
+            Alert.alert("✅ Success", "Logged in!", [
+              { text: "OK", onPress: () => router.push("/dashboard" as any) },
+            ]);
+          }
+        } else {
+          setStep("register");
+        }
+      } else {
+        Alert.alert("Error", result.message || "Invalid code");
+      }
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Network error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    const newErrors: Record<string, string> = {};
+    if (!name.trim()) newErrors.name = "First name required";
+    if (!lastName.trim()) newErrors.lastName = "Last name required";
+    if (!email.trim()) newErrors.email = "Email required";
+    else if (!email.includes("@")) newErrors.email = "Invalid email";
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await authService.register(phone, name, lastName, email);
+      if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await refreshUser();
+        const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
+        if (pendingVan) {
+          await AsyncStorage.removeItem("pendingBookingVan");
+          Alert.alert(
+            "✅ Success",
+            "Account created! Redirecting to booking...",
+            [{ text: "OK", onPress: () => router.push("/vans" as any) }]
+          );
+        } else {
+          Alert.alert("✅ Success", "Account created!", [
+            { text: "OK", onPress: () => router.push("/dashboard" as any) },
+          ]);
+        }
+      } else {
+        Alert.alert("Error", result.message || "Registration failed");
+      }
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Network error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -143,171 +170,11 @@ export default function AuthScreen() {
           <Ionicons name="chevron-back" size={28} color="#f9fafb" />
         </Pressable>
 
-        <View style={styles.modeToggle}>
-          <Animated.View
-            style={[
-              styles.modeIndicator,
-              {
-                transform: [
-                  {
-                    translateX: indicatorX.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, buttonWidth],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          />
-          <Pressable
-            onPress={() => mode === "signup" && toggleMode()}
-            style={styles.modeBtn}
-            onLayout={(e) => {
-              if (buttonWidth === 0) {
-                setButtonWidth(e.nativeEvent.layout.width);
-              }
-            }}
-          >
-            <Text
-              style={[
-                styles.modeText,
-                mode === "login" && styles.modeTextActive,
-              ]}
-            >
-              Login
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => mode === "login" && toggleMode()}
-            style={styles.modeBtn}
-          >
-            <Text
-              style={[
-                styles.modeText,
-                mode === "signup" && styles.modeTextActive,
-              ]}
-            >
-              Sign Up
-            </Text>
-          </Pressable>
-        </View>
-
         <BlurView intensity={40} tint="dark" style={styles.formCard}>
           <View style={styles.formContent}>
-            {mode === "signup" && (
-              <View style={styles.row}>
-                <View style={styles.half}>
-                  <Text style={styles.label}>First Name</Text>
-                  <View
-                    style={[
-                      styles.inputWrapper,
-                      focusedInput === "name" && styles.inputFocused,
-                      errors.name && styles.inputError,
-                    ]}
-                  >
-                    <Ionicons
-                      name="person-outline"
-                      size={18}
-                      color={focusedInput === "name" ? ACCENT : "#9ca3af"}
-                    />
-                    <TextInput
-                      placeholder="John"
-                      placeholderTextColor="#6b7280"
-                      value={name}
-                      onChangeText={(text) => {
-                        setName(text);
-                        if (errors.name) setErrors({ ...errors, name: "" });
-                      }}
-                      onFocus={() => {
-                        Haptics.selectionAsync();
-                        setFocusedInput("name");
-                      }}
-                      onBlur={() => setFocusedInput(null)}
-                      style={styles.input}
-                    />
-                  </View>
-                  {errors.name && (
-                    <Text style={styles.errorText}>{errors.name}</Text>
-                  )}
-                </View>
-
-                <View style={styles.half}>
-                  <Text style={styles.label}>Last Name</Text>
-                  <View
-                    style={[
-                      styles.inputWrapper,
-                      focusedInput === "lastName" && styles.inputFocused,
-                      errors.lastName && styles.inputError,
-                    ]}
-                  >
-                    <Ionicons
-                      name="person-outline"
-                      size={18}
-                      color={focusedInput === "lastName" ? ACCENT : "#9ca3af"}
-                    />
-                    <TextInput
-                      placeholder="Doe"
-                      placeholderTextColor="#6b7280"
-                      value={lastName}
-                      onChangeText={(text) => {
-                        setLastName(text);
-                        if (errors.lastName)
-                          setErrors({ ...errors, lastName: "" });
-                      }}
-                      onFocus={() => {
-                        Haptics.selectionAsync();
-                        setFocusedInput("lastName");
-                      }}
-                      onBlur={() => setFocusedInput(null)}
-                      style={styles.input}
-                    />
-                  </View>
-                  {errors.lastName && (
-                    <Text style={styles.errorText}>{errors.lastName}</Text>
-                  )}
-                </View>
-              </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  focusedInput === "email" && styles.inputFocused,
-                  errors.email && styles.inputError,
-                ]}
-              >
-                <Ionicons
-                  name="mail-outline"
-                  size={18}
-                  color={focusedInput === "email" ? ACCENT : "#9ca3af"}
-                />
-                <TextInput
-                  placeholder="your@email.com"
-                  placeholderTextColor="#6b7280"
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (errors.email) setErrors({ ...errors, email: "" });
-                  }}
-                  onFocus={() => {
-                    Haptics.selectionAsync();
-                    setFocusedInput("email");
-                  }}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              {errors.email && (
-                <Text style={styles.errorText}>{errors.email}</Text>
-              )}
-            </View>
-
-            {mode === "signup" && (
+            {step === "phone" && (
               <>
+                <Text style={styles.stepTitle}>Enter Phone Number</Text>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Phone</Text>
                   <View
@@ -343,82 +210,242 @@ export default function AuthScreen() {
                     <Text style={styles.errorText}>{errors.phone}</Text>
                   )}
                 </View>
-
-                <View style={styles.licenceSection}>
-                  <Text style={styles.sectionLabel}>
-                    Driving Licence (Optional)
-                  </Text>
-                  <View style={styles.licenceRow}>
-                    <Pressable
-                      onPress={() => pickImage("front")}
-                      style={styles.licenceBtn}
-                    >
-                      {licenceFront ? (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={24}
-                          color={ACCENT}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="camera-outline"
-                          size={24}
-                          color="#9ca3af"
-                        />
-                      )}
-                      <Text style={styles.licenceBtnText}>Front</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => pickImage("back")}
-                      style={styles.licenceBtn}
-                    >
-                      {licenceBack ? (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={24}
-                          color={ACCENT}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="camera-outline"
-                          size={24}
-                          color="#9ca3af"
-                        />
-                      )}
-                      <Text style={styles.licenceBtnText}>Back</Text>
-                    </Pressable>
-                  </View>
-                </View>
+                <Pressable
+                  onPress={handleSendCode}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => [
+                    styles.submitBtn,
+                    pressed && styles.submitBtnPressed,
+                    isSubmitting && styles.submitBtnDisabled,
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[ACCENT, "#ff8c00"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.submitGradient}
+                  >
+                    {isSubmitting ? (
+                      <ActivityIndicator color={DARK} size="small" />
+                    ) : (
+                      <>
+                        <Text style={styles.submitText}>Send Code</Text>
+                        <Ionicons name="arrow-forward" size={20} color={DARK} />
+                      </>
+                    )}
+                  </LinearGradient>
+                </Pressable>
               </>
             )}
 
-            <Pressable
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-              style={({ pressed }) => [
-                styles.submitBtn,
-                pressed && styles.submitBtnPressed,
-                isSubmitting && styles.submitBtnDisabled,
-              ]}
-            >
-              <LinearGradient
-                colors={[ACCENT, "#ff8c00"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.submitGradient}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color={DARK} size="small" />
-                ) : (
-                  <>
-                    <Text style={styles.submitText}>
-                      {mode === "login" ? "Login" : "Create Account"}
-                    </Text>
-                    <Ionicons name="arrow-forward" size={20} color={DARK} />
-                  </>
-                )}
-              </LinearGradient>
-            </Pressable>
+            {step === "code" && (
+              <>
+                <Text style={styles.stepTitle}>Enter Verification Code</Text>
+                <Text style={styles.stepDesc}>Code sent to {phone}</Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Code</Text>
+                  <View
+                    style={[
+                      styles.inputWrapper,
+                      focusedInput === "code" && styles.inputFocused,
+                      errors.code && styles.inputError,
+                    ]}
+                  >
+                    <Ionicons
+                      name="key-outline"
+                      size={18}
+                      color={focusedInput === "code" ? ACCENT : "#9ca3af"}
+                    />
+                    <TextInput
+                      placeholder="123456"
+                      placeholderTextColor="#6b7280"
+                      value={code}
+                      onChangeText={(text) => {
+                        setCode(text);
+                        if (errors.code) setErrors({ ...errors, code: "" });
+                      }}
+                      onFocus={() => {
+                        Haptics.selectionAsync();
+                        setFocusedInput("code");
+                      }}
+                      onBlur={() => setFocusedInput(null)}
+                      style={styles.input}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                    />
+                  </View>
+                  {errors.code && (
+                    <Text style={styles.errorText}>{errors.code}</Text>
+                  )}
+                </View>
+                <Pressable
+                  onPress={handleVerifyCode}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => [
+                    styles.submitBtn,
+                    pressed && styles.submitBtnPressed,
+                    isSubmitting && styles.submitBtnDisabled,
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[ACCENT, "#ff8c00"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.submitGradient}
+                  >
+                    {isSubmitting ? (
+                      <ActivityIndicator color={DARK} size="small" />
+                    ) : (
+                      <>
+                        <Text style={styles.submitText}>Verify</Text>
+                        <Ionicons name="arrow-forward" size={20} color={DARK} />
+                      </>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+              </>
+            )}
+
+            {step === "register" && (
+              <>
+                <Text style={styles.stepTitle}>Complete Registration</Text>
+                <View style={styles.row}>
+                  <View style={styles.half}>
+                    <Text style={styles.label}>First Name</Text>
+                    <View
+                      style={[
+                        styles.inputWrapper,
+                        focusedInput === "name" && styles.inputFocused,
+                        errors.name && styles.inputError,
+                      ]}
+                    >
+                      <Ionicons
+                        name="person-outline"
+                        size={18}
+                        color={focusedInput === "name" ? ACCENT : "#9ca3af"}
+                      />
+                      <TextInput
+                        placeholder="John"
+                        placeholderTextColor="#6b7280"
+                        value={name}
+                        onChangeText={(text) => {
+                          setName(text);
+                          if (errors.name) setErrors({ ...errors, name: "" });
+                        }}
+                        onFocus={() => {
+                          Haptics.selectionAsync();
+                          setFocusedInput("name");
+                        }}
+                        onBlur={() => setFocusedInput(null)}
+                        style={styles.input}
+                      />
+                    </View>
+                    {errors.name && (
+                      <Text style={styles.errorText}>{errors.name}</Text>
+                    )}
+                  </View>
+
+                  <View style={styles.half}>
+                    <Text style={styles.label}>Last Name</Text>
+                    <View
+                      style={[
+                        styles.inputWrapper,
+                        focusedInput === "lastName" && styles.inputFocused,
+                        errors.lastName && styles.inputError,
+                      ]}
+                    >
+                      <Ionicons
+                        name="person-outline"
+                        size={18}
+                        color={focusedInput === "lastName" ? ACCENT : "#9ca3af"}
+                      />
+                      <TextInput
+                        placeholder="Doe"
+                        placeholderTextColor="#6b7280"
+                        value={lastName}
+                        onChangeText={(text) => {
+                          setLastName(text);
+                          if (errors.lastName)
+                            setErrors({ ...errors, lastName: "" });
+                        }}
+                        onFocus={() => {
+                          Haptics.selectionAsync();
+                          setFocusedInput("lastName");
+                        }}
+                        onBlur={() => setFocusedInput(null)}
+                        style={styles.input}
+                      />
+                    </View>
+                    {errors.lastName && (
+                      <Text style={styles.errorText}>{errors.lastName}</Text>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Email</Text>
+                  <View
+                    style={[
+                      styles.inputWrapper,
+                      focusedInput === "email" && styles.inputFocused,
+                      errors.email && styles.inputError,
+                    ]}
+                  >
+                    <Ionicons
+                      name="mail-outline"
+                      size={18}
+                      color={focusedInput === "email" ? ACCENT : "#9ca3af"}
+                    />
+                    <TextInput
+                      placeholder="your@email.com"
+                      placeholderTextColor="#6b7280"
+                      value={email}
+                      onChangeText={(text) => {
+                        setEmail(text);
+                        if (errors.email) setErrors({ ...errors, email: "" });
+                      }}
+                      onFocus={() => {
+                        Haptics.selectionAsync();
+                        setFocusedInput("email");
+                      }}
+                      onBlur={() => setFocusedInput(null)}
+                      style={styles.input}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                  {errors.email && (
+                    <Text style={styles.errorText}>{errors.email}</Text>
+                  )}
+                </View>
+
+                <Pressable
+                  onPress={handleRegister}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => [
+                    styles.submitBtn,
+                    pressed && styles.submitBtnPressed,
+                    isSubmitting && styles.submitBtnDisabled,
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[ACCENT, "#ff8c00"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.submitGradient}
+                  >
+                    {isSubmitting ? (
+                      <ActivityIndicator color={DARK} size="small" />
+                    ) : (
+                      <>
+                        <Text style={styles.submitText}>Create Account</Text>
+                        <Ionicons name="arrow-forward" size={20} color={DARK} />
+                      </>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+              </>
+            )}
           </View>
         </BlurView>
       </ScrollView>
@@ -432,25 +459,6 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", marginBottom: 40 },
   logo: { fontSize: 32, fontWeight: "900", color: "#fff", marginBottom: 4 },
   tagline: { fontSize: 14, color: "#ece6e6ff", fontWeight: "600" },
-  modeToggle: {
-    flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.9)",
-    borderRadius: 999,
-    padding: 4,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.5)",
-    position: "relative",
-  },
-  modeIndicator: {
-    position: "absolute",
-    top: 4,
-    left: 4,
-    right: "50%",
-    bottom: 4,
-    backgroundColor: ACCENT,
-    borderRadius: 999,
-  },
   backButton: {
     position: "absolute",
     left: 10,
@@ -458,16 +466,6 @@ const styles = StyleSheet.create({
     zIndex: 999,
     padding: 8,
   },
-  modeBtn: {
-    flex: 1,
-    justifyContent: "center",
-    paddingVertical: 12,
-    alignItems: "center",
-    borderRadius: 999,
-    zIndex: 1,
-  },
-  modeText: { fontSize: 14, fontWeight: "600", color: "#e5e7eb" },
-  modeTextActive: { color: "#0f172a" },
   formCard: {
     borderRadius: 24,
     overflow: "hidden",
@@ -475,6 +473,13 @@ const styles = StyleSheet.create({
     borderColor: "rgba(254,154,0,0.2)",
   },
   formContent: { padding: 24, backgroundColor: "rgba(15,23,42,0.4)" },
+  stepTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#fff",
+    marginBottom: 8,
+  },
+  stepDesc: { fontSize: 14, color: "#9ca3af", marginBottom: 20 },
   inputGroup: { marginBottom: 20 },
   row: { flexDirection: "row", gap: 12, marginBottom: 20 },
   half: { flex: 1 },
@@ -509,25 +514,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: "500",
   },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#9ca3af",
-    marginBottom: 12,
-  },
-  licenceSection: { marginBottom: 20 },
-  licenceRow: { flexDirection: "row", gap: 12 },
-  licenceBtn: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-    paddingVertical: 20,
-    alignItems: "center",
-    gap: 8,
-  },
-  licenceBtnText: { color: "#e5e7eb", fontSize: 14, fontWeight: "600" },
   submitBtn: { borderRadius: 16, overflow: "hidden", marginTop: 8 },
   submitBtnPressed: { transform: [{ scale: 0.98 }] },
   submitBtnDisabled: { opacity: 0.6 },

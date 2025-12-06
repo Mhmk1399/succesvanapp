@@ -21,10 +21,12 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
+import * as Notifications from "expo-notifications";
+import { Audio } from "expo-av";
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
-const { height } = Dimensions.get("window");
+const { height, width } = Dimensions.get("window");
 
 type PickerField =
   | "pickupDate"
@@ -34,15 +36,74 @@ type PickerField =
   | null;
 
 type ReservationFormProps = {
-  /** اگه خواستی بعداً این دکمه رو توی مودال دیگه استفاده کنی */
   onCompleted?: () => void;
 };
+
+/* ========= Types to mirror your Next.js logic ========= */
+
+type SpecialDay = {
+  month: number;
+  day: number;
+  isOpen: boolean;
+  startTime: string;
+  endTime: string;
+  reason?: string;
+};
+
+type WorkingTime = {
+  day: string; // "monday" | "tuesday" | ...
+  isOpen: boolean;
+  startTime: string;
+  endTime: string;
+};
+
+type Office = {
+  _id: string;
+  name: string;
+  specialDays?: SpecialDay[];
+  workingTime?: WorkingTime[];
+};
+
+type Category = {
+  _id: string;
+  name: string;
+};
+
+import { officeService } from "@/services/officeService";
+import { categoryService } from "@/services/categoryService";
+import { useRouter } from "expo-router";
+
+/* ===================================================== */
 
 export default function ReservationForm({ onCompleted }: ReservationFormProps) {
   const [sheetVisible, setSheetVisible] = useState(false);
   const translateY = useRef(new Animated.Value(height)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const shineAnim = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => gestureState.dy > 5,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          translateY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 70) {
+          closeSheet();
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            tension: 50,
+            friction: 9,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   useEffect(() => {
     Animated.loop(
@@ -58,32 +119,6 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
     inputRange: [0, 1],
     outputRange: [-400, 800],
   });
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return gestureState.dy > 5;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          translateY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 50) {
-          closeSheet();
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            tension: 50,
-            friction: 9,
-            useNativeDriver: true,
-          }).start();
-        }
-      },
-    })
-  ).current;
 
   const openSheet = async () => {
     await Haptics.selectionAsync();
@@ -169,7 +204,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
             style={[
               StyleSheet.absoluteFill,
               {
-                backgroundColor: "rgba(0,0,0,0.2)",
+                backgroundColor: "rgba(0,0,0,0.3)",
                 opacity: backdropOpacity,
               },
             ]}
@@ -210,18 +245,129 @@ type SheetContentProps = {
 
 function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const colorScheme = useColorScheme();
+  const router = useRouter();
 
-  const [pickupDate, setPickupDate] = useState<Date | null>(null);
-  const [pickupTime, setPickupTime] = useState<Date | null>(null);
-  const [returnDate, setReturnDate] = useState<Date | null>(null);
-  const [returnTime, setReturnTime] = useState<Date | null>(null);
+  // ---- WEB LOGIC PORTED HERE ----
+  const [offices, setOffices] = useState<Office[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  const [selectedOffice, setSelectedOffice] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+
+  const [pickupDate, setPickupDate] = useState<Date | null>(new Date());
+  const [pickupTime, setPickupTime] = useState<Date | null>(new Date());
+  const [returnDate, setReturnDate] = useState<Date | null>(
+    new Date(Date.now() + 24 * 60 * 60 * 1000)
+  );
+  const [returnTime, setReturnTime] = useState<Date | null>(new Date());
+
+  const [driverAge, setDriverAge] = useState("");
+  const [message, setMessage] = useState("");
   const [location, setLocation] = useState("");
   const [passengers, setPassengers] = useState("");
+
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   const [pickerField, setPickerField] = useState<PickerField>(null);
   const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
   const isPickerVisible = pickerField !== null;
+
+  const [officeModalVisible, setOfficeModalVisible] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch offices & categories
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [offData, catData] = await Promise.all([
+          officeService.getAll(),
+          categoryService.getAll(),
+        ]);
+        setOffices(offData.data || []);
+        setCategories(catData.data || []);
+      } catch (error) {
+        console.log("Failed to fetch offices/categories", error);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const getSelectedOffice = (): Office | undefined =>
+    offices.find((o) => o._id === selectedOffice);
+
+  // ---- DATE/TIME HELPERS (ported from web) ----
+
+  const isDateDisabled = (date: Date) => {
+    const office = getSelectedOffice();
+    if (!office) return false;
+
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const dayName = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ][date.getDay()];
+
+    const specialDay = office.specialDays?.find(
+      (sd) => sd.month === month && sd.day === day
+    );
+    if (specialDay && !specialDay.isOpen) return true;
+
+    const workingDay = office.workingTime?.find((w) => w.day === dayName);
+    if (workingDay && !workingDay.isOpen) return true;
+
+    return false;
+  };
+
+  const getAvailableTimeSlots = (date: Date | null) => {
+    const office = getSelectedOffice();
+    if (!office || !date) return { start: "00:00", end: "23:59", info: "" };
+
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const dayName = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ][date.getDay()];
+
+    const specialDay = office.specialDays?.find(
+      (sd) => sd.month === month && sd.day === day
+    );
+    if (specialDay && specialDay.isOpen) {
+      return {
+        start: specialDay.startTime,
+        end: specialDay.endTime,
+        info: `Special day: ${specialDay.reason ?? ""} (${
+          specialDay.startTime
+        } - ${specialDay.endTime})`,
+      };
+    }
+
+    const workingDay = office.workingTime?.find((w) => w.day === dayName);
+    if (workingDay && workingDay.isOpen) {
+      return {
+        start: workingDay.startTime,
+        end: workingDay.endTime,
+        info: `${workingDay.day}: ${workingDay.startTime} - ${workingDay.endTime}`,
+      };
+    }
+
+    return { start: "00:00", end: "23:59", info: "" };
+  };
+
+  // ---- FORMATTERS ----
 
   const formatDate = (date: Date | null) => {
     if (!date) return "DD/MM/YYYY";
@@ -238,7 +384,13 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     return `${h}:${min}`;
   };
 
+  // ---- PICKERS ----
+
   const openPicker = async (field: PickerField, mode: "date" | "time") => {
+    if (!selectedOffice) {
+      Alert.alert("Select Office", "Please select an office first.");
+      return;
+    }
     await Haptics.selectionAsync();
     setPickerField(field);
     setPickerMode(mode);
@@ -247,6 +399,15 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const hidePicker = () => setPickerField(null);
 
   const handleConfirm = (date: Date) => {
+    if (pickerMode === "date" && isDateDisabled(date)) {
+      Alert.alert(
+        "Office Closed",
+        "The selected date is not available for this office."
+      );
+      hidePicker();
+      return;
+    }
+
     switch (pickerField) {
       case "pickupDate":
         setPickupDate(date);
@@ -264,22 +425,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     hidePicker();
   };
 
-  const handleSubmit = async () => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert(
-      "✅ Reservation Submitted",
-      "Your reservation has been successfully submitted!",
-      [
-        {
-          text: "OK",
-          onPress: () => {
-            onCompleted?.();
-            onClose();
-          },
-        },
-      ]
-    );
-  };
+  // ---- FORM ----
 
   const handleFocus = (inputName: string) => {
     Haptics.selectionAsync();
@@ -287,6 +433,90 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   };
 
   const handleBlur = () => setFocusedInput(null);
+
+  const handleSubmit = async () => {
+    if (!selectedOffice || !selectedCategory) {
+      Alert.alert("Missing details", "Please select office and category.");
+      return;
+    }
+    if (!pickupDate || !returnDate) {
+      Alert.alert("Missing dates", "Please choose pickup and return dates.");
+      return;
+    }
+    if (!driverAge || Number(driverAge) < 18) {
+      Alert.alert("Driver age", "Driver age must be 18+.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    const officeObj = getSelectedOffice();
+
+    const reservationPayload = {
+      office: selectedOffice,
+      officeName: officeObj?.name ?? "",
+      category: selectedCategory,
+      pickupDate: pickupDate.toISOString(),
+      returnDate: returnDate.toISOString(),
+      pickupTime: formatTime(pickupTime),
+      returnTime: formatTime(returnTime),
+      pickupLocation: location,
+      passengers,
+      driverAge,
+      message,
+    };
+
+    console.log("Reservation payload (mobile):", reservationPayload);
+
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require("@/assets/sounds/Iphone.mp3")
+      );
+      await sound.playAsync();
+      setTimeout(() => sound.unloadAsync(), 3000);
+    } catch (error) {
+      console.log("Sound error:", error);
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "✅ Reservation Confirmed",
+        body: `Your van reservation at ${officeObj?.name} has been successfully submitted!`,
+        sound: true,
+      },
+      trigger: null,
+    });
+    // 🔧 اینجا می‌تونی:
+    // - به سرور POST کنی
+    // - یا تو AsyncStorage ذخیره کنی
+    // - یا با expo-router به صفحه‌ی بعدی push کنی و payload رو ببری
+
+    Alert.alert(
+      "✅ Reservation Submitted",
+      "Your reservation has been successfully submitted!",
+      [
+        {
+          text: "View Available Vans",
+          onPress: () => {
+            onCompleted?.();
+            onClose();
+            router.push({
+              pathname: "/vans",
+              params: {
+                category: selectedCategory,
+                office: selectedOffice,
+                pickupDate: pickupDate?.toISOString(),
+                returnDate: returnDate?.toISOString(),
+              },
+            } as any);
+          },
+        },
+      ]
+    );
+
+    setIsSubmitting(false);
+  };
 
   const renderInput = (
     placeholder: string,
@@ -365,6 +595,27 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     );
   };
 
+  const pickupSlots = getAvailableTimeSlots(pickupDate);
+  const returnSlots = getAvailableTimeSlots(returnDate);
+
+  const getMinMaxTime = () => {
+    if (pickerMode !== "time") return {};
+    const slots = pickerField === "pickupTime" || pickerField === "returnTime" 
+      ? (pickerField === "pickupTime" ? pickupSlots : returnSlots)
+      : { start: "00:00", end: "23:59" };
+    
+    const [startH, startM] = slots.start.split(":").map(Number);
+    const [endH, endM] = slots.end.split(":").map(Number);
+    
+    const minTime = new Date();
+    minTime.setHours(startH, startM, 0, 0);
+    
+    const maxTime = new Date();
+    maxTime.setHours(endH, endM, 0, 0);
+    
+    return { minimumDate: minTime, maximumDate: maxTime };
+  };
+
   return (
     <>
       {/* DATE / TIME PICKER MODAL */}
@@ -378,7 +629,79 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         themeVariant={colorScheme === "dark" ? "dark" : "light"}
         accentColor={ACCENT}
         textColor={colorScheme === "dark" ? "#fff" : DARK}
+        minimumDate={pickerMode === "date" ? new Date() : getMinMaxTime().minimumDate}
+        maximumDate={getMinMaxTime().maximumDate}
       />
+
+      {/* Office selection modal */}
+      <Modal
+        visible={officeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOfficeModalVisible(false)}
+      >
+        <Pressable
+          style={sheetStyles.selectOverlay}
+          onPress={() => setOfficeModalVisible(false)}
+        >
+          <View style={sheetStyles.selectBox}>
+            <Text style={sheetStyles.selectTitle}>Select Office</Text>
+            <ScrollView>
+              {offices.map((o) => (
+                <Pressable
+                  key={o._id}
+                  onPress={() => {
+                    setSelectedOffice(o._id);
+                    setOfficeModalVisible(false);
+                  }}
+                  style={({ pressed }) => [
+                    sheetStyles.selectItem,
+                    selectedOffice === o._id && sheetStyles.selectItemActive,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Text style={sheetStyles.selectItemText}>{o.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Category selection modal */}
+      <Modal
+        visible={categoryModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCategoryModalVisible(false)}
+      >
+        <Pressable
+          style={sheetStyles.selectOverlay}
+          onPress={() => setCategoryModalVisible(false)}
+        >
+          <View style={sheetStyles.selectBox}>
+            <Text style={sheetStyles.selectTitle}>Select Vehicle Category</Text>
+            <ScrollView>
+              {categories.map((c) => (
+                <Pressable
+                  key={c._id}
+                  onPress={() => {
+                    setSelectedCategory(c._id);
+                    setCategoryModalVisible(false);
+                  }}
+                  style={({ pressed }) => [
+                    sheetStyles.selectItem,
+                    selectedCategory === c._id && sheetStyles.selectItemActive,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Text style={sheetStyles.selectItemText}>{c.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -402,12 +725,91 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
             </Pressable>
           </View>
 
-          {/* AI VOICE BUTTON */}
+          {/* Voice + AI button (kept) */}
           <VoiceAIButton />
 
-          {/* PICKUP / RETURN */}
+          {/* Office + Category */}
+          <View style={[sheetStyles.section, { marginTop: 4 }]}>
+            <View style={sheetStyles.row}>
+              <View style={sheetStyles.half}>
+                <Text style={sheetStyles.sectionLabel}>Office</Text>
+                <Pressable
+                  onPress={() => setOfficeModalVisible(true)}
+                  style={({ pressed }) => [
+                    sheetStyles.inputWrapper,
+                    pressed && sheetStyles.inputWrapperFocused,
+                  ]}
+                >
+                  <Ionicons
+                    name="location-outline"
+                    size={18}
+                    color={selectedOffice ? ACCENT : "rgba(255,255,255,0.4)"}
+                    style={sheetStyles.inputIcon}
+                  />
+                  <Text
+                    style={[
+                      sheetStyles.input,
+                      !selectedOffice && {
+                        color: "rgba(255,255,255,0.35)",
+                      },
+                    ]}
+                  >
+                    {selectedOffice
+                      ? getSelectedOffice()?.name ?? "Selected office"
+                      : "Select office"}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={16}
+                    color="rgba(255,255,255,0.5)"
+                  />
+                </Pressable>
+              </View>
+
+              <View style={sheetStyles.half}>
+                <Text style={sheetStyles.sectionLabel}>Vehicle</Text>
+                <Pressable
+                  onPress={() => setCategoryModalVisible(true)}
+                  style={({ pressed }) => [
+                    sheetStyles.inputWrapper,
+                    pressed && sheetStyles.inputWrapperFocused,
+                  ]}
+                >
+                  <Ionicons
+                    name="car-sport-outline"
+                    size={18}
+                    color={selectedCategory ? ACCENT : "rgba(255,255,255,0.4)"}
+                    style={sheetStyles.inputIcon}
+                  />
+                  <Text
+                    style={[
+                      sheetStyles.input,
+                      !selectedCategory && {
+                        color: "rgba(255,255,255,0.35)",
+                      },
+                    ]}
+                  >
+                    {selectedCategory
+                      ? categories.find((c) => c._id === selectedCategory)
+                          ?.name ?? "Selected category"
+                      : "Select category"}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={16}
+                    color="rgba(255,255,255,0.5)"
+                  />
+                </Pressable>
+              </View>
+            </View>
+          </View>
+
+          {/* PICKUP */}
           <View style={sheetStyles.section}>
             <Text style={sheetStyles.sectionLabel}>Pickup</Text>
+            {pickupSlots.info ? (
+              <Text style={sheetStyles.infoText}>{pickupSlots.info}</Text>
+            ) : null}
             <View style={sheetStyles.row}>
               <View style={sheetStyles.half}>
                 {renderDateTimeField(
@@ -430,8 +832,12 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
             </View>
           </View>
 
+          {/* RETURN */}
           <View style={sheetStyles.section}>
             <Text style={sheetStyles.sectionLabel}>Return</Text>
+            {returnSlots.info ? (
+              <Text style={sheetStyles.infoText}>{returnSlots.info}</Text>
+            ) : null}
             <View style={sheetStyles.row}>
               <View style={sheetStyles.half}>
                 {renderDateTimeField(
@@ -454,13 +860,13 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
             </View>
           </View>
 
-          {/* LOCATION & PASSENGERS (MINIMAL) */}
+          {/* LOCATION & PASSENGERS */}
           <View style={sheetStyles.section}>
             {renderInput(
               "Pickup location (e.g. NW London)",
               location,
               setLocation,
-              "location-outline",
+              "navigate-outline",
               "location"
             )}
           </View>
@@ -476,13 +882,38 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
             )}
           </View>
 
+          {/* Driver age & message */}
+          <View style={sheetStyles.row}>
+            <View style={sheetStyles.half}>
+              {renderInput(
+                "Driver age (18+)",
+                driverAge,
+                setDriverAge,
+                "person-outline",
+                "driverAge",
+                "numeric"
+              )}
+            </View>
+            <View style={sheetStyles.half}>
+              {renderInput(
+                "Message (optional)",
+                message,
+                setMessage,
+                "chatbubble-ellipses-outline",
+                "message"
+              )}
+            </View>
+          </View>
+
           {/* SUBMIT */}
           <View style={sheetStyles.buttonsRow}>
             <Pressable
               onPress={handleSubmit}
+              disabled={isSubmitting}
               style={({ pressed }) => [
                 sheetStyles.submitButton,
                 pressed && sheetStyles.submitButtonPressed,
+                isSubmitting && { opacity: 0.7 },
               ]}
             >
               <LinearGradient
@@ -492,7 +923,9 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
                 style={sheetStyles.submitGradient}
               >
                 <Ionicons name="checkmark-circle" size={20} color={DARK} />
-                <Text style={sheetStyles.submitText}>Confirm Reservation</Text>
+                <Text style={sheetStyles.submitText}>
+                  {isSubmitting ? "Booking..." : "Confirm Reservation"}
+                </Text>
               </LinearGradient>
             </Pressable>
           </View>
@@ -502,7 +935,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   );
 }
 
-/* ===================== VOICE + AI BUTTON ===================== */
+/* ===================== VOICE + AI BUTTON (same idea) ===================== */
 
 function VoiceAIButton() {
   const [recording, setRecording] = useState(false);
@@ -544,10 +977,10 @@ function VoiceAIButton() {
     );
     setRecording((prev) => !prev);
 
-    // 🔊 اینجا می‌تونی رکورد صدا رو شروع/متوقف کنی
-    // - با expo-av: Audio.Recording
-    // - بعد بفرستی سرور/Cloud Function که هوش مصنوعی متن رو استخراج کنه
-    // - بعد متن رو مپ کنی به فیلدهای فرم
+    // 🔊 اینجا می‌تونی روی native:
+    // - از expo-speech / third-party speech-to-text استفاده کنی
+    // - transcript رو به سرور / Cloud Function بفرستی (/api/parse-voice)
+    // - نتیجه رو روی stateهای فرم (office, times, category, age, ...) مپ کنی
   };
 
   return (
@@ -577,12 +1010,11 @@ function VoiceAIButton() {
         </View>
       </View>
 
-      {/* Waveform */}
       <View style={sheetStyles.waveWrapper}>
         {bars.map((_, index) => {
           const h = barAnims[index].interpolate({
             inputRange: [0, 1],
-            outputRange: [4, 18], // ارتفاع سینوسی‌طور
+            outputRange: [4, 18],
           });
           return (
             <Animated.View
@@ -607,7 +1039,7 @@ function VoiceAIButton() {
 const styles = StyleSheet.create({
   mainButton: {
     marginHorizontal: 20,
-     borderRadius: 999,
+    borderRadius: 999,
     overflow: "hidden",
     ...Platform.select({
       ios: {
@@ -673,11 +1105,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: height * 0.8,
+    height: height * 0.82,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: "hidden",
-    borderColor: "rgba(254,154,0,0.2)",
+    borderColor: "rgba(254,154,0,0.25)",
+    borderWidth: 1,
+    borderBottomWidth: 0,
     ...Platform.select({
       ios: {
         shadowColor: ACCENT,
@@ -686,16 +1120,16 @@ const styles = StyleSheet.create({
         shadowRadius: 20,
       },
       android: {
-        elevation: 8,
+        elevation: 10,
       },
     }),
   },
   blurContainer: {
     flex: 1,
-    backgroundColor: "rgba(2,6,23,0.3)",
+    backgroundColor: "rgba(2,6,23,0.7)",
   },
   handleArea: {
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: "center",
   },
   sheetHandle: {
@@ -708,7 +1142,7 @@ const styles = StyleSheet.create({
 
 const sheetStyles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 10,
     paddingBottom: 32,
   },
   headerRow: {
@@ -716,6 +1150,7 @@ const sheetStyles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 14,
+    marginTop: 4,
   },
   sheetTitle: {
     color: "#f9fafb",
@@ -824,7 +1259,12 @@ const sheetStyles = StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1,
-    marginBottom: 10,
+    marginBottom: 8,
+  },
+  infoText: {
+    color: "#fbbf24",
+    fontSize: 11,
+    marginBottom: 6,
   },
   row: {
     flexDirection: "row",
@@ -912,5 +1352,43 @@ const sheetStyles = StyleSheet.create({
     color: DARK,
     fontSize: 15,
     fontWeight: "800",
+  },
+
+  /* Select modals */
+  selectOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  selectBox: {
+    width: width - 60,
+    maxHeight: height * 0.6,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  selectTitle: {
+    color: "#f9fafb",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 10,
+  },
+  selectItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  selectItemActive: {
+    backgroundColor: "rgba(254,154,0,0.18)",
+  },
+  selectItemText: {
+    color: "#e5e7eb",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

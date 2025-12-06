@@ -26,6 +26,10 @@ import * as Notifications from "expo-notifications";
 import { Audio } from "expo-av";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { Van } from "./vanlist";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { reservationService } from "@/services/reservationService";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "expo-router";
 
 const { height } = Dimensions.get("window");
 const ACCENT = "#fe9a00";
@@ -49,9 +53,35 @@ export default function BookingModal({
   van,
   onClose,
 }: BookingModalProps) {
+  const { user } = useAuth();
+  const router = useRouter();
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    if (visible && !user && van && !hasCheckedAuth.current) {
+      hasCheckedAuth.current = true;
+      AsyncStorage.setItem("pendingBookingVan", JSON.stringify(van));
+      setTimeout(() => {
+        handleClose();
+        Alert.alert(
+          "Login Required",
+          "Please login or register to book a van.",
+          [
+            {
+              text: "Register",
+              onPress: () => router.push("/register" as any),
+            },
+            { text: "Cancel", style: "cancel" },
+          ]
+        );
+      }, 100);
+    }
+    if (!visible) {
+      hasCheckedAuth.current = false;
+    }
+  }, [visible, user, van]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -80,7 +110,18 @@ export default function BookingModal({
   ).current;
 
   const [name, setName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+
+  useEffect(() => {
+    if (user) {
+      setName(user.name || "");
+      setLastName(user.lastName || "");
+      setEmail(user.emaildata?.emailAddress || "");
+      setPhone(user.phoneData?.phoneNumber || "");
+    }
+  }, [user]);
   const [pickupDate, setPickupDate] = useState<Date | null>(null);
   const [pickupTime, setPickupTime] = useState<Date | null>(null);
   const [returnDate, setReturnDate] = useState<Date | null>(null);
@@ -90,6 +131,7 @@ export default function BookingModal({
   const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const hasCheckedAuth = useRef(false);
 
   useEffect(() => {
     // Setup audio mode
@@ -175,7 +217,14 @@ export default function BookingModal({
   };
 
   const handleSubmit = async () => {
-    // Validation
+    console.log("=== BOOKING SUBMIT START ===");
+    console.log("User:", user);
+    
+    if (!user) {
+      Alert.alert("Login Required", "Please login to book a van.");
+      return;
+    }
+
     const newErrors: Record<string, string> = {};
 
     if (!name.trim()) {
@@ -196,6 +245,7 @@ export default function BookingModal({
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length > 0) {
+      console.log("Validation errors:", newErrors);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -204,18 +254,54 @@ export default function BookingModal({
     setIsSubmitting(true);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Play success sound
-    await playSuccessSound();
+    try {
+      const userData = { userId: user._id };
 
-    // Schedule notification
-    await scheduleNotification();
+      const startDateTime = new Date(pickupDate!);
+      const [pickupHour, pickupMin] = formatTime(pickupTime).split(':');
+      startDateTime.setHours(parseInt(pickupHour), parseInt(pickupMin));
 
-    setIsSubmitting(false);
-    Alert.alert(
-      "✅ Booking Confirmed",
-      `Your ${van?.name} has been booked successfully!\n\nYou'll receive a confirmation notification.`,
-      [{ text: "OK", onPress: handleClose }]
-    );
+      const endDateTime = new Date(returnDate!);
+      const [returnHour, returnMin] = formatTime(returnTime).split(':');
+      endDateTime.setHours(parseInt(returnHour), parseInt(returnMin));
+
+      const reservationData = {
+        category: van?.id,
+        office: "6926e38162f2c0d857bffff9",
+        startDate: startDateTime.toISOString(),
+        endDate: endDateTime.toISOString(),
+        dirverAge: 25,
+        totalPrice: 0,
+      };
+
+      console.log("userData:", userData);
+      console.log("reservationData:", reservationData);
+      console.log("Calling reservationService.create...");
+      
+      const result = await reservationService.create(userData, reservationData);
+      
+      console.log("API Response:", result);
+
+      if (result.success) {
+        await playSuccessSound();
+        await scheduleNotification();
+
+        Alert.alert(
+          "✅ Booking Confirmed",
+          `Your ${van?.name} has been booked successfully!`,
+          [{ text: "OK", onPress: handleClose }]
+        );
+      } else {
+        console.error("Booking failed:", result.error);
+        Alert.alert("Error", result.error || "Booking failed");
+      }
+    } catch (error: any) {
+      console.error("Booking error:", error);
+      Alert.alert("Error", error.message || "Network error");
+    } finally {
+      setIsSubmitting(false);
+      console.log("=== BOOKING SUBMIT END ===");
+    }
   };
 
   const playSuccessSound = async () => {
@@ -335,6 +421,7 @@ export default function BookingModal({
                     style={[
                       styles.inputWrapper,
                       focusedInput === "name" && styles.inputFocused,
+                      user && styles.inputDisabled,
                     ]}
                   >
                     <Ionicons
@@ -356,6 +443,7 @@ export default function BookingModal({
                       }}
                       onBlur={() => setFocusedInput(null)}
                       style={styles.input}
+                      editable={!user}
                     />
                   </View>
                   {errors.name && (
@@ -370,6 +458,7 @@ export default function BookingModal({
                     style={[
                       styles.inputWrapper,
                       focusedInput === "email" && styles.inputFocused,
+                      user && styles.inputDisabled,
                     ]}
                   >
                     <Ionicons
@@ -393,6 +482,7 @@ export default function BookingModal({
                       style={styles.input}
                       keyboardType="email-address"
                       autoCapitalize="none"
+                      editable={!user}
                     />
                   </View>
                   {errors.email && (
@@ -806,5 +896,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: DARK,
+  },
+  inputDisabled: {
+    opacity: 0.6,
+    backgroundColor: "rgba(255,255,255,0.02)",
   },
 });

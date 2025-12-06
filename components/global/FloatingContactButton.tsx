@@ -8,7 +8,6 @@ import {
   Pressable,
   Linking,
   Platform,
-  StyleSheet as RNStyleSheet,
   Modal,
   Dimensions,
 } from "react-native";
@@ -18,7 +17,6 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 
 const ACCENT = "#fe9a00";
-const DARK = "#0f172a";
 const EXPAND_THRESHOLD = 50;
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 

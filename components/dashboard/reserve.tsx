@@ -1,6 +1,12 @@
 // components/dashboard/UserReservations.tsx
 import React from "react";
-import { View, Text, StyleSheet, FlatList } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 const ACCENT = "#fe9a00";
@@ -11,32 +17,51 @@ export type Reservation = {
   pickupDate: string;
   returnDate: string;
   location: string;
-  status: "upcoming" | "completed" | "cancelled";
+  status: "upcoming" | "completed" | "cancelled" | "pending";
 };
 
 type UserReservationsProps = {
-  reservations: Reservation[];
+  reservations: any[];
+  isLoading?: boolean;
+};
+
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const day = date.getDate().toString().padStart(2, "0");
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const year = date.getFullYear();
+  const hours = date.getHours().toString().padStart(2, "0");
+  const mins = date.getMinutes().toString().padStart(2, "0");
+  return `${day}/${month}/${year} · ${hours}:${mins}`;
 };
 
 export default function UserReservations({
   reservations,
+  isLoading = false,
 }: UserReservationsProps) {
-  const renderStatus = (status: Reservation["status"]) => {
+  const renderStatus = (status: string) => {
     let label = "";
     let color = "";
     switch (status) {
-      case "upcoming":
-        label = "Upcoming";
+      case "pending":
+        label = "Pending";
+        color = "#fbbf24";
+        break;
+      case "confirmed":
+        label = "Confirmed";
         color = "#22c55e";
         break;
       case "completed":
         label = "Completed";
         color = "#38bdf8";
         break;
-      case "cancelled":
+      case "canceled":
         label = "Cancelled";
         color = "#f97373";
         break;
+      default:
+        label = status;
+        color = "#9ca3af";
     }
     return (
       <View style={[styles.statusBadge, { backgroundColor: color + "33" }]}>
@@ -46,14 +71,14 @@ export default function UserReservations({
     );
   };
 
-  const renderItem = ({ item }: { item: Reservation }) => (
+  const renderItem = ({ item }: { item: any }) => (
     <View style={styles.card}>
       <View style={styles.rowBetween}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.vanName}>{item.vanName}</Text>
+          <Text style={styles.vanName}>{item.category?.name || "Van"}</Text>
           <Text style={styles.locationText}>
             <Ionicons name="location-outline" size={13} color={ACCENT} />{" "}
-            {item.location}
+            {item.office?.name || "Office"}
           </Text>
         </View>
         {renderStatus(item.status)}
@@ -62,15 +87,28 @@ export default function UserReservations({
       <View style={styles.datesRow}>
         <View style={styles.dateBlock}>
           <Text style={styles.dateLabel}>Pickup</Text>
-          <Text style={styles.dateValue}>{item.pickupDate}</Text>
+          <Text style={styles.dateValue}>{formatDate(item.startDate)}</Text>
         </View>
         <View style={styles.dateBlock}>
           <Text style={styles.dateLabel}>Return</Text>
-          <Text style={styles.dateValue}>{item.returnDate}</Text>
+          <Text style={styles.dateValue}>{formatDate(item.endDate)}</Text>
         </View>
+      </View>
+      <View style={styles.priceRow}>
+        <Text style={styles.priceLabel}>Total Price</Text>
+        <Text style={styles.priceValue}>£{item.totalPrice}</Text>
       </View>
     </View>
   );
+
+  if (isLoading) {
+    return (
+      <View style={styles.emptyState}>
+        <ActivityIndicator size="large" color={"#fff"} />
+        <Text style={styles.emptySubtitle}>Loading reservations...</Text>
+      </View>
+    );
+  }
 
   if (!reservations.length) {
     return (
@@ -78,7 +116,7 @@ export default function UserReservations({
         <Ionicons
           name="calendar-outline"
           size={40}
-          color="rgba(148,163,184,0.9)"
+          color="rgba(255, 255, 255, 0.9)"
         />
         <Text style={styles.emptyTitle}>No reservations yet</Text>
         <Text style={styles.emptySubtitle}>
@@ -91,7 +129,7 @@ export default function UserReservations({
   return (
     <FlatList
       data={reservations}
-      keyExtractor={(item) => item.id}
+      keyExtractor={(item) => item._id || item.id || Math.random().toString()}
       renderItem={renderItem}
       contentContainerStyle={{ paddingBottom: 40 }}
     />
@@ -100,11 +138,9 @@ export default function UserReservations({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "rgba(15,23,42,0.95)",
+    backgroundColor: "rgba(15,23,42,0.7)",
     borderRadius: 18,
     padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.45)",
     marginBottom: 14,
   },
   rowBetween: {
@@ -172,9 +208,28 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   emptySubtitle: {
-    color: "#9ca3af",
+    color: "#c6c7c8ff",
     fontSize: 13,
     textAlign: "center",
     marginTop: 6,
+  },
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148,163,184,0.2)",
+  },
+  priceLabel: {
+    color: "#9ca3af",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  priceValue: {
+    color: ACCENT,
+    fontSize: 18,
+    fontWeight: "800",
   },
 });

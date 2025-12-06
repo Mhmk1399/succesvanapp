@@ -263,9 +263,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: "rgba(254,154,0,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.3)",
   },
   viewAllText: {
     color: ACCENT,

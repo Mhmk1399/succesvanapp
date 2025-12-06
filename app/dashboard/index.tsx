@@ -12,42 +12,48 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
 import UserReservations, { Reservation } from "@/components/dashboard/reserve";
 import UserProfileCard from "@/components/dashboard/profile";
 import { LinearGradient } from "expo-linear-gradient";
+import { useAuth } from "@/contexts/AuthContext";
+import { reservationService } from "@/services/reservationService";
 
 const ACCENT = "#fe9a00";
 
 type TabKey = "profile" | "reservations";
 
-const MOCK_RESERVATIONS: Reservation[] = [
-  {
-    id: "1",
-    vanName: "Ford Transit LWB",
-    pickupDate: "12/12/2025 · 09:00",
-    returnDate: "13/12/2025 · 18:00",
-    location: "NW London",
-    status: "upcoming",
-  },
-  {
-    id: "2",
-    vanName: "Mercedes Sprinter",
-    pickupDate: "01/11/2025 · 10:00",
-    returnDate: "01/11/2025 · 20:00",
-    location: "Northolt",
-    status: "completed",
-  },
-];
-
 export default function ProfileScreen() {
+  const { user, logout } = useAuth();
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const router = useRouter();
 
   const indicatorX = useRef(new Animated.Value(0)).current;
   const prevTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    if (user && activeTab === "reservations") {
+      loadReservations();
+    }
+  }, [user, activeTab]);
+
+  const loadReservations = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const result = await reservationService.getAll(user._id);
+      if (result.success) {
+        setReservations(result.data);
+      }
+    } catch (error) {
+      console.error("Load reservations error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     const prevTab = prevTabRef.current;
@@ -71,7 +77,7 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await AsyncStorage.clear();
+    await logout();
     setLogoutModalVisible(false);
     router.replace("/" as any);
   };
@@ -181,16 +187,16 @@ export default function ProfileScreen() {
             showsVerticalScrollIndicator={false}
           >
             <UserProfileCard
-              name="John Doe"
-              email="john.doe@example.com"
-              phone="+44 7123 456 789"
+              name={user ? `${user.name} ${user.lastName}` : "User"}
+              email={user?.emaildata.emailAddress || ""}
+              phone={user?.phoneData.phoneNumber || ""}
             />
 
             {/* میتونی اینجا کارتهای دیگه مثل Payment Method / Address اضافه کنی */}
           </ScrollView>
         ) : (
           <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}>
-            <UserReservations reservations={MOCK_RESERVATIONS} />
+            <UserReservations reservations={reservations} isLoading={isLoading} />
           </View>
         )}
       </View>

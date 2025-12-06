@@ -6,15 +6,44 @@ import HorizontalVanList from "@/components/home/HorizontalVanList";
 import WhyUs from "@/components/home/WhyUs";
 import FAQ from "@/components/home/FAQ";
 import Footer from "@/components/global/Footer";
-import { mockVans } from "@/data/mockVans";
 import ReservationForm from "@/components/global/ReservationForm";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { categoryService } from "@/services/categoryService";
+import { Van } from "@/components/home/HorizontalVanList";
+import { Category } from "@/types/type";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { height: screenHeight } = Dimensions.get("window");
+  const [vans, setVans] = useState<Van[]>([]);
+  const [translateY] = useState(new Animated.Value(screenHeight));
 
-  const [translateY] = useState(new Animated.Value(screenHeight)); // Start from bottom
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const result = await categoryService.getAll();
+      if (result.success) {
+        const mappedVans: Van[] = result.data
+          .slice(0, 5)
+          .map((cat: Category) => ({
+            id: cat._id,
+            name: cat.name,
+            image: cat.image || require("@/assets/images/van.png"),
+            seats: cat.seats || 2,
+            fuel: cat.fuel || "Diesel",
+            doors: cat.doors || 2,
+            gear: cat.gear || "manual",
+            pricePerHour: cat.pricePerHour || 0,
+          }));
+        setVans(mappedVans);
+      }
+    } catch (error) {
+      console.log("Load categories error:", error);
+    }
+  };
 
   const closeModal = () => {
     Animated.timing(translateY, {
@@ -35,9 +64,9 @@ export default function HomeScreen() {
       <ReservationHero />
       <ReservationForm onCompleted={closeModal} />
       <HorizontalVanList
-        vans={mockVans.slice(0, 5)}
-        onSelectVan={(van) => router.push("/vans" as any)}
-        onViewAll={() => router.push("/vans" as any)}
+        vans={vans}
+        onSelectVan={() => router.push("/vans")}
+        onViewAll={() => router.push("/vans")}
       />
       <WhyUs />
       <FAQ />

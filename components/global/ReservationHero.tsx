@@ -305,8 +305,11 @@ export default function ReservationHero() {
 
         <View style={styles.featureRow}>
           <Feature icon="checkmark-circle" label="24/7 Service" />
+          <View style={styles.featureDivider} />
           <Feature icon="shield-checkmark" label="Fully Insured" />
+          <View style={styles.featureDivider} />
           <Feature icon="flash" label="Instant Booking" />
+          <View style={styles.featureDivider} />
           <Feature icon="car-sport" label="Modern Fleet" />
         </View>
       </Animated.View>
@@ -318,7 +321,7 @@ function Feature({ icon, label }: { icon: any; label: string }) {
   return (
     <View style={styles.feature}>
       <View style={styles.featureIconContainer}>
-        <Ionicons name={icon} size={16} color={ACCENT} />
+        <Ionicons name={icon} size={10} color={ACCENT} />
       </View>
       <Text style={styles.featureText}>{label}</Text>
     </View>
@@ -415,46 +418,34 @@ const styles = StyleSheet.create({
   },
   featureRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    marginTop: 4,
-    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 36,
+    marginBottom: 15,
   },
   feature: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(15,23,42,0.7)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    gap: 3,
   },
   featureIconContainer: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: ACCENT + "25",
     alignItems: "center",
     justifyContent: "center",
   },
   featureText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.3,
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  featureDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: "rgba(255,255,255,0.2)",
   },
   teaser: {
     marginTop: 18,
