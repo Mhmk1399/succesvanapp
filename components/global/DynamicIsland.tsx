@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, usePathname } from "expo-router";
+import { useRouter, usePathname, Href } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -349,7 +349,7 @@ export default function DynamicIsland() {
   }, []);
 
   const handlePress = useCallback(
-    async (route: string, index: number) => {
+    async (route: "/" | "/vans" | "/dashboard", index: number) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       // Quick tap animation
@@ -371,12 +371,12 @@ export default function DynamicIsland() {
       if (route === "/dashboard") {
         const token = await AsyncStorage.getItem("authToken");
         if (!token) {
-          router.push("/register" as any);
+          router.push("/register" as Href);
           return;
         }
       }
 
-      router.push(route as any);
+      router.push(route as Href);
     },
     [router]
   );

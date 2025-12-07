@@ -9,6 +9,7 @@ import {
   Animated,
   RefreshControl,
 } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
@@ -36,12 +37,16 @@ type VanListProps = {
   vans: Van[];
   onSelectVan?: (van: Van) => void;
   onBookVan?: (van: Van) => void;
+  flatListRef?: React.RefObject<FlatList | null>;
+  highlightedVanId?: string | null;
 };
 
 export default function VanList({
   vans,
   onSelectVan,
   onBookVan,
+  flatListRef,
+  highlightedVanId,
 }: VanListProps) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -67,6 +72,7 @@ export default function VanList({
     <VanCard
       van={item}
       index={index}
+      isHighlighted={highlightedVanId === item.id}
       onPress={() => {
         Haptics.selectionAsync();
         onSelectVan?.(item);
@@ -81,12 +87,22 @@ export default function VanList({
   return (
     <View style={styles.container}>
       <FlatList
+        ref={flatListRef}
         data={vans}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: 120, paddingBottom: 100 }}
         ItemSeparatorComponent={() => <View style={{ height: 20 }} />}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconWrapper}>
+              <Ionicons name="car-outline" size={80} color={ACCENT} />
+            </View>
+            <Text style={styles.emptyTitle}>No Vans Available</Text>
+            <Text style={styles.emptySubtitle}>We couldn't find any vans matching your criteria. Try adjusting your filters.</Text>
+          </View>
+        }
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -103,6 +119,12 @@ export default function VanList({
         removeClippedSubviews={true}
         maxToRenderPerBatch={5}
         windowSize={5}
+        onScrollToIndexFailed={(info) => {
+          const wait = new Promise((resolve) => setTimeout(resolve, 500));
+          wait.then(() => {
+            flatListRef?.current?.scrollToIndex({ index: info.index, animated: true });
+          });
+        }}
       />
 
       {/* Floating Blur Header */}
@@ -142,15 +164,17 @@ export default function VanList({
 type VanCardProps = {
   van: Van;
   index: number;
+  isHighlighted?: boolean;
   onPress?: () => void;
   onBook?: () => void;
 };
 
-function VanCard({ van, index, onPress, onBook }: VanCardProps) {
+function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(50)).current;
   const imageScale = useRef(new Animated.Value(1.2)).current;
+  const highlightAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -175,6 +199,26 @@ function VanCard({ van, index, onPress, onBook }: VanCardProps) {
       }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    if (isHighlighted) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(highlightAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: false,
+          }),
+          Animated.timing(highlightAnim, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: false,
+          }),
+        ]),
+        { iterations: 2 }
+      ).start();
+    }
+  }, [isHighlighted]);
 
   const handlePressIn = () => {
     Animated.parallel([
@@ -212,6 +256,11 @@ function VanCard({ van, index, onPress, onBook }: VanCardProps) {
   const imageSource =
     typeof van.image === "string" ? { uri: van.image } : van.image;
 
+  const borderColor = highlightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["rgba(148,163,184,0.5)", "rgba(254,154,0,1)"],
+  });
+
   return (
     <Animated.View
       style={[
@@ -222,18 +271,21 @@ function VanCard({ van, index, onPress, onBook }: VanCardProps) {
         },
       ]}
     >
-      <Pressable
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={({ pressed }) => [styles.card, pressed && { opacity: 0.95 }]}
-      >
+      <Animated.View style={[styles.card, { borderColor }]}>
+        <Pressable
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.95 }]}
+        >
         <View style={styles.imageContainer}>
-          <Animated.Image
-            source={imageSource}
-            style={[styles.image, { transform: [{ scale: imageScale }] }]}
-            resizeMode="cover"
-          />
+          <Animated.View style={{ transform: [{ scale: imageScale }] }}>
+            <Image
+              source={imageSource}
+              style={styles.image}
+              contentFit="cover"
+            />
+          </Animated.View>
           <LinearGradient
             colors={["rgba(0,0,0,0.9)", "rgba(0,0,0,0.1)", "rgba(0,0,0,0.85)"]}
             locations={[0, 0.5, 1]}
@@ -288,7 +340,8 @@ function VanCard({ van, index, onPress, onBook }: VanCardProps) {
             </Pressable>
           </View>
         </View>
-      </Pressable>
+        </Pressable>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -377,8 +430,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: "hidden",
     backgroundColor: "#020617",
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.5)",
+    borderWidth: 2,
   },
   imageContainer: {
     width: "100%",
@@ -480,5 +532,35 @@ const styles = StyleSheet.create({
     color: DARK,
     fontSize: 13,
     fontWeight: "700",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyIconWrapper: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "rgba(254,154,0,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#f9fafb",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: "#9ca3af",
+    textAlign: "center",
+    lineHeight: 20,
   },
 });

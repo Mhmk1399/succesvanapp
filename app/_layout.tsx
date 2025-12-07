@@ -5,6 +5,7 @@ import DynamicIsland from "@/components/global/DynamicIsland";
 import FloatingContactButton from "@/components/global/FloatingContactButton";
 import ScreenEdgeBlur from "@/components/global/ScreenEdgeBlur";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -26,15 +27,17 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AuthProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="vans/index" />
-        <Stack.Screen name="dashboard/index" />
-      </Stack>
-      <ScreenEdgeBlur /> 
-      <DynamicIsland />
-      <FloatingContactButton />
-    </AuthProvider>
+    <QueryProvider>
+      <AuthProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="vans/index" />
+          <Stack.Screen name="dashboard/index" />
+        </Stack>
+        <ScreenEdgeBlur /> 
+        <DynamicIsland />
+        <FloatingContactButton />
+      </AuthProvider>
+    </QueryProvider>
   );
 }

@@ -3,12 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   Dimensions,
   Pressable,
   Animated,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -42,6 +41,8 @@ export default function HorizontalVanList({
   onSelectVan,
   onViewAll,
 }: HorizontalVanListProps) {
+  if (!vans || vans.length === 0) return null;
+
   const scrollX = useRef(new Animated.Value(0)).current;
 
   const renderItem = ({ item, index }: { item: Van; index: number }) => {
@@ -180,7 +181,7 @@ function VanCard({ van, index, scale, opacity, onPress }: VanCardProps) {
         style={styles.card}
       >
         <View style={styles.imageWrapper}>
-          <Image source={imageSource} style={styles.image} resizeMode="cover" />
+          <Image source={imageSource} style={styles.image} contentFit="cover" />
           <LinearGradient
             colors={["transparent", "rgba(0,0,0,0.3)", "rgba(0,0,0,0.95)"]}
             locations={[0, 0.4, 1]}

@@ -1,28 +1,26 @@
 // components/ReservationForm.tsx
-import React, { useState, useRef, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  Pressable,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  useColorScheme,
-  Modal,
-  Animated,
-  Dimensions,
-  PanResponder,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useColorScheme,
+  View,
+} from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import * as Notifications from "expo-notifications";
-import { Audio } from "expo-av";
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
@@ -69,8 +67,8 @@ type Category = {
   name: string;
 };
 
-import { officeService } from "@/services/officeService";
 import { categoryService } from "@/services/categoryService";
+import { officeService } from "@/services/officeService";
 import { useRouter } from "expo-router";
 
 /* ===================================================== */
@@ -243,9 +241,8 @@ type SheetContentProps = {
   onCompleted?: () => void;
 };
 
-function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
+function ReservationSheetContent({ onClose }: SheetContentProps) {
   const colorScheme = useColorScheme();
-  const router = useRouter();
 
   // ---- WEB LOGIC PORTED HERE ----
   const [offices, setOffices] = useState<Office[]>([]);
@@ -264,7 +261,6 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const [driverAge, setDriverAge] = useState("");
   const [message, setMessage] = useState("");
   const [location, setLocation] = useState("");
-  const [passengers, setPassengers] = useState("");
 
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
@@ -288,7 +284,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         setOffices(offData.data || []);
         setCategories(catData.data || []);
       } catch (error) {
-        console.log("Failed to fetch offices/categories", error);
+        console.log("Failed to fetch data", error);
       }
     };
     fetchData();
@@ -443,8 +439,9 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       Alert.alert("Missing dates", "Please choose pickup and return dates.");
       return;
     }
-    if (!driverAge || Number(driverAge) < 18) {
-      Alert.alert("Driver age", "Driver age must be 18+.");
+    const age = Number(driverAge);
+    if (!driverAge || age < 25 || age > 70) {
+      Alert.alert("Driver age", "Driver age must be between 25 and 70.");
       return;
     }
 
@@ -462,58 +459,53 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       pickupTime: formatTime(pickupTime),
       returnTime: formatTime(returnTime),
       pickupLocation: location,
-      passengers,
       driverAge,
       message,
     };
 
     console.log("Reservation payload (mobile):", reservationPayload);
 
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require("@/assets/sounds/Iphone.mp3")
-      );
-      await sound.playAsync();
-      setTimeout(() => sound.unloadAsync(), 3000);
-    } catch (error) {
-      console.log("Sound error:", error);
-    }
+    // try {
+    //   const { sound } = await Audio.Sound.createAsync(
+    //     require("@/assets/sounds/Iphone.mp3")
+    //   );
+    //   await sound.playAsync();
+    //   setTimeout(() => sound.unloadAsync(), 3000);
+    // } catch (error) {
+    //   console.log("Sound error:", error);
+    // }
 
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "✅ Reservation Confirmed",
-        body: `Your van reservation at ${officeObj?.name} has been successfully submitted!`,
-        sound: true,
-      },
-      trigger: null,
-    });
-    // 🔧 اینجا می‌تونی:
-    // - به سرور POST کنی
-    // - یا تو AsyncStorage ذخیره کنی
-    // - یا با expo-router به صفحه‌ی بعدی push کنی و payload رو ببری
+    // await Notifications.scheduleNotificationAsync({
+    //   content: {
+    //     title: "✅ Reservation Confirmed",
+    //     body: `Your van reservation at ${officeObj?.name} has been successfully submitted!`,
+    //     sound: true,
+    //   },
+    //   trigger: null,
+    // });
 
-    Alert.alert(
-      "✅ Reservation Submitted",
-      "Your reservation has been successfully submitted!",
-      [
-        {
-          text: "View Available Vans",
-          onPress: () => {
-            onCompleted?.();
-            onClose();
-            router.push({
-              pathname: "/vans",
-              params: {
-                category: selectedCategory,
-                office: selectedOffice,
-                pickupDate: pickupDate?.toISOString(),
-                returnDate: returnDate?.toISOString(),
-              },
-            } as any);
-          },
-        },
-      ]
-    );
+    // Alert.alert(
+    //   "✅ Reservation Submitted",
+    //   "Your reservation has been successfully submitted!",
+    //   [
+    //     {
+    //       text: "View Available Vans",
+    //       onPress: () => {
+    //         onCompleted?.();
+    //         onClose();
+    //         router.push({
+    //           pathname: "/vans",
+    //           params: {
+    //             category: selectedCategory,
+    //             office: selectedOffice,
+    //             pickupDate: pickupDate?.toISOString(),
+    //             returnDate: returnDate?.toISOString(),
+    //           },
+    //         } as any);
+    //       },
+    //     },
+    //   ]
+    // );
 
     setIsSubmitting(false);
   };
@@ -600,19 +592,22 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
 
   const getMinMaxTime = () => {
     if (pickerMode !== "time") return {};
-    const slots = pickerField === "pickupTime" || pickerField === "returnTime" 
-      ? (pickerField === "pickupTime" ? pickupSlots : returnSlots)
-      : { start: "00:00", end: "23:59" };
-    
+    const slots =
+      pickerField === "pickupTime" || pickerField === "returnTime"
+        ? pickerField === "pickupTime"
+          ? pickupSlots
+          : returnSlots
+        : { start: "00:00", end: "23:59" };
+
     const [startH, startM] = slots.start.split(":").map(Number);
     const [endH, endM] = slots.end.split(":").map(Number);
-    
+
     const minTime = new Date();
     minTime.setHours(startH, startM, 0, 0);
-    
+
     const maxTime = new Date();
     maxTime.setHours(endH, endM, 0, 0);
-    
+
     return { minimumDate: minTime, maximumDate: maxTime };
   };
 
@@ -629,7 +624,9 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         themeVariant={colorScheme === "dark" ? "dark" : "light"}
         accentColor={ACCENT}
         textColor={colorScheme === "dark" ? "#fff" : DARK}
-        minimumDate={pickerMode === "date" ? new Date() : getMinMaxTime().minimumDate}
+        minimumDate={
+          pickerMode === "date" ? new Date() : getMinMaxTime().minimumDate
+        }
         maximumDate={getMinMaxTime().maximumDate}
       />
 
@@ -860,47 +857,16 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
             </View>
           </View>
 
-          {/* LOCATION & PASSENGERS */}
-          <View style={sheetStyles.section}>
-            {renderInput(
-              "Pickup location (e.g. NW London)",
-              location,
-              setLocation,
-              "navigate-outline",
-              "location"
-            )}
-          </View>
-
-          <View style={sheetStyles.section}>
-            {renderInput(
-              "Number of passengers",
-              passengers,
-              setPassengers,
-              "people-outline",
-              "passengers",
-              "numeric"
-            )}
-          </View>
-
           {/* Driver age & message */}
           <View style={sheetStyles.row}>
             <View style={sheetStyles.half}>
               {renderInput(
-                "Driver age (18+)",
+                "Driver age (25-70)",
                 driverAge,
                 setDriverAge,
                 "person-outline",
                 "driverAge",
                 "numeric"
-              )}
-            </View>
-            <View style={sheetStyles.half}>
-              {renderInput(
-                "Message (optional)",
-                message,
-                setMessage,
-                "chatbubble-ellipses-outline",
-                "message"
               )}
             </View>
           </View>
@@ -1005,7 +971,7 @@ function VoiceAIButton() {
             {recording ? "Listening..." : "Fill with Voice + AI"}
           </Text>
           <Text style={sheetStyles.voiceSubtitle}>
-            Just tell us pickup, return & passengers
+            Just tell us pickup, return & vehicle
           </Text>
         </View>
       </View>

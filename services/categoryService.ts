@@ -1,4 +1,4 @@
-const API_URL = process.env.REACT_APP_CATEGORIES_API || "https://succesvan.vercel.app/api/categories";
+const API_URL = process.env.REACT_APP_CATEGORIES_API || " ";
 
 export const categoryService = {
   async getAll() {

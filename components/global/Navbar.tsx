@@ -211,7 +211,7 @@ export default function Navbar() {
     ]).start();
 
     closeMenu();
-    setTimeout(() => router.push(route as any), 200);
+    setTimeout(() => router.push(route), 200);
   };
 
   const menuButtonRotation = menuButtonRotate.interpolate({

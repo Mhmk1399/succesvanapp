@@ -104,8 +104,11 @@ export default function UserProfileCard({
       } else {
         Alert.alert("Error", result.error || "Failed to update profile");
       }
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Network error");
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Network error"
+      );
     } finally {
       setIsSaving(false);
     }

@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, StyleSheet, ActivityIndicator, FlatList } from "react-native";
 import VanList, { Van } from "@/components/global/vanlist";
 import BookingModal from "@/components/global/BookingModal";
 import { LinearGradient } from "expo-linear-gradient";
 import { categoryService } from "@/services/categoryService";
 import { useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Category } from "@/types/type";
 
 export default function VansScreen() {
   const params = useLocalSearchParams();
@@ -14,11 +15,30 @@ export default function VansScreen() {
   const [bookingVan, setBookingVan] = useState<Van | null>(null);
   const [vans, setVans] = useState<Van[]>([]);
   const [loading, setLoading] = useState(true);
+  const flatListRef = useRef<FlatList>(null);
+  const [highlightedVanId, setHighlightedVanId] = useState<string | null>(null);
 
   useEffect(() => {
     loadCategories();
     checkPendingBooking();
   }, [params]);
+
+  useEffect(() => {
+    if (params.selectedVanId && vans.length > 0) {
+      setHighlightedVanId(params.selectedVanId as string);
+      const index = vans.findIndex((v) => v.id === params.selectedVanId);
+      if (index !== -1) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({
+            index,
+            animated: true,
+            viewPosition: 0.5,
+          });
+        }, 300);
+        setTimeout(() => setHighlightedVanId(null), 3000);
+      }
+    }
+  }, [params.selectedVanId, vans]);
 
   const checkPendingBooking = async () => {
     try {
@@ -38,7 +58,7 @@ export default function VansScreen() {
     try {
       const result = await categoryService.getAll();
       if (result.success) {
-        let mappedVans: Van[] = result.data.map((cat: any) => ({
+        let mappedVans: Van[] = result.data.map((cat: Category) => ({
           id: cat._id,
           name: cat.name,
           image: cat.image || require("@/assets/images/van.png"),
@@ -47,7 +67,7 @@ export default function VansScreen() {
           doors: cat.doors || 2,
           gear: cat.gear || "manual",
           pricePerHour: cat.pricePerHour || 0,
-          cargo: cat.cargo,
+          // cargo: cat.cargo,
         }));
 
         // Filter by category if provided
@@ -95,12 +115,24 @@ export default function VansScreen() {
         vans={vans}
         onSelectVan={handleSelectVan}
         onBookVan={handleBookVan}
+        flatListRef={flatListRef}
+        highlightedVanId={highlightedVanId}
       />
 
       <BookingModal
         visible={bookingModalVisible}
         van={bookingVan}
         onClose={() => setBookingModalVisible(false)}
+        prefilledData={
+          params.office && params.pickupDate
+            ? {
+                office: params.office as string,
+                category: params.category as string,
+                pickupDate: params.pickupDate as string,
+                returnDate: params.returnDate as string,
+              }
+            : undefined
+        }
       />
     </View>
   );

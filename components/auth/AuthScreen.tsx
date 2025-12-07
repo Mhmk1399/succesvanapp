@@ -59,9 +59,9 @@ export default function AuthScreen() {
       } else {
         Alert.alert("Error", result.message || "Failed to send code");
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Send code error:", error);
-      Alert.alert("Error", error.message || "Network error");
+      Alert.alert("Error", error instanceof Error ? error.message : "Network error");
     } finally {
       setIsSubmitting(false);
     }
@@ -85,11 +85,11 @@ export default function AuthScreen() {
           if (pendingVan) {
             await AsyncStorage.removeItem("pendingBookingVan");
             Alert.alert("✅ Success", "Logged in! Redirecting to booking...", [
-              { text: "OK", onPress: () => router.push("/vans" as any) },
+              { text: "OK", onPress: () => router.push("/vans") },
             ]);
           } else {
             Alert.alert("✅ Success", "Logged in!", [
-              { text: "OK", onPress: () => router.push("/dashboard" as any) },
+              { text: "OK", onPress: () => router.push("/dashboard") },
             ]);
           }
         } else {
@@ -98,8 +98,8 @@ export default function AuthScreen() {
       } else {
         Alert.alert("Error", result.message || "Invalid code");
       }
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Network error");
+    } catch (error) {
+      Alert.alert("Error", error instanceof Error ? error.message : "Network error");
     } finally {
       setIsSubmitting(false);
     }
@@ -130,18 +130,18 @@ export default function AuthScreen() {
           Alert.alert(
             "✅ Success",
             "Account created! Redirecting to booking...",
-            [{ text: "OK", onPress: () => router.push("/vans" as any) }]
+            [{ text: "OK", onPress: () => router.push("/vans") }]
           );
         } else {
           Alert.alert("✅ Success", "Account created!", [
-            { text: "OK", onPress: () => router.push("/dashboard" as any) },
+            { text: "OK", onPress: () => router.push("/dashboard") },
           ]);
         }
       } else {
         Alert.alert("Error", result.message || "Registration failed");
       }
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Network error");
+    } catch (error) {
+      Alert.alert("Error", error instanceof Error ? error.message : "Network error");
     } finally {
       setIsSubmitting(false);
     }

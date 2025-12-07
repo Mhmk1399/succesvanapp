@@ -1,0 +1,321 @@
+import { StyleSheet, Platform } from "react-native";
+import { height, ACCENT, DARK } from "./constants";
+
+export const styles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.2)",
+  },
+  modalContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.85,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: "hidden",
+    borderColor: "rgba(254,154,0,0.2)",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  blurContainer: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,0.6)",
+    paddingTop: 12,
+  },
+  handleArea: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    backgroundColor: "rgba(148,163,184,0.7)",
+    borderRadius: 999,
+    marginBottom: 12,
+  },
+  vanImageCard: {
+    height: 180,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  vanImage: {
+    width: "100%",
+    height: "100%",
+  },
+  vanImageGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  vanImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 16,
+    justifyContent: "space-between",
+  },
+  vanImageTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#fff",
+    marginBottom: 8,
+  },
+  vanImageSpecs: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  vanImageSpec: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(15,23,42,0.6)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  vanImageSpecText: {
+    color: "#e5e7eb",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  vanImagePrice: {
+    alignSelf: "flex-end",
+    alignItems: "flex-end",
+  },
+  vanImagePriceValue: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: ACCENT,
+  },
+  vanImagePriceUnit: {
+    fontSize: 13,
+    color: "#9ca3af",
+    fontWeight: "600",
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#f9fafb",
+  },
+  form: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#e5e7eb",
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+    }),
+  },
+  inputFocused: {
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderColor: ACCENT,
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+      },
+    }),
+  },
+  input: {
+    flex: 1,
+    color: "#f9fafb",
+    fontSize: 14,
+    paddingVertical: 8,
+    fontWeight: "500",
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#9ca3af",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 20,
+  },
+  half: {
+    flex: 1,
+  },
+  submitBtn: {
+    borderRadius: 18,
+    overflow: "hidden",
+    marginTop: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  submitBtnPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  submitBtnDisabled: {
+    opacity: 0.6,
+  },
+  errorText: {
+    color: "#ef4444",
+    fontSize: 13,
+    marginTop: 6,
+    marginLeft: 4,
+    fontWeight: "500",
+  },
+  submitGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+  },
+  submitText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: DARK,
+  },
+  inputDisabled: {
+    opacity: 0.6,
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
+  addonCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  addonCardSelected: {
+    backgroundColor: "rgba(254,154,0,0.1)",
+    borderColor: ACCENT,
+  },
+  addonInfo: {
+    flex: 1,
+  },
+  addonName: {
+    color: "#f9fafb",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  addonDesc: {
+    color: "#9ca3af",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  addonPrice: {
+    color: ACCENT,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxSelected: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "90%",
+    maxHeight: "70%",
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#f9fafb",
+    marginBottom: 16,
+  },
+  modalItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  modalItemSelected: {
+    backgroundColor: "rgba(254,154,0,0.15)",
+  },
+  modalItemText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#e5e7eb",
+  },
+});

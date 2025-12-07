@@ -8,20 +8,12 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Reservation } from "@/types/type";
 
 const ACCENT = "#fe9a00";
 
-export type Reservation = {
-  id: string;
-  vanName: string;
-  pickupDate: string;
-  returnDate: string;
-  location: string;
-  status: "upcoming" | "completed" | "cancelled" | "pending";
-};
-
 type UserReservationsProps = {
-  reservations: any[];
+  reservations: Reservation[];
   isLoading?: boolean;
 };
 
@@ -71,7 +63,7 @@ export default function UserReservations({
     );
   };
 
-  const renderItem = ({ item }: { item: any }) => (
+  const renderItem = ({ item }: { item: Reservation }) => (
     <View style={styles.card}>
       <View style={styles.rowBetween}>
         <View style={{ flex: 1 }}>
@@ -129,7 +121,7 @@ export default function UserReservations({
   return (
     <FlatList
       data={reservations}
-      keyExtractor={(item) => item._id || item.id || Math.random().toString()}
+      keyExtractor={(item) => item._id || Math.random().toString()}
       renderItem={renderItem}
       contentContainerStyle={{ paddingBottom: 40 }}
     />

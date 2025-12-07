@@ -13,11 +13,11 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
-import UserReservations, { Reservation } from "@/components/dashboard/reserve";
+import UserReservations from "@/components/dashboard/reserve";
 import UserProfileCard from "@/components/dashboard/profile";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/contexts/AuthContext";
-import { reservationService } from "@/services/reservationService";
+import { useReservations } from "@/hooks/useReservations";
 
 const ACCENT = "#fe9a00";
 
@@ -25,35 +25,13 @@ type TabKey = "profile" | "reservations";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
-  const [reservations, setReservations] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: reservations = [], isLoading } = useReservations();
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const router = useRouter();
 
   const indicatorX = useRef(new Animated.Value(0)).current;
   const prevTabRef = useRef(activeTab);
-
-  useEffect(() => {
-    if (user && activeTab === "reservations") {
-      loadReservations();
-    }
-  }, [user, activeTab]);
-
-  const loadReservations = async () => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      const result = await reservationService.getAll(user._id);
-      if (result.success) {
-        setReservations(result.data);
-      }
-    } catch (error) {
-      console.error("Load reservations error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   useEffect(() => {
     const prevTab = prevTabRef.current;
@@ -79,7 +57,7 @@ export default function ProfileScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await logout();
     setLogoutModalVisible(false);
-    router.replace("/" as any);
+    router.replace("/");
   };
 
   return (
@@ -196,7 +174,10 @@ export default function ProfileScreen() {
           </ScrollView>
         ) : (
           <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}>
-            <UserReservations reservations={reservations} isLoading={isLoading} />
+            <UserReservations
+              reservations={reservations}
+              isLoading={isLoading}
+            />
           </View>
         )}
       </View>
@@ -276,7 +257,7 @@ const styles = StyleSheet.create({
     right: 0,
     textAlign: "center",
     zIndex: 1,
-    marginBottom:12
+    marginBottom: 12,
   },
   logoutButton: {
     padding: 8,

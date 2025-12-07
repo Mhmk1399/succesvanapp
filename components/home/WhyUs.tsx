@@ -158,11 +158,6 @@ function FeatureCard({ feature }: FeatureCardProps) {
   );
 }
 
-type StatItemProps = {
-  number: string;
-  label: string;
-};
-
 const styles = StyleSheet.create({
   container: {
     paddingVertical: 24,

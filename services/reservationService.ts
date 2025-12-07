@@ -1,7 +1,19 @@
-const API_URL = process.env.EXPO_PUBLIC_RESERVATIONS_API || "https://succesvan.vercel.app/api/reservations";
+const API_URL = process.env.EXPO_PUBLIC_RESERVATIONS_API || " ";
+
+type ReservationCreate = {
+  category?: string;
+  office: string;
+  startDate: string;
+  endDate: string;
+  dirverAge: string | number;
+  totalPrice: number;
+};
 
 export const reservationService = {
-  async create(userData: any, reservationData: any) {
+  async create(
+    userData: { userId: string },
+    reservationData: ReservationCreate
+  ) {
     console.log("Posting to:", API_URL);
     console.log("Body:", JSON.stringify({ userData, reservationData }));
     const response = await fetch(API_URL, {

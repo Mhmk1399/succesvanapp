@@ -7,10 +7,10 @@ import {
   StyleSheet,
   Dimensions,
   Animated,
-  Image,
   Easing,
   Platform,
 } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 
 const { width, height } = Dimensions.get("window");
@@ -231,7 +231,7 @@ export default function ReservationHero() {
         <View style={styles.logoContainer}>
           <Image
             source={require("@/assets/images/logo.png")}
-            resizeMode="contain"
+            contentFit="contain"
             style={styles.logo}
           />
         </View>
@@ -283,7 +283,7 @@ export default function ReservationHero() {
             <Image
               source={currentVan}
               style={styles.vanImage}
-              resizeMode="contain"
+              contentFit="contain"
             />
           </Animated.View>
         </View>
@@ -317,7 +317,13 @@ export default function ReservationHero() {
   );
 }
 
-function Feature({ icon, label }: { icon: any; label: string }) {
+function Feature({
+  icon,
+  label,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+}) {
   return (
     <View style={styles.feature}>
       <View style={styles.featureIconContainer}>

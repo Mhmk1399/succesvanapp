@@ -65,7 +65,12 @@ export default function HomeScreen() {
       <ReservationForm onCompleted={closeModal} />
       <HorizontalVanList
         vans={vans}
-        onSelectVan={() => router.push("/vans")}
+        onSelectVan={(van) =>
+          router.push({
+            pathname: "/vans",
+            params: { selectedVanId: van.id },
+          })
+        }
         onViewAll={() => router.push("/vans")}
       />
       <WhyUs />

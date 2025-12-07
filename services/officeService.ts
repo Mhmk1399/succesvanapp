@@ -1,4 +1,4 @@
-const API_URL = process.env.REACT_APP_OFFICES_API || "https://succesvan.vercel.app/api/offices";
+const API_URL = process.env.REACT_APP_OFFICES_API || " ";
 
 export const officeService = {
   async getAll() {

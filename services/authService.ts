@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_URL = process.env.EXPO_PUBLIC_AUTH_API || "https://succesvan.vercel.app/api/auth";
+const API_URL = process.env.EXPO_PUBLIC_AUTH_API || " ";
 
 export const authService = {
   async sendCode(phoneNumber: string) {
