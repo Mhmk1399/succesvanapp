@@ -1,4 +1,4 @@
-const API_URL = process.env.REACT_APP_OFFICES_API || " ";
+const API_URL = process.env.EXPO_PUBLIC_OFFICES_API || " ";
 
 export const officeService = {
   async getAll() {

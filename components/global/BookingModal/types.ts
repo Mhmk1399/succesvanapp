@@ -9,6 +9,7 @@ export type BookingModalProps = {
     category: string;
     pickupDate: string;
     returnDate: string;
+    driverAge?: string | number;
   };
 };
 

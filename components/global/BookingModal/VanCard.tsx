@@ -9,8 +9,15 @@ import { ACCENT } from "./constants";
 
 export const VanCard = ({ van }: { van: Van }) => (
   <View style={styles.vanImageCard}>
-    <Image source={typeof van.image === "string" ? { uri: van.image } : van.image} style={styles.vanImage} contentFit="cover" />
-    <LinearGradient colors={["transparent", "rgba(2,6,23,0.8)"]} style={styles.vanImageGradient} />
+    <Image
+      source={typeof van.image === "string" ? { uri: van.image } : van.image}
+      style={styles.vanImage}
+      contentFit="cover"
+    />
+    <LinearGradient
+      colors={["transparent", "rgba(2,6,23,0.8)"]}
+      style={styles.vanImageGradient}
+    />
     <View style={styles.vanImageOverlay}>
       <View>
         <Text style={styles.vanImageTitle}>{van.name}</Text>
@@ -26,7 +33,9 @@ export const VanCard = ({ van }: { van: Van }) => (
         </View>
       </View>
       <View style={styles.vanImagePrice}>
-        <Text style={styles.vanImagePriceValue}>£{van.pricePerHour}</Text>
+        <Text style={styles.vanImagePriceValue}>
+          £{van?.pricingTiers?.[0]?.pricePerHour}
+        </Text>
         <Text style={styles.vanImagePriceUnit}>/hour</Text>
       </View>
     </View>

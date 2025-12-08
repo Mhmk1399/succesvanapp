@@ -23,7 +23,7 @@ import { VanCard } from "./BookingModal/VanCard";
 import { FormFields } from "./BookingModal/FormFields";
 import { styles } from "./BookingModal/styles";
 import { ACCENT, DARK } from "./BookingModal/constants";
-import { getSelectedOffice, getAvailableTimeSlots } from "./BookingModal/utils";
+import { getSelectedOffice, getAvailableTimeSlots, isDateDisabled } from "./BookingModal/utils";
 
 export default function BookingModal({
   visible,
@@ -53,8 +53,8 @@ export default function BookingModal({
     pickerMode,
     isSubmitting,
     addons,
-    selectedAddons,
-    setSelectedAddons,
+    addonSelections,
+    setAddonSelections,
     offices,
     selectedOffice,
     setSelectedOffice,
@@ -67,6 +67,7 @@ export default function BookingModal({
     openPicker,
     handleConfirm,
     handleSubmit,
+    isLoadingData,
   } = useBookingModal(visible, van, onClose, prefilledData);
 
   if (!van) return null;
@@ -121,8 +122,9 @@ export default function BookingModal({
                   pickerField={pickerField}
                   openPicker={openPicker}
                   addons={addons}
-                  selectedAddons={selectedAddons}
-                  setSelectedAddons={setSelectedAddons}
+                  addonSelections={addonSelections}
+                  setAddonSelections={setAddonSelections}
+                  isLoadingData={isLoadingData}
                 />
 
                 <Pressable
@@ -184,8 +186,7 @@ export default function BookingModal({
                         returnDate,
                         getSelectedOffice(offices, selectedOffice)
                       );
-                if (!slots.start) return new Date();
-                const [h, m] = slots.start.split(":").map(Number);
+                const [h, m] = (slots.start || "00:00").split(":").map(Number);
                 const minTime = new Date();
                 minTime.setHours(h, m, 0, 0);
                 return minTime;
@@ -204,8 +205,7 @@ export default function BookingModal({
                         returnDate,
                         getSelectedOffice(offices, selectedOffice)
                       );
-                if (!slots.end) return new Date();
-                const [h, m] = slots.end.split(":").map(Number);
+                const [h, m] = (slots.end || "23:59").split(":").map(Number);
                 const maxTime = new Date();
                 maxTime.setHours(h, m, 0, 0);
                 return maxTime;

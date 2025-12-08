@@ -6,6 +6,7 @@ import {
   StyleSheet,
   FlatList,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Reservation } from "@/types/type";
@@ -15,6 +16,8 @@ const ACCENT = "#fe9a00";
 type UserReservationsProps = {
   reservations: Reservation[];
   isLoading?: boolean;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 };
 
 const formatDate = (dateStr: string) => {
@@ -30,6 +33,8 @@ const formatDate = (dateStr: string) => {
 export default function UserReservations({
   reservations,
   isLoading = false,
+  onRefresh,
+  isRefreshing = false,
 }: UserReservationsProps) {
   const renderStatus = (status: string) => {
     let label = "";
@@ -72,6 +77,12 @@ export default function UserReservations({
             <Ionicons name="location-outline" size={13} color={ACCENT} />{" "}
             {item.office?.name || "Office"}
           </Text>
+          {item.createdAt && (
+            <Text style={styles.reservedDate}>
+              <Ionicons name="calendar" size={13} color={ACCENT} /> Reserved On:{" "}
+              {formatDate(item.createdAt.toString())}
+            </Text>
+          )}
         </View>
         {renderStatus(item.status)}
       </View>
@@ -86,6 +97,20 @@ export default function UserReservations({
           <Text style={styles.dateValue}>{formatDate(item.endDate)}</Text>
         </View>
       </View>
+
+      {item.addOns && item.addOns.length > 0 && (
+        <View style={styles.addonsSection}>
+          <Text style={styles.addonsLabel}>Add-ons</Text>
+          {item.addOns.map((addon, index) => (
+            <View key={index} style={styles.addonItem}>
+              <Text style={styles.addonName}>
+                {addon.addOn?.name || "Add-on"} x{addon.quantity}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <View style={styles.priceRow}>
         <Text style={styles.priceLabel}>Total Price</Text>
         <Text style={styles.priceValue}>£{item.totalPrice}</Text>
@@ -120,10 +145,18 @@ export default function UserReservations({
 
   return (
     <FlatList
-      data={reservations}
+      data={[...reservations].reverse()}
       keyExtractor={(item) => item._id || Math.random().toString()}
       renderItem={renderItem}
       contentContainerStyle={{ paddingBottom: 40 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={onRefresh}
+          tintColor={ACCENT}
+          colors={[ACCENT]}
+        />
+      }
     />
   );
 }
@@ -148,6 +181,11 @@ const styles = StyleSheet.create({
   locationText: {
     color: "#9ca3af",
     fontSize: 13,
+    marginTop: 4,
+  },
+  reservedDate: {
+    color: "#9ca3af",
+    fontSize: 11,
     marginTop: 4,
   },
   datesRow: {
@@ -200,7 +238,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   emptySubtitle: {
-    color: "#c6c7c8ff",
+    color: "#ffffffd4",
     fontSize: 13,
     textAlign: "center",
     marginTop: 6,
@@ -223,5 +261,28 @@ const styles = StyleSheet.create({
     color: ACCENT,
     fontSize: 18,
     fontWeight: "800",
+  },
+  addonsSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148,163,184,0.2)",
+  },
+  addonsLabel: {
+    color: "#9ca3af",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  addonItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  addonName: {
+    color: "#e5e7eb",
+    fontSize: 13,
+    fontWeight: "500",
   },
 });

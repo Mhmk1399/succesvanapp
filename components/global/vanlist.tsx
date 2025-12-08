@@ -29,7 +29,7 @@ export type Van = {
   fuel: string;
   doors: number;
   gear: string;
-  pricePerHour: number;
+  pricingTiers?: { minHours: number; maxHours: number; pricePerHour: number }[];
   cargo?: string;
 };
 
@@ -100,7 +100,10 @@ export default function VanList({
               <Ionicons name="car-outline" size={80} color={ACCENT} />
             </View>
             <Text style={styles.emptyTitle}>No Vans Available</Text>
-            <Text style={styles.emptySubtitle}>We couldn't find any vans matching your criteria. Try adjusting your filters.</Text>
+            <Text style={styles.emptySubtitle}>
+              We couldn't find any vans matching your criteria. Try adjusting
+              your filters.
+            </Text>
           </View>
         }
         onScroll={Animated.event(
@@ -122,7 +125,10 @@ export default function VanList({
         onScrollToIndexFailed={(info) => {
           const wait = new Promise((resolve) => setTimeout(resolve, 500));
           wait.then(() => {
-            flatListRef?.current?.scrollToIndex({ index: info.index, animated: true });
+            flatListRef?.current?.scrollToIndex({
+              index: info.index,
+              animated: true,
+            });
           });
         }}
       />
@@ -278,68 +284,74 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
           onPressOut={handlePressOut}
           style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.95 }]}
         >
-        <View style={styles.imageContainer}>
-          <Animated.View style={{ transform: [{ scale: imageScale }] }}>
-            <Image
-              source={imageSource}
-              style={styles.image}
-              contentFit="cover"
-            />
-          </Animated.View>
-          <LinearGradient
-            colors={["rgba(0,0,0,0.9)", "rgba(0,0,0,0.1)", "rgba(0,0,0,0.85)"]}
-            locations={[0, 0.5, 1]}
-            style={styles.gradientOverlay}
-          />
-        </View>
-
-        <View style={styles.overlayContent}>
-          <View>
-            <Text style={styles.vanName} numberOfLines={1}>
-              {van.name}
-            </Text>
-            <Text style={styles.vanSub}>
-              {van.cargo ? van.cargo : "Modern van · or similar"}
-            </Text>
-
-            <View style={styles.chipsRow}>
-              <Chip icon="people-outline" label={`${van.seats} seats`} />
-              <Chip icon="car-outline" label={`${van.doors} doors`} />
-              <Chip icon="flame-outline" label={van.fuel} />
-            </View>
-          </View>
-
-          <View style={styles.bottomRow}>
-            <View>
-              <View style={styles.gearRow}>
-                <Ionicons name="settings-outline" size={14} color={ACCENT} />
-                <Text style={styles.gearText}>
-                  {van.gear === "manual,automatic"
-                    ? "Manual & Automatic"
-                    : van.gear.charAt(0).toUpperCase() + van.gear.slice(1)}
-                </Text>
-              </View>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceValue}>£{van.pricePerHour}</Text>
-                <Text style={styles.priceUnit}>/ hour</Text>
-              </View>
-            </View>
-
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                onBook?.();
-              }}
-              style={({ pressed }) => [
-                styles.bookButton,
-                pressed && styles.bookButtonPressed,
+          <View style={styles.imageContainer}>
+            <Animated.View style={{ transform: [{ scale: imageScale }] }}>
+              <Image
+                source={imageSource}
+                style={styles.image}
+                contentFit="cover"
+              />
+            </Animated.View>
+            <LinearGradient
+              colors={[
+                "rgba(0,0,0,0.9)",
+                "rgba(0,0,0,0.1)",
+                "rgba(0,0,0,0.85)",
               ]}
-            >
-              <Text style={styles.bookButtonText}>Book Now</Text>
-              <Ionicons name="arrow-forward" size={16} color={DARK} />
-            </Pressable>
+              locations={[0, 0.5, 1]}
+              style={styles.gradientOverlay}
+            />
           </View>
-        </View>
+
+          <View style={styles.overlayContent}>
+            <View>
+              <Text style={styles.vanName} numberOfLines={1}>
+                {van.name}
+              </Text>
+              <Text style={styles.vanSub}>
+                {van.cargo ? van.cargo : "Modern van · or similar"}
+              </Text>
+
+              <View style={styles.chipsRow}>
+                <Chip icon="people-outline" label={`${van.seats} seats`} />
+                <Chip icon="car-outline" label={`${van.doors} doors`} />
+                <Chip icon="flame-outline" label={van.fuel} />
+              </View>
+            </View>
+
+            <View style={styles.bottomRow}>
+              <View>
+                <View style={styles.gearRow}>
+                  <Ionicons name="settings-outline" size={14} color={ACCENT} />
+                  <Text style={styles.gearText}>
+                    {van.gear === "manual,automatic"
+                      ? "Manual & Automatic"
+                      : van.gear.charAt(0).toUpperCase() + van.gear.slice(1)}
+                  </Text>
+                </View>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceValue}>
+                    £{van.pricingTiers?.[0]?.pricePerHour || 0}
+                  </Text>
+                  <Text style={styles.priceUnit}>/ hour</Text>
+                </View>
+              </View>
+
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onBook?.();
+                }}
+                style={({ pressed }) => [
+                  styles.bookButton,
+                  pressed && styles.bookButtonPressed,
+                ]}
+              >
+                <Text style={styles.bookButtonText}>Book Now</Text>
+                <Ionicons name="chevron-forward" size={16} color="#444444ff" />
+              </Pressable>
+            </View>
+          </View>
         </Pressable>
       </Animated.View>
     </Animated.View>

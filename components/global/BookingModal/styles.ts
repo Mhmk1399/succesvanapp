@@ -45,7 +45,7 @@ export const styles = StyleSheet.create({
     marginBottom: 12,
   },
   vanImageCard: {
-    height: 180,
+    height: 130,
     marginHorizontal: 20,
     marginBottom: 20,
     borderRadius: 20,
@@ -176,6 +176,12 @@ export const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 8,
     marginBottom: 10,
+  },
+  infoText: {
+    color: "#fbbf24",
+    fontSize: 11,
+    marginBottom: 6,
+    fontWeight: "500",
   },
   row: {
     flexDirection: "row",

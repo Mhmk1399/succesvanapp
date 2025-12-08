@@ -1,4 +1,4 @@
-const API_URL = process.env.REACT_APP_CATEGORIES_API || " ";
+const API_URL = process.env.EXPO_PUBLIC_CATEGORIES_API || " ";
 
 export const categoryService = {
   async getAll() {

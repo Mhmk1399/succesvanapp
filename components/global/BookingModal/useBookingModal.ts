@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import { addonService } from "@/services/addonService";
 import { officeService } from "@/services/officeService";
 import { reservationService } from "@/services/reservationService";
+import { calculatePrice } from "@/utils/priceCalculator";
 import { AddOn, Office } from "@/types/type";
 import { Van } from "../vanlist";
 import { PickerField } from "./types";
@@ -29,6 +30,7 @@ export const useBookingModal = (
     category: string;
     pickupDate: string;
     returnDate: string;
+    driverAge?: string | number;
   }
 ) => {
   const hasPrefilledData = !!prefilledData;
@@ -43,16 +45,16 @@ export const useBookingModal = (
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [pickupDate, setPickupDate] = useState<Date | null>(
-    prefilledData?.pickupDate ? new Date(prefilledData.pickupDate) : null
+    prefilledData?.pickupDate ? new Date(prefilledData.pickupDate) : new Date()
   );
   const [pickupTime, setPickupTime] = useState<Date | null>(
-    prefilledData?.pickupDate ? new Date(prefilledData.pickupDate) : null
+    prefilledData?.pickupDate ? new Date(prefilledData.pickupDate) : new Date()
   );
   const [returnDate, setReturnDate] = useState<Date | null>(
-    prefilledData?.returnDate ? new Date(prefilledData.returnDate) : null
+    prefilledData?.returnDate ? new Date(prefilledData.returnDate) : new Date(Date.now() + 24 * 60 * 60 * 1000)
   );
   const [returnTime, setReturnTime] = useState<Date | null>(
-    prefilledData?.returnDate ? new Date(prefilledData.returnDate) : null
+    prefilledData?.returnDate ? new Date(prefilledData.returnDate) : new Date()
   );
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [pickerField, setPickerField] = useState<PickerField>(null);
@@ -60,13 +62,14 @@ export const useBookingModal = (
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [addons, setAddons] = useState<AddOn[]>([]);
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [addonSelections, setAddonSelections] = useState<Record<string, { quantity: number; tierId?: string }>>({});
   const [offices, setOffices] = useState<Office[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [selectedOffice, setSelectedOffice] = useState<string>(
     prefilledData?.office || ""
   );
   const [officeModalVisible, setOfficeModalVisible] = useState(false);
-  const [driverAge, setDriverAge] = useState("");
+  const [driverAge, setDriverAge] = useState(prefilledData?.driverAge?.toString() || "");
 
   useEffect(() => {
     if (visible && !user && van && !hasCheckedAuth.current) {
@@ -138,6 +141,7 @@ export const useBookingModal = (
 
   useEffect(() => {
     const fetchData = async () => {
+      setIsLoadingData(true);
       try {
         const [addonsResult, officesResult] = await Promise.all([
           addonService.getAll(),
@@ -147,6 +151,8 @@ export const useBookingModal = (
         setOffices(officesResult.data || []);
       } catch (error) {
         console.log("Failed to fetch data", error);
+      } finally {
+        setIsLoadingData(false);
       }
     };
     if (visible) fetchData();
@@ -180,7 +186,7 @@ export const useBookingModal = (
   }, [visible]);
 
   const openPicker = (field: PickerField, mode: "date" | "time") => {
-    if (!hasPrefilledData && !selectedOffice) {
+    if (!selectedOffice) {
       Alert.alert("Select Office", "Please select an office first.");
       return;
     }
@@ -235,10 +241,11 @@ export const useBookingModal = (
         newErrors.pickup = "Please select pickup date and time";
       if (!returnDate || !returnTime)
         newErrors.return = "Please select return date and time";
-      const age = Number(driverAge);
-      if (!driverAge || age < 25 || age > 75)
-        newErrors.driverAge = "Driver age must be between 25 and 75";
     }
+    
+    const age = Number(driverAge);
+    if (!driverAge || age < 25 || age > 70)
+      newErrors.driverAge = "Driver age must be between 25 and 70";
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
@@ -260,12 +267,26 @@ export const useBookingModal = (
       const [returnHour, returnMin] = formatTime(returnTime).split(":");
       endDateTime.setHours(parseInt(returnHour), parseInt(returnMin));
 
-      const hours = Math.ceil((endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60));
-      const vanPrice = (van?.pricePerHour || 0) * hours;
-      const addonsPrice = selectedAddons.reduce((sum, addonId) => {
-        const addon = addons.find(a => a._id === addonId);
-        return sum + (addon?.pricingType === "flat" ? (addon.flatPrice || 0) : 0);
+      const vanPrice = calculatePrice(
+        startDateTime,
+        endDateTime,
+        van?.pricingTiers || []
+      );
+      
+      const addonsPrice = Object.entries(addonSelections).reduce((sum, [addonId, selection]) => {
+        const addon = addons.find((a) => a._id === addonId);
+        if (!addon) return sum;
+        
+        let addonPrice = 0;
+        if (addon.pricingType === "flat") {
+          addonPrice = (addon.flatPrice || 0) * selection.quantity;
+        } else if (addon.pricingType === "tiered" && selection.tierId) {
+          const tier = addon.tiers?.find((t) => t._id === selection.tierId);
+          addonPrice = (tier?.price || 0) * selection.quantity;
+        }
+        return sum + addonPrice;
       }, 0);
+      
       const totalPrice = vanPrice + addonsPrice;
 
       const reservationData = {
@@ -278,6 +299,7 @@ export const useBookingModal = (
       };
 
       const result = await reservationService.create(userData, reservationData);
+      console.log(result);
 
       if (result.success) {
         await playSuccessSound();
@@ -291,7 +313,15 @@ export const useBookingModal = (
         Alert.alert("Error", result.error || "Booking failed");
       }
     } catch (error) {
-      Alert.alert("Network error");
+      console.log("[BookingModal] Submit error:", error);
+      console.log(
+        "[BookingModal] Error details:",
+        JSON.stringify(error, null, 2)
+      );
+      Alert.alert(
+        "Network error",
+        error instanceof Error ? error.message : "Unknown error"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -326,8 +356,8 @@ export const useBookingModal = (
     errors,
     setErrors,
     addons,
-    selectedAddons,
-    setSelectedAddons,
+    addonSelections,
+    setAddonSelections,
     offices,
     selectedOffice,
     setSelectedOffice,
@@ -340,5 +370,6 @@ export const useBookingModal = (
     openPicker,
     handleConfirm,
     handleSubmit,
+    isLoadingData,
   };
 };

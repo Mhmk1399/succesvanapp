@@ -21,6 +21,8 @@ import {
   View,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
+import * as Notifications from "expo-notifications";
+import { Audio } from "expo-av";
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
@@ -69,7 +71,7 @@ type Category = {
 
 import { categoryService } from "@/services/categoryService";
 import { officeService } from "@/services/officeService";
-import { useRouter } from "expo-router";
+import { router, useRouter } from "expo-router";
 
 /* ===================================================== */
 
@@ -465,47 +467,47 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
 
     console.log("Reservation payload (mobile):", reservationPayload);
 
-    // try {
-    //   const { sound } = await Audio.Sound.createAsync(
-    //     require("@/assets/sounds/Iphone.mp3")
-    //   );
-    //   await sound.playAsync();
-    //   setTimeout(() => sound.unloadAsync(), 3000);
-    // } catch (error) {
-    //   console.log("Sound error:", error);
-    // }
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require("@/assets/sounds/Iphone.mp3")
+      );
+      await sound.playAsync();
+      setTimeout(() => sound.unloadAsync(), 3000);
+    } catch (error) {
+      console.log("Sound error:", error);
+    }
 
-    // await Notifications.scheduleNotificationAsync({
-    //   content: {
-    //     title: "✅ Reservation Confirmed",
-    //     body: `Your van reservation at ${officeObj?.name} has been successfully submitted!`,
-    //     sound: true,
-    //   },
-    //   trigger: null,
-    // });
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "✅ Reservation Confirmed",
+        body: `Your van reservation at ${officeObj?.name} has been successfully submitted!`,
+        sound: true,
+      },
+      trigger: null,
+    });
 
-    // Alert.alert(
-    //   "✅ Reservation Submitted",
-    //   "Your reservation has been successfully submitted!",
-    //   [
-    //     {
-    //       text: "View Available Vans",
-    //       onPress: () => {
-    //         onCompleted?.();
-    //         onClose();
-    //         router.push({
-    //           pathname: "/vans",
-    //           params: {
-    //             category: selectedCategory,
-    //             office: selectedOffice,
-    //             pickupDate: pickupDate?.toISOString(),
-    //             returnDate: returnDate?.toISOString(),
-    //           },
-    //         } as any);
-    //       },
-    //     },
-    //   ]
-    // );
+    Alert.alert(
+      "✅ Reservation Submitted",
+      "Your reservation has been successfully submitted!",
+      [
+        {
+          text: "View Available Vans",
+          onPress: () => {
+            onClose();
+            router.push({
+              pathname: "/vans",
+              params: {
+                category: selectedCategory,
+                office: selectedOffice,
+                pickupDate: pickupDate?.toISOString(),
+                returnDate: returnDate?.toISOString(),
+                driverAge: driverAge,
+              },
+            });
+          },
+        },
+      ]
+    );
 
     setIsSubmitting(false);
   };

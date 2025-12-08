@@ -17,7 +17,8 @@ import UserReservations from "@/components/dashboard/reserve";
 import UserProfileCard from "@/components/dashboard/profile";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/contexts/AuthContext";
-import { useReservations } from "@/hooks/useReservations";
+import { reservationService } from "@/services/reservationService";
+import { Reservation } from "@/types/type";
 
 const ACCENT = "#fe9a00";
 
@@ -25,13 +26,19 @@ type TabKey = "profile" | "reservations";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
-  const { data: reservations = [], isLoading } = useReservations();
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const router = useRouter();
 
   const indicatorX = useRef(new Animated.Value(0)).current;
   const prevTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    fetchReservations();
+  }, [user]);
 
   useEffect(() => {
     const prevTab = prevTabRef.current;
@@ -48,9 +55,28 @@ export default function ProfileScreen() {
     }
   }, [activeTab]);
 
+  const fetchReservations = async () => {
+    if (!user?._id) return;
+    setIsLoading(true);
+    try {
+      const result = await reservationService.getAll(user._id);
+      setReservations(result.data || []);
+    } catch (error) {
+      console.error("Error fetching reservations:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleTabChange = async (tab: TabKey) => {
     await Haptics.selectionAsync();
     setActiveTab(tab);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchReservations();
+    setIsRefreshing(false);
   };
 
   const handleLogout = async () => {
@@ -177,6 +203,8 @@ export default function ProfileScreen() {
             <UserReservations
               reservations={reservations}
               isLoading={isLoading}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
             />
           </View>
         )}

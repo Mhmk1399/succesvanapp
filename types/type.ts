@@ -80,6 +80,12 @@ export interface ServicesPeriod {
   service: number;
 }
 
+export interface PricingTier {
+  minHours: number;
+  maxHours: number;
+  pricePerHour: number;
+}
+
 export interface Category {
   _id?: string;
   name: string;
@@ -87,7 +93,7 @@ export interface Category {
   image?: string;
   type: string | Type;
   servicesPeriod: ServicesPeriod;
-  pricePerHour: number;
+  pricingTiers: PricingTier[];
   fuel: "gas" | "diesel" | "electric" | "hybrid";
   gear: "automatic" | "manual" | "manual,automatic";
   seats: number;
@@ -129,6 +135,7 @@ export interface AddOn {
   pricingType: "flat" | "tiered";
   flatPrice?: number;
   tiers?: Array<{
+    _id?: string;
     minDays: number;
     maxDays: number;
     price: number;
@@ -217,7 +224,7 @@ export interface VanData {
     air: number;
     service: number;
   };
-  pricePerHour: number;
+  pricingTiers?: PricingTier[];
   fuel: "gas" | "diesel" | "electric" | "hybrid";
   gear: "automatic" | "manual" | "manual,automatic";
   seats: number;
