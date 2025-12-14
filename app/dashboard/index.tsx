@@ -29,11 +29,11 @@ export default function ProfileScreen() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>("profile");
+  const [activeTab, setActiveTab] = useState<TabKey>("reservations");
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const router = useRouter();
 
-  const indicatorX = useRef(new Animated.Value(0)).current;
+  const indicatorX = useRef(new Animated.Value(1)).current;
   const prevTabRef = useRef(activeTab);
 
   useEffect(() => {

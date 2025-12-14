@@ -66,7 +66,9 @@ export default function VansScreen() {
           fuel: cat.fuel || "Diesel",
           doors: cat.doors || 2,
           gear: cat.gear || "manual",
+          showPrice: cat.showPrice || 0,
           pricingTiers: cat.pricingTiers || [],
+          extraHoursRate: cat.extraHoursRate || 0,
         }));
 
         // Filter by category if provided
@@ -129,6 +131,8 @@ export default function VansScreen() {
                 category: params.category as string,
                 pickupDate: params.pickupDate as string,
                 returnDate: params.returnDate as string,
+                pickupTime: params.pickupTime as string,
+                returnTime: params.returnTime as string,
                 driverAge: params.driverAge as string,
               }
             : undefined

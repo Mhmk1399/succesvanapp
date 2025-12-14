@@ -1,46 +1,49 @@
 interface PricingTier {
-  minHours: number;
-  maxHours: number;
-  pricePerHour: number;
+  minDays: number;
+  maxDays: number;
+  pricePerDay: number;
 }
 
 export function calculatePrice(
   startDate: Date,
   endDate: Date,
-  pricingTiers: PricingTier[]
+  pricingTiers: PricingTier[],
+  extraHoursRate: number = 0
 ): number {
   if (!pricingTiers || pricingTiers.length === 0) return 0;
 
-  const diffTime = endDate.getTime() - startDate.getTime();
-  const totalHours = Math.ceil(diffTime / (1000 * 60 * 60));
+  const start = new Date(startDate);
+  const end = new Date(endDate);
 
-  if (totalHours <= 0) return 0;
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+
+  const diffTime = end.getTime() - start.getTime();
+  const totalMinutes = diffTime / (1000 * 60);
+  const totalHours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
+
+  const billableHours = remainingMinutes > 15 ? totalHours + 1 : totalHours;
+
+  if (billableHours <= 0) return 0;
+
+  let totalDays = Math.floor(billableHours / 24);
+  const extraHours = billableHours % 24;
+
+  if (billableHours < 24) {
+    totalDays = 1;
+  } else if (extraHours > 6) {
+    totalDays += 1;
+  }
 
   const tier =
     pricingTiers.find(
-      (t) => totalHours >= t.minHours && totalHours <= t.maxHours
-    ) || pricingTiers[0];
+      (t) => totalDays >= t.minDays && totalDays <= t.maxDays
+    ) || pricingTiers[pricingTiers.length - 1];
 
-  const pricePerHour = tier.pricePerHour;
+  const pricePerDay = tier.pricePerDay;
+  const daysPrice = totalDays * pricePerDay;
+  const extraHoursPrice =
+    billableHours < 24 || extraHours > 6 ? 0 : extraHours * extraHoursRate;
 
-  let billableDays = 0;
-  let billableHours = 0;
-
-  if (totalHours < 24) {
-    billableDays = 1;
-  } else {
-    const fullDays = Math.floor(totalHours / 24);
-    const remainingHours = totalHours % 24;
-
-    if (remainingHours >= 6) {
-      billableDays = fullDays + 1;
-    } else if (remainingHours > 0) {
-      billableDays = fullDays;
-      billableHours = remainingHours;
-    } else {
-      billableDays = fullDays;
-    }
-  }
-
-  return (billableDays * 24 + billableHours) * pricePerHour;
+  return daysPrice + extraHoursPrice;
 }

@@ -5,13 +5,7 @@ import * as Haptics from "expo-haptics";
 import { AddOn, Office, User } from "@/types/type";
 import { styles } from "./styles";
 import { ACCENT, DARK } from "./constants";
-import {
-  formatDate,
-  formatTime,
-  getAvailableTimeSlots,
-  getSelectedOffice,
-} from "./utils";
-import { PickerField } from "./types";
+import { formatDate, formatTime } from "./utils";
 
 type FormFieldsProps = {
   name: string;
@@ -31,15 +25,17 @@ type FormFieldsProps = {
   driverAge: string;
   setDriverAge: (v: string) => void;
   pickupDate: Date | null;
-  pickupTime: Date | null;
+  pickupTime: string;
   returnDate: Date | null;
-  returnTime: Date | null;
-  pickerField: PickerField;
-  openPicker: (field: PickerField, mode: "date" | "time") => void;
+  returnTime: string;
+  openDatePicker: () => void;
+  openTimePicker: (field: "pickupTime" | "returnTime") => void;
   addons: AddOn[];
   addonSelections: Record<string, { quantity: number; tierId?: string }>;
   setAddonSelections: (v: Record<string, { quantity: number; tierId?: string }>) => void;
   isLoadingData: boolean;
+  message: string;
+  setMessage: (v: string) => void;
 };
 
 export const FormFields = ({
@@ -63,12 +59,14 @@ export const FormFields = ({
   pickupTime,
   returnDate,
   returnTime,
-  pickerField,
-  openPicker,
+  openDatePicker,
+  openTimePicker,
   addons,
   addonSelections,
   setAddonSelections,
   isLoadingData,
+  message,
+  setMessage,
 }: FormFieldsProps) => (
   <>
     <View style={styles.inputGroup}>
@@ -210,112 +208,29 @@ export const FormFields = ({
           )}
         </View>
 
-        <Text style={styles.sectionLabel}>Pickup</Text>
-        {(() => {
-          const office = getSelectedOffice(offices, selectedOffice);
-          const slots =
-            office && pickupDate
-              ? getAvailableTimeSlots(pickupDate, office)
-              : null;
-          return slots?.start && slots?.end ? (
-            <Text style={styles.infoText}>
-              Office hours: {slots.start} - {slots.end}
-            </Text>
-          ) : null;
-        })()}
+        <Text style={styles.sectionLabel}>Pickup & Return</Text>
         {errors.pickup && <Text style={styles.errorText}>{errors.pickup}</Text>}
-        <View style={styles.row}>
-          <View style={styles.half}>
-            <Text style={styles.label}>Date</Text>
-            <Pressable
-              onPress={() => openPicker("pickupDate", "date")}
-              style={[
-                styles.inputWrapper,
-                pickerField === "pickupDate" && styles.inputFocused,
-              ]}
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={18}
-                color={pickupDate ? ACCENT : "#9ca3af"}
-              />
-              <Text style={[styles.input, !pickupDate && { color: "#6b7280" }]}>
-                {formatDate(pickupDate)}
-              </Text>
-            </Pressable>
-          </View>
-          <View style={styles.half}>
-            <Text style={styles.label}>Time</Text>
-            <Pressable
-              onPress={() => openPicker("pickupTime", "time")}
-              style={[
-                styles.inputWrapper,
-                pickerField === "pickupTime" && styles.inputFocused,
-              ]}
-            >
-              <Ionicons
-                name="time-outline"
-                size={18}
-                color={pickupTime ? ACCENT : "#9ca3af"}
-              />
-              <Text style={[styles.input, !pickupTime && { color: "#6b7280" }]}>
-                {formatTime(pickupTime)}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <Text style={styles.sectionLabel}>Return</Text>
-        {(() => {
-          const office = getSelectedOffice(offices, selectedOffice);
-          const slots =
-            office && returnDate
-              ? getAvailableTimeSlots(returnDate, office)
-              : null;
-          return slots?.start && slots?.end ? (
-            <Text style={styles.infoText}>
-              Office hours: {slots.start} - {slots.end}
-            </Text>
-          ) : null;
-        })()}
         {errors.return && <Text style={styles.errorText}>{errors.return}</Text>}
+        <Pressable onPress={openDatePicker} style={[styles.inputWrapper]}>
+          <Ionicons name="calendar-outline" size={18} color={pickupDate && returnDate ? ACCENT : "#9ca3af"} />
+          <Text style={[styles.input, (!pickupDate || !returnDate) && { color: "#6b7280" }]}>
+            {pickupDate && returnDate ? `${formatDate(pickupDate)} - ${formatDate(returnDate)}` : "Select dates"}
+          </Text>
+        </Pressable>
+
         <View style={styles.row}>
           <View style={styles.half}>
-            <Text style={styles.label}>Date</Text>
-            <Pressable
-              onPress={() => openPicker("returnDate", "date")}
-              style={[
-                styles.inputWrapper,
-                pickerField === "returnDate" && styles.inputFocused,
-              ]}
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={18}
-                color={returnDate ? ACCENT : "#9ca3af"}
-              />
-              <Text style={[styles.input, !returnDate && { color: "#6b7280" }]}>
-                {formatDate(returnDate)}
-              </Text>
+            <Text style={styles.label}>Pickup Time</Text>
+            <Pressable onPress={() => openTimePicker("pickupTime")} style={styles.inputWrapper}>
+              <Ionicons name="time-outline" size={18} color={pickupTime ? ACCENT : "#9ca3af"} />
+              <Text style={[styles.input, !pickupTime && { color: "#6b7280" }]}>{formatTime(pickupTime)}</Text>
             </Pressable>
           </View>
           <View style={styles.half}>
-            <Text style={styles.label}>Time</Text>
-            <Pressable
-              onPress={() => openPicker("returnTime", "time")}
-              style={[
-                styles.inputWrapper,
-                pickerField === "returnTime" && styles.inputFocused,
-              ]}
-            >
-              <Ionicons
-                name="time-outline"
-                size={18}
-                color={returnTime ? ACCENT : "#9ca3af"}
-              />
-              <Text style={[styles.input, !returnTime && { color: "#6b7280" }]}>
-                {formatTime(returnTime)}
-              </Text>
+            <Text style={styles.label}>Return Time</Text>
+            <Pressable onPress={() => openTimePicker("returnTime")} style={styles.inputWrapper}>
+              <Ionicons name="time-outline" size={18} color={returnTime ? ACCENT : "#9ca3af"} />
+              <Text style={[styles.input, !returnTime && { color: "#6b7280" }]}>{formatTime(returnTime)}</Text>
             </Pressable>
           </View>
         </View>
@@ -330,12 +245,13 @@ export const FormFields = ({
     ) : addons.length > 0 ? (
       <View style={{ marginTop: 10 }}>
         <Text style={styles.sectionLabel}>Add-ons (Optional)</Text>
-        {addons.map((addon) => {
-          const selection = addonSelections[addon._id];
-          const isSelected = !!selection;
-          return (
-            <View key={addon._id} style={{ marginBottom: 12 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {addons.map((addon) => {
+            const selection = addonSelections[addon._id];
+            const isSelected = !!selection;
+            return (
               <Pressable
+                key={addon._id}
                 onPress={() => {
                   Haptics.selectionAsync();
                   if (isSelected) {
@@ -349,98 +265,141 @@ export const FormFields = ({
                     });
                   }
                 }}
-                style={[styles.addonCard, isSelected && styles.addonCardSelected]}
+                style={{
+                  width: "48%",
+                  backgroundColor: isSelected ? "rgba(254,154,0,0.15)" : "rgba(255,255,255,0.05)",
+                  borderRadius: 12,
+                  padding: 12,
+                  borderWidth: 1.5,
+                  borderColor: isSelected ? ACCENT : "rgba(255,255,255,0.1)",
+                }}
               >
-                <View style={styles.addonInfo}>
-                  <Text style={styles.addonName}>{addon.name}</Text>
-                  <Text style={styles.addonDesc}>{addon.description}</Text>
-                  <Text style={styles.addonPrice}>
-                    {addon.pricingType === "flat"
-                      ? `£${addon.flatPrice}`
-                      : "Tiered pricing"}
-                  </Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                  <Text style={{ color: "#f9fafb", fontSize: 13, fontWeight: "700", flex: 1 }}>{addon.name}</Text>
+                  <View style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    backgroundColor: isSelected ? ACCENT : "rgba(255,255,255,0.1)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    {isSelected && <Ionicons name="checkmark" size={14} color={DARK} />}
+                  </View>
                 </View>
-                <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                  {isSelected && <Ionicons name="checkmark" size={16} color={DARK} />}
-                </View>
-              </Pressable>
-              
-              {isSelected && (
-                <View style={{ marginTop: 8, paddingLeft: 12 }}>
-                  <View style={styles.row}>
-                    <View style={styles.half}>
-                      <Text style={styles.label}>Quantity</Text>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Pressable
-                          onPress={() => {
-                            Haptics.selectionAsync();
-                            if (selection.quantity > 1) {
+                <Text style={{ color: "#9ca3af", fontSize: 10, marginBottom: 6 }} numberOfLines={2}>{addon.description}</Text>
+                <Text style={{ color: ACCENT, fontSize: 12, fontWeight: "700" }}>
+                  {addon.pricingType === "flat" ? `£${addon.flatPrice}` : "From £" + (addon.tiers?.[0]?.price || 0)}
+                </Text>
+                {isSelected && (
+                  <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)", gap: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          Haptics.selectionAsync();
+                          if (selection.quantity > 1) {
+                            setAddonSelections({
+                              ...addonSelections,
+                              [addon._id]: { ...selection, quantity: selection.quantity - 1 },
+                            });
+                          }
+                        }}
+                        style={{ backgroundColor: "rgba(254,154,0,0.2)", borderRadius: 6, padding: 4 }}
+                      >
+                        <Ionicons name="remove" size={12} color={ACCENT} />
+                      </Pressable>
+                      <Text style={{ color: "#f9fafb", fontSize: 13, fontWeight: "700", minWidth: 24, textAlign: "center" }}>
+                        {selection.quantity}
+                      </Text>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          Haptics.selectionAsync();
+                          setAddonSelections({
+                            ...addonSelections,
+                            [addon._id]: { ...selection, quantity: selection.quantity + 1 },
+                          });
+                        }}
+                        style={{ backgroundColor: "rgba(254,154,0,0.2)", borderRadius: 6, padding: 4 }}
+                      >
+                        <Ionicons name="add" size={12} color={ACCENT} />
+                      </Pressable>
+                    </View>
+                    {addon.pricingType === "tiered" && addon.tiers && addon.tiers.length > 0 && (
+                      <View style={{ gap: 4 }}>
+                        {addon.tiers.map((tier) => (
+                          <Pressable
+                            key={tier._id}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              Haptics.selectionAsync();
                               setAddonSelections({
                                 ...addonSelections,
-                                [addon._id]: { ...selection, quantity: selection.quantity - 1 },
+                                [addon._id]: { ...selection, tierId: tier._id },
                               });
-                            }
-                          }}
-                          style={[styles.inputWrapper, { flex: 0, paddingHorizontal: 12 }]}
-                        >
-                          <Ionicons name="remove" size={18} color={ACCENT} />
-                        </Pressable>
-                        <Text style={[styles.input, { textAlign: "center", flex: 0, minWidth: 40 }]}>
-                          {selection.quantity}
-                        </Text>
-                        <Pressable
-                          onPress={() => {
-                            Haptics.selectionAsync();
-                            setAddonSelections({
-                              ...addonSelections,
-                              [addon._id]: { ...selection, quantity: selection.quantity + 1 },
-                            });
-                          }}
-                          style={[styles.inputWrapper, { flex: 0, paddingHorizontal: 12 }]}
-                        >
-                          <Ionicons name="add" size={18} color={ACCENT} />
-                        </Pressable>
-                      </View>
-                    </View>
-                  </View>
-                  
-                  {addon.pricingType === "tiered" && addon.tiers && addon.tiers.length > 0 && (
-                    <View style={{ marginTop: 8 }}>
-                      <Text style={styles.label}>Select Tier</Text>
-                      {addon.tiers.map((tier) => (
-                        <Pressable
-                          key={tier._id}
-                          onPress={() => {
-                            Haptics.selectionAsync();
-                            setAddonSelections({
-                              ...addonSelections,
-                              [addon._id]: { ...selection, tierId: tier._id },
-                            });
-                          }}
-                          style={[
-                            styles.inputWrapper,
-                            { marginBottom: 6 },
-                            selection.tierId === tier._id && styles.inputFocused,
-                          ]}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.input, { paddingVertical: 4 }]}>
-                              {tier.minDays}-{tier.maxDays} days: £{tier.price}
+                            }}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              backgroundColor: selection.tierId === tier._id ? "rgba(254,154,0,0.25)" : "rgba(255,255,255,0.05)",
+                              borderRadius: 6,
+                              paddingVertical: 4,
+                              paddingHorizontal: 8,
+                              borderWidth: 1,
+                              borderColor: selection.tierId === tier._id ? ACCENT : "transparent",
+                            }}
+                          >
+                            <Text style={{ color: "#e5e7eb", fontSize: 10, fontWeight: "500" }}>
+                              {tier.minDays}-{tier.maxDays}d
                             </Text>
-                          </View>
-                          {selection.tierId === tier._id && (
-                            <Ionicons name="checkmark-circle" size={18} color={ACCENT} />
-                          )}
-                        </Pressable>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-          );
-        })}
+                            <Text style={{ color: ACCENT, fontSize: 11, fontWeight: "700" }}>
+                              £{tier.price}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
     ) : null}
+
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>Message (Optional)</Text>
+      <View
+        style={[
+          styles.inputWrapper,
+          focusedInput === "message" && styles.inputFocused,
+          { minHeight: 80, alignItems: "flex-start" },
+        ]}
+      >
+        <Ionicons
+          name="chatbox-outline"
+          size={18}
+          color={focusedInput === "message" ? ACCENT : "#9ca3af"}
+          style={{ marginTop: 8 }}
+        />
+        <TextInput
+          placeholder="Add any special requests or notes..."
+          placeholderTextColor="#6b7280"
+          value={message}
+          onChangeText={setMessage}
+          onFocus={() => {
+            Haptics.selectionAsync();
+            setFocusedInput("message");
+          }}
+          onBlur={() => setFocusedInput(null)}
+          style={[styles.input, { minHeight: 60, textAlignVertical: "top" }]}
+          multiline
+          numberOfLines={3}
+        />
+      </View>
+    </View>
   </>
 );

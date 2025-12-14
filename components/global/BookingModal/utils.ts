@@ -11,10 +11,11 @@ export const formatDate = (date: Date | null) => {
   return `${d}/${m}/${y}`;
 };
 
-export const formatTime = (date: Date | null) => {
-  if (!date) return "HH:MM";
-  const h = date.getHours().toString().padStart(2, "0");
-  const min = date.getMinutes().toString().padStart(2, "0");
+export const formatTime = (time: string | Date | null) => {
+  if (!time) return "HH:MM";
+  if (typeof time === "string") return time;
+  const h = time.getHours().toString().padStart(2, "0");
+  const min = time.getMinutes().toString().padStart(2, "0");
   return `${h}:${min}`;
 };
 

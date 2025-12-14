@@ -21,8 +21,13 @@ import {
   View,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import * as Notifications from "expo-notifications";
 import { Audio } from "expo-av";
+import { Calendar } from "react-native-calendars";
+import { ActivityIndicator } from "react-native";
+import { typeService } from "@/services/typeService";
+import { officeService } from "@/services/officeService";
+import { Type } from "@/types/type";
+import VansModal from "./VansModal";
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
@@ -63,15 +68,6 @@ type Office = {
   specialDays?: SpecialDay[];
   workingTime?: WorkingTime[];
 };
-
-type Category = {
-  _id: string;
-  name: string;
-};
-
-import { categoryService } from "@/services/categoryService";
-import { officeService } from "@/services/officeService";
-import { router, useRouter } from "expo-router";
 
 /* ===================================================== */
 
@@ -243,54 +239,119 @@ type SheetContentProps = {
   onCompleted?: () => void;
 };
 
-function ReservationSheetContent({ onClose }: SheetContentProps) {
+function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const colorScheme = useColorScheme();
 
   // ---- WEB LOGIC PORTED HERE ----
   const [offices, setOffices] = useState<Office[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [type, setTypes] = useState<Type[]>([]);
 
   const [selectedOffice, setSelectedOffice] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedType, setSelectedType] = useState<string>("");
 
   const [pickupDate, setPickupDate] = useState<Date | null>(new Date());
-  const [pickupTime, setPickupTime] = useState<Date | null>(new Date());
+  const [pickupTime, setPickupTime] = useState<string>("10:00");
   const [returnDate, setReturnDate] = useState<Date | null>(
     new Date(Date.now() + 24 * 60 * 60 * 1000)
   );
-  const [returnTime, setReturnTime] = useState<Date | null>(new Date());
+  const [returnTime, setReturnTime] = useState<string>("10:00");
 
   const [driverAge, setDriverAge] = useState("");
-  const [message, setMessage] = useState("");
-  const [location, setLocation] = useState("");
 
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   const [pickerField, setPickerField] = useState<PickerField>(null);
-  const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
+  const [pickerMode] = useState<"date" | "time">("date");
   const isPickerVisible = pickerField !== null;
 
   const [officeModalVisible, setOfficeModalVisible] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [timeModalVisible, setTimeModalVisible] = useState(false);
+  const [timeModalField, setTimeModalField] = useState<
+    "pickupTime" | "returnTime" | null
+  >(null);
+  const [dateRangeModalVisible, setDateRangeModalVisible] = useState(false);
+  const [selectingDate, setSelectingDate] = useState<"pickup" | "return">(
+    "pickup"
+  );
+  const [tempPickupDate, setTempPickupDate] = useState<Date | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [reservedSlots, setReservedSlots] = useState<
+    { startTime: string; endTime: string }[]
+  >([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [vansModalVisible, setVansModalVisible] = useState(false);
+  const [availableVans, setAvailableVans] = useState<any[]>([]);
+  const [loadingVans, setLoadingVans] = useState(false);
 
-  // Fetch offices & categories
+  // Fetch offices & types
   useEffect(() => {
     const fetchData = async () => {
+      setIsLoading(true);
       try {
-        const [offData, catData] = await Promise.all([
+        const [offData, typeData] = await Promise.all([
           officeService.getAll(),
-          categoryService.getAll(),
+          typeService.getAll(),
         ]);
         setOffices(offData.data || []);
-        setCategories(catData.data || []);
+        setTypes(typeData || []);
       } catch (error) {
         console.log("Failed to fetch data", error);
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchData();
   }, []);
+
+  // Fetch reserved slots when office and dates change
+  useEffect(() => {
+    const fetchReservedSlots = async () => {
+      if (!selectedOffice || !timeModalVisible) return;
+
+      const targetDate =
+        timeModalField === "returnTime" ? returnDate : pickupDate;
+      if (!targetDate) return;
+
+      try {
+        const startDateStr = targetDate.toISOString().split("T")[0];
+        const endDateStr = targetDate.toISOString().split("T")[0];
+        const baseUrl =
+          process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API || "";
+        const url = `${baseUrl}?office=${selectedOffice}&startDate=${startDateStr}&endDate=${endDateStr}`;
+
+        console.log("[Fetching Reserved Slots] URL:", url);
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        console.log("[Reserved Slots API Response]", data);
+
+        if (data.success && data.data?.reservedSlots) {
+          console.log("[Reserved Slots]", data.data.reservedSlots);
+          setReservedSlots(data.data.reservedSlots);
+        } else if (data.success && data.reservedSlots) {
+          console.log("[Reserved Slots]", data.reservedSlots);
+          setReservedSlots(data.reservedSlots);
+        } else {
+          console.log("[Reserved Slots] No slots found");
+          setReservedSlots([]);
+        }
+      } catch (error) {
+        console.log("Failed to fetch reserved slots:", error);
+        setReservedSlots([]);
+      }
+    };
+
+    fetchReservedSlots();
+  }, [
+    selectedOffice,
+    pickupDate,
+    returnDate,
+    timeModalField,
+    timeModalVisible,
+  ]);
 
   const getSelectedOffice = (): Office | undefined =>
     offices.find((o) => o._id === selectedOffice);
@@ -375,23 +436,90 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
     return `${d}/${m}/${y}`;
   };
 
-  const formatTime = (date: Date | null) => {
-    if (!date) return "HH:MM";
-    const h = date.getHours().toString().padStart(2, "0");
-    const min = date.getMinutes().toString().padStart(2, "0");
-    return `${h}:${min}`;
+  const formatTime = (time: string | null) => time || "HH:MM";
+
+  const generateTimeSlots = (startTime: string, endTime: string) => {
+    const slots: string[] = [];
+    const [startH, startM] = startTime.split(":").map(Number);
+    const [endH, endM] = endTime.split(":").map(Number);
+
+    let currentMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    while (currentMinutes <= endMinutes) {
+      const h = Math.floor(currentMinutes / 60);
+      const m = currentMinutes % 60;
+      slots.push(
+        `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+      );
+      currentMinutes += 15;
+    }
+
+    return slots;
   };
 
-  // ---- PICKERS ----
-
-  const openPicker = async (field: PickerField, mode: "date" | "time") => {
+  const openDateRangePicker = () => {
     if (!selectedOffice) {
       Alert.alert("Select Office", "Please select an office first.");
       return;
     }
-    await Haptics.selectionAsync();
-    setPickerField(field);
-    setPickerMode(mode);
+    setSelectingDate("pickup");
+    setTempPickupDate(null);
+    setDateRangeModalVisible(true);
+  };
+
+  const selectDate = (date: Date) => {
+    if (isDateDisabled(date)) {
+      Alert.alert("Office Closed", "This date is not available.");
+      return;
+    }
+
+    Haptics.selectionAsync();
+    if (selectingDate === "pickup") {
+      setTempPickupDate(date);
+      setPickupDate(date);
+      setReturnDate(null);
+      setSelectingDate("return");
+    } else {
+      const baseDate = tempPickupDate || pickupDate;
+      if (baseDate && date < baseDate) {
+        Alert.alert("Invalid Date", "Return date must be after pickup date.");
+        return;
+      }
+      setReturnDate(date);
+      setDateRangeModalVisible(false);
+      setSelectingDate("pickup");
+      setTempPickupDate(null);
+    }
+  };
+
+  const openTimeModal = (field: "pickupTime" | "returnTime") => {
+    if (!selectedOffice) {
+      Alert.alert("Select Office", "Please select an office first.");
+      return;
+    }
+    Haptics.selectionAsync();
+    setTimeModalField(field);
+    setTimeModalVisible(true);
+  };
+
+  const selectTime = (time: string) => {
+    console.log("[selectTime] Called with:", {
+      time,
+      timeModalField,
+      timeType: typeof time,
+    });
+
+    if (timeModalField === "pickupTime") {
+      console.log("[selectTime] Setting pickupTime to:", time);
+      setPickupTime(time);
+    } else if (timeModalField === "returnTime") {
+      console.log("[selectTime] Setting returnTime to:", time);
+      setReturnTime(time);
+    }
+
+    setTimeModalVisible(false);
+    setTimeModalField(null);
   };
 
   const hidePicker = () => setPickerField(null);
@@ -410,14 +538,8 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
       case "pickupDate":
         setPickupDate(date);
         break;
-      case "pickupTime":
-        setPickupTime(date);
-        break;
       case "returnDate":
         setReturnDate(date);
-        break;
-      case "returnTime":
-        setReturnTime(date);
         break;
     }
     hidePicker();
@@ -433,7 +555,7 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
   const handleBlur = () => setFocusedInput(null);
 
   const handleSubmit = async () => {
-    if (!selectedOffice || !selectedCategory) {
+    if (!selectedOffice || !selectedType) {
       Alert.alert("Missing details", "Please select office and category.");
       return;
     }
@@ -452,64 +574,91 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
 
     const officeObj = getSelectedOffice();
 
+    const [pickupHour, pickupMinute] = pickupTime.split(":").map(Number);
+    const [returnHour, returnMinute] = returnTime.split(":").map(Number);
+
+    const startDateTime = new Date(pickupDate);
+    startDateTime.setHours(pickupHour, pickupMinute, 0, 0);
+
+    const endDateTime = new Date(returnDate);
+    endDateTime.setHours(returnHour, returnMinute, 0, 0);
+
     const reservationPayload = {
       office: selectedOffice,
       officeName: officeObj?.name ?? "",
-      category: selectedCategory,
-      pickupDate: pickupDate.toISOString(),
-      returnDate: returnDate.toISOString(),
-      pickupTime: formatTime(pickupTime),
-      returnTime: formatTime(returnTime),
-      pickupLocation: location,
+      type: selectedType,
+      pickupDate: startDateTime.toISOString(),
+      returnDate: endDateTime.toISOString(),
+      pickupTime: pickupTime,
+      returnTime: returnTime,
       driverAge,
-      message,
     };
 
     console.log("Reservation payload (mobile):", reservationPayload);
 
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require("@/assets/sounds/Iphone.mp3")
-      );
-      await sound.playAsync();
-      setTimeout(() => sound.unloadAsync(), 3000);
-    } catch (error) {
-      console.log("Sound error:", error);
-    }
-
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "✅ Reservation Confirmed",
-        body: `Your van reservation at ${officeObj?.name} has been successfully submitted!`,
-        sound: true,
-      },
-      trigger: null,
-    });
-
-    Alert.alert(
-      "✅ Reservation Submitted",
-      "Your reservation has been successfully submitted!",
-      [
-        {
-          text: "View Available Vans",
-          onPress: () => {
-            onClose();
-            router.push({
-              pathname: "/vans",
-              params: {
-                category: selectedCategory,
-                office: selectedOffice,
-                pickupDate: pickupDate?.toISOString(),
-                returnDate: returnDate?.toISOString(),
-                driverAge: driverAge,
-              },
-            });
-          },
-        },
-      ]
-    );
+    // try {
+    //   const { sound } = await Audio.Sound.createAsync(
+    //     require("@/assets/sounds/Iphone.mp3")
+    //   );
+    //   await sound.playAsync();
+    //   setTimeout(() => sound.unloadAsync(), 3000);
+    // } catch (error) {
+    //   console.log("Sound error:", error);
+    // }
 
     setIsSubmitting(false);
+    setLoadingVans(true);
+
+    try {
+      const [officeResponse, categoriesResponse] = await Promise.all([
+        fetch(`${process.env.EXPO_PUBLIC_OFFICES_API}/${selectedOffice}`),
+        fetch(process.env.EXPO_PUBLIC_CATEGORIES_API || ""),
+      ]);
+
+      const [officeData, categoriesData] = await Promise.all([
+        officeResponse.json(),
+        categoriesResponse.json(),
+      ]);
+
+      if (
+        officeData.success &&
+        officeData.data?.categories &&
+        categoriesData.success &&
+        categoriesData.data
+      ) {
+        const officeCategoryIds = officeData.data.categories;
+
+        const filteredVans = categoriesData.data
+          .filter((cat: any) => {
+            const matchesOffice = officeCategoryIds.includes(cat._id);
+            const matchesType =
+              cat.type === selectedType || cat.type?._id === selectedType;
+
+            return matchesOffice && matchesType;
+          })
+          .map((cat: any) => ({
+            id: cat._id,
+            name: cat.name,
+            image: cat.image || require("@/assets/images/van.png"),
+            seats: cat.seats || 2,
+            fuel: cat.fuel || "Diesel",
+            doors: cat.doors || 2,
+            gear: cat.gear || "manual",
+            showPrice: cat.showPrice || 0,
+            pricingTiers: cat.pricingTiers || [],
+            extraHoursRate: cat.extrahoursRate || 0,
+            cargo: cat.expert || "",
+          }));
+
+        console.log("[Filtered Vans]", filteredVans);
+        setAvailableVans(filteredVans);
+      }
+    } catch (error) {
+      console.log("Failed to load vans:", error);
+    } finally {
+      setLoadingVans(false);
+      setVansModalVisible(true);
+    }
   };
 
   const renderInput = (
@@ -547,45 +696,6 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
           />
         </View>
       </View>
-    );
-  };
-
-  const renderDateTimeField = (
-    field: PickerField,
-    mode: "date" | "time",
-    icon: keyof typeof Ionicons.glyphMap,
-    value: Date | null,
-    placeholder: string
-  ) => {
-    const isActive = pickerField === field;
-    const displayValue =
-      mode === "date" ? formatDate(value) : formatTime(value);
-    const hasValue = value !== null;
-
-    return (
-      <Pressable
-        onPress={() => openPicker(field, mode)}
-        style={({ pressed }) => [
-          sheetStyles.inputWrapper,
-          (pressed || isActive) && sheetStyles.inputWrapperFocused,
-        ]}
-      >
-        <Ionicons
-          name={icon}
-          size={18}
-          color={hasValue ? ACCENT : "rgba(255,255,255,0.4)"}
-          style={sheetStyles.inputIcon}
-        />
-        <Text
-          style={[
-            sheetStyles.input,
-            !hasValue && { color: "rgba(255,255,255,0.35)" },
-          ]}
-        >
-          {hasValue ? displayValue : placeholder}
-        </Text>
-        <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.5)" />
-      </Pressable>
     );
   };
 
@@ -646,22 +756,54 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
           <View style={sheetStyles.selectBox}>
             <Text style={sheetStyles.selectTitle}>Select Office</Text>
             <ScrollView>
-              {offices.map((o) => (
-                <Pressable
-                  key={o._id}
-                  onPress={() => {
-                    setSelectedOffice(o._id);
-                    setOfficeModalVisible(false);
+              {isLoading ? (
+                <View
+                  style={{
+                    padding: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
-                  style={({ pressed }) => [
-                    sheetStyles.selectItem,
-                    selectedOffice === o._id && sheetStyles.selectItemActive,
-                    pressed && { opacity: 0.8 },
-                  ]}
                 >
-                  <Text style={sheetStyles.selectItemText}>{o.name}</Text>
-                </Pressable>
-              ))}
+                  <ActivityIndicator size="large" color={ACCENT} />
+                </View>
+              ) : offices.length === 0 ? (
+                <View
+                  style={{
+                    padding: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="business-outline" size={48} color="#4b5563" />
+                  <Text
+                    style={{
+                      color: "#9ca3af",
+                      fontSize: 14,
+                      marginTop: 12,
+                      textAlign: "center",
+                    }}
+                  >
+                    No offices available
+                  </Text>
+                </View>
+              ) : (
+                offices.map((o) => (
+                  <Pressable
+                    key={o._id}
+                    onPress={() => {
+                      setSelectedOffice(o._id);
+                      setOfficeModalVisible(false);
+                    }}
+                    style={({ pressed }) => [
+                      sheetStyles.selectItem,
+                      selectedOffice === o._id && sheetStyles.selectItemActive,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    <Text style={sheetStyles.selectItemText}>{o.name}</Text>
+                  </Pressable>
+                ))
+              )}
             </ScrollView>
           </View>
         </Pressable>
@@ -681,24 +823,337 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
           <View style={sheetStyles.selectBox}>
             <Text style={sheetStyles.selectTitle}>Select Vehicle Category</Text>
             <ScrollView>
-              {categories.map((c) => (
-                <Pressable
-                  key={c._id}
-                  onPress={() => {
-                    setSelectedCategory(c._id);
-                    setCategoryModalVisible(false);
+              {isLoading ? (
+                <View
+                  style={{
+                    padding: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
-                  style={({ pressed }) => [
-                    sheetStyles.selectItem,
-                    selectedCategory === c._id && sheetStyles.selectItemActive,
-                    pressed && { opacity: 0.8 },
-                  ]}
                 >
-                  <Text style={sheetStyles.selectItemText}>{c.name}</Text>
-                </Pressable>
-              ))}
+                  <ActivityIndicator size="large" color={ACCENT} />
+                </View>
+              ) : type.length === 0 ? (
+                <View
+                  style={{
+                    padding: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons
+                    name="car-sport-outline"
+                    size={48}
+                    color="#4b5563"
+                  />
+                  <Text
+                    style={{
+                      color: "#9ca3af",
+                      fontSize: 14,
+                      marginTop: 12,
+                      textAlign: "center",
+                    }}
+                  >
+                    No vehicle types available
+                  </Text>
+                </View>
+              ) : (
+                type.map((c) => (
+                  <Pressable
+                    key={c._id}
+                    onPress={() => {
+                      setSelectedType(c._id ?? "");
+                      setCategoryModalVisible(false);
+                    }}
+                    style={({ pressed }) => [
+                      sheetStyles.selectItem,
+                      selectedType === c._id && sheetStyles.selectItemActive,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    <Text style={sheetStyles.selectItemText}>{c.name}</Text>
+                  </Pressable>
+                ))
+              )}
             </ScrollView>
           </View>
+        </Pressable>
+      </Modal>
+
+      {/* Date Range Picker Modal */}
+      <Modal
+        visible={dateRangeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setDateRangeModalVisible(false);
+          setSelectingDate("pickup");
+        }}
+      >
+        <Pressable
+          style={sheetStyles.selectOverlay}
+          onPress={() => {
+            setDateRangeModalVisible(false);
+            setSelectingDate("pickup");
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={sheetStyles.calendarModalBox}
+          >
+            <View style={sheetStyles.timeModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={sheetStyles.selectTitle}>
+                  {selectingDate === "pickup"
+                    ? "📅 Pickup Date"
+                    : "📅 Return Date"}
+                </Text>
+                <Text style={{ color: "#9ca3af", fontSize: 11, marginTop: 4 }}>
+                  {selectingDate === "pickup"
+                    ? pickupDate
+                      ? `Selected: ${formatDate(pickupDate)}`
+                      : "Choose your pickup date"
+                    : returnDate
+                    ? `Selected: ${formatDate(returnDate)}`
+                    : "Choose your return date"}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  setDateRangeModalVisible(false);
+                  setSelectingDate("pickup");
+                }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="close" size={20} color="#e5e7eb" />
+              </Pressable>
+            </View>
+            <Calendar
+              minDate={
+                selectingDate === "pickup"
+                  ? new Date().toISOString().split("T")[0]
+                  : pickupDate?.toISOString().split("T")[0]
+              }
+              maxDate={
+                selectingDate === "return" && pickupDate
+                  ? (() => {
+                      const maxDate = new Date(pickupDate);
+                      maxDate.setDate(maxDate.getDate() + 30);
+                      return maxDate.toISOString().split("T")[0];
+                    })()
+                  : undefined
+              }
+              onDayPress={(day) => selectDate(new Date(day.timestamp))}
+              markedDates={(() => {
+                const marked: any = {};
+                const office = getSelectedOffice();
+                const currentPickup = tempPickupDate || pickupDate;
+
+                // Mark range between pickup and return
+                if (currentPickup && returnDate && selectingDate === "pickup") {
+                  const start = new Date(currentPickup);
+                  const end = new Date(returnDate);
+                  const current = new Date(start);
+
+                  while (current <= end) {
+                    const dateStr = current.toISOString().split("T")[0];
+                    const isStart = current.getTime() === start.getTime();
+                    const isEnd = current.getTime() === end.getTime();
+
+                    marked[dateStr] = {
+                      color: isStart || isEnd ? ACCENT : "rgba(254,154,0,0.3)",
+                      textColor: isStart || isEnd ? "#fff" : "#f9fafb",
+                      startingDay: isStart,
+                      endingDay: isEnd,
+                    };
+
+                    current.setDate(current.getDate() + 1);
+                  }
+                } else if (currentPickup) {
+                  const pickupStr = currentPickup.toISOString().split("T")[0];
+                  marked[pickupStr] = {
+                    selected: true,
+                    selectedColor: ACCENT,
+                    selectedTextColor: "#ffffff",
+                  };
+                }
+
+                // Mark disabled dates
+                if (office) {
+                  const today = new Date();
+                  for (let i = 0; i < 60; i++) {
+                    const checkDate = new Date(today);
+                    checkDate.setDate(today.getDate() + i);
+
+                    if (isDateDisabled(checkDate)) {
+                      const dateStr = checkDate.toISOString().split("T")[0];
+                      marked[dateStr] = {
+                        disabled: true,
+                        disableTouchEvent: true,
+                      };
+                    }
+                  }
+                }
+
+                return marked;
+              })()}
+              markingType="period"
+              theme={{
+                calendarBackground: "transparent",
+                textSectionTitleColor: "#9ca3af",
+                selectedDayBackgroundColor: ACCENT,
+                selectedDayTextColor: ACCENT,
+
+                todayTextColor: "#06cb48ff",
+                dayTextColor: "#f9fafb",
+                textDisabledColor: "#4b5563",
+                monthTextColor: "#f9fafb",
+                arrowColor: ACCENT,
+              }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Time selection modal */}
+      <Modal
+        visible={timeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTimeModalVisible(false)}
+      >
+        <Pressable
+          style={sheetStyles.selectOverlay}
+          onPress={() => setTimeModalVisible(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={sheetStyles.timeModalBox}
+          >
+            <View style={sheetStyles.timeModalHeader}>
+              <View>
+                <Text style={sheetStyles.selectTitle}>
+                  {timeModalField === "pickupTime" ? "Pickup" : "Return"} Time
+                </Text>
+                <Text style={{ color: "#9ca3af", fontSize: 11, marginTop: 2 }}>
+                  Select a time slot
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setTimeModalVisible(false)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="close" size={20} color="#e5e7eb" />
+              </Pressable>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ paddingBottom: 10 }}
+              style={{ maxHeight: height * 0.6 }}
+            >
+              {(() => {
+                if (isLoading) {
+                  return (
+                    <View
+                      style={{
+                        padding: 40,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <ActivityIndicator size="large" color={ACCENT} />
+                    </View>
+                  );
+                }
+
+                const slots =
+                  timeModalField === "pickupTime" ? pickupSlots : returnSlots;
+                const timeSlots = generateTimeSlots(slots.start, slots.end);
+                const selectedTime = formatTime(
+                  timeModalField === "pickupTime" ? pickupTime : returnTime
+                );
+
+                return (
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                  >
+                    {timeSlots.map((time) => {
+                      const isSelected = time === selectedTime;
+                      const isReserved = reservedSlots.some((slot) => {
+                        return time >= slot.startTime && time < slot.endTime;
+                      });
+                      const isAvailable = !isReserved;
+
+                      return (
+                        <Pressable
+                          key={time}
+                          disabled={!isAvailable}
+                          onPress={() => {
+                            if (isAvailable) {
+                              Haptics.selectionAsync();
+                              selectTime(time);
+                            }
+                          }}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                            paddingVertical: 10,
+                            paddingHorizontal: 14,
+                            borderRadius: 12,
+                            backgroundColor: isSelected
+                              ? ACCENT
+                              : "rgba(255,255,255,0.05)",
+                            borderWidth: 1.5,
+                            borderColor: isSelected
+                              ? ACCENT
+                              : "rgba(255,255,255,0.1)",
+                            width: "23%",
+                            opacity: isAvailable ? 1 : 0.4,
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: isAvailable
+                                ? "#22c55e"
+                                : "#ef4444",
+                            }}
+                          />
+                          <Text
+                            style={{
+                              color: isSelected ? DARK : "#e5e7eb",
+                              fontSize: 14,
+                              fontWeight: "700",
+                            }}
+                          >
+                            {time}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                );
+              })()}
+            </ScrollView>
+          </Pressable>
         </Pressable>
       </Modal>
 
@@ -752,6 +1207,8 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
                         color: "rgba(255,255,255,0.35)",
                       },
                     ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
                   >
                     {selectedOffice
                       ? getSelectedOffice()?.name ?? "Selected office"
@@ -766,7 +1223,7 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
               </View>
 
               <View style={sheetStyles.half}>
-                <Text style={sheetStyles.sectionLabel}>Vehicle</Text>
+                <Text style={sheetStyles.sectionLabel}>Type</Text>
                 <Pressable
                   onPress={() => setCategoryModalVisible(true)}
                   style={({ pressed }) => [
@@ -777,21 +1234,23 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
                   <Ionicons
                     name="car-sport-outline"
                     size={18}
-                    color={selectedCategory ? ACCENT : "rgba(255,255,255,0.4)"}
+                    color={selectedType ? ACCENT : "rgba(255,255,255,0.4)"}
                     style={sheetStyles.inputIcon}
                   />
                   <Text
                     style={[
                       sheetStyles.input,
-                      !selectedCategory && {
+                      !selectedType && {
                         color: "rgba(255,255,255,0.35)",
                       },
                     ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
                   >
-                    {selectedCategory
-                      ? categories.find((c) => c._id === selectedCategory)
-                          ?.name ?? "Selected category"
-                      : "Select category"}
+                    {selectedType
+                      ? type.find((c) => c._id === selectedType)?.name ??
+                        "Selected type"
+                      : "Select type"}
                   </Text>
                   <Ionicons
                     name="chevron-down"
@@ -803,58 +1262,142 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
             </View>
           </View>
 
-          {/* PICKUP */}
+          {/* DATE RANGE */}
           <View style={sheetStyles.section}>
-            <Text style={sheetStyles.sectionLabel}>Pickup</Text>
-            {pickupSlots.info ? (
-              <Text style={sheetStyles.infoText}>{pickupSlots.info}</Text>
-            ) : null}
-            <View style={sheetStyles.row}>
-              <View style={sheetStyles.half}>
-                {renderDateTimeField(
-                  "pickupDate",
-                  "date",
-                  "calendar-outline",
-                  pickupDate,
-                  "Pickup date"
-                )}
+            <Text style={sheetStyles.sectionLabel}>Rental Period</Text>
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                openDateRangePicker();
+              }}
+              style={({ pressed }) => [
+                sheetStyles.dateRangeButton,
+                pressed && sheetStyles.inputWrapperFocused,
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Ionicons name="calendar" size={16} color={ACCENT} />
+                  <Text
+                    style={{
+                      color: "#9ca3af",
+                      fontSize: 11,
+                      fontWeight: "700",
+                    }}
+                  >
+                    PICKUP
+                  </Text>
+                </View>
+                <Text
+                  style={{ color: "#f9fafb", fontSize: 15, fontWeight: "700" }}
+                >
+                  {formatDate(pickupDate)}
+                </Text>
               </View>
-              <View style={sheetStyles.half}>
-                {renderDateTimeField(
-                  "pickupTime",
-                  "time",
-                  "time-outline",
-                  pickupTime,
-                  "Time"
-                )}
+              <Ionicons name="arrow-forward" size={20} color={ACCENT} />
+              <View style={{ flex: 1 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Ionicons name="calendar" size={16} color={ACCENT} />
+                  <Text
+                    style={{
+                      color: "#9ca3af",
+                      fontSize: 11,
+                      fontWeight: "700",
+                    }}
+                  >
+                    RETURN
+                  </Text>
+                </View>
+                <Text
+                  style={{ color: "#f9fafb", fontSize: 15, fontWeight: "700" }}
+                >
+                  {formatDate(returnDate)}
+                </Text>
               </View>
-            </View>
+            </Pressable>
           </View>
 
-          {/* RETURN */}
+          {/* TIME SELECTION */}
           <View style={sheetStyles.section}>
-            <Text style={sheetStyles.sectionLabel}>Return</Text>
-            {returnSlots.info ? (
-              <Text style={sheetStyles.infoText}>{returnSlots.info}</Text>
-            ) : null}
+            <Text style={sheetStyles.sectionLabel}>Time</Text>
             <View style={sheetStyles.row}>
               <View style={sheetStyles.half}>
-                {renderDateTimeField(
-                  "returnDate",
-                  "date",
-                  "calendar-outline",
-                  returnDate,
-                  "Return date"
-                )}
+                <Text style={[sheetStyles.sectionLabel, { marginBottom: 8 }]}>
+                  Pickup
+                </Text>
+                <Pressable
+                  onPress={() => openTimeModal("pickupTime")}
+                  style={({ pressed }) => [
+                    sheetStyles.inputWrapper,
+                    pressed && sheetStyles.inputWrapperFocused,
+                  ]}
+                >
+                  <Ionicons
+                    name="time-outline"
+                    size={18}
+                    color={pickupTime ? ACCENT : "rgba(255,255,255,0.4)"}
+                    style={sheetStyles.inputIcon}
+                  />
+                  <Text
+                    style={[
+                      sheetStyles.input,
+                      !pickupTime && { color: "rgba(255,255,255,0.35)" },
+                    ]}
+                  >
+                    {formatTime(pickupTime)}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={16}
+                    color="rgba(255,255,255,0.5)"
+                  />
+                </Pressable>
               </View>
               <View style={sheetStyles.half}>
-                {renderDateTimeField(
-                  "returnTime",
-                  "time",
-                  "time-outline",
-                  returnTime,
-                  "Time"
-                )}
+                <Text style={[sheetStyles.sectionLabel, { marginBottom: 8 }]}>
+                  Return
+                </Text>
+                <Pressable
+                  onPress={() => openTimeModal("returnTime")}
+                  style={({ pressed }) => [
+                    sheetStyles.inputWrapper,
+                    pressed && sheetStyles.inputWrapperFocused,
+                  ]}
+                >
+                  <Ionicons
+                    name="time-outline"
+                    size={18}
+                    color={returnTime ? ACCENT : "rgba(255,255,255,0.4)"}
+                    style={sheetStyles.inputIcon}
+                  />
+                  <Text
+                    style={[
+                      sheetStyles.input,
+                      !returnTime && { color: "rgba(255,255,255,0.35)" },
+                    ]}
+                  >
+                    {formatTime(returnTime)}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={16}
+                    color="rgba(255,255,255,0.5)"
+                  />
+                </Pressable>
               </View>
             </View>
           </View>
@@ -877,11 +1420,11 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
           <View style={sheetStyles.buttonsRow}>
             <Pressable
               onPress={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || loadingVans}
               style={({ pressed }) => [
                 sheetStyles.submitButton,
                 pressed && sheetStyles.submitButtonPressed,
-                isSubmitting && { opacity: 0.7 },
+                (isSubmitting || loadingVans) && { opacity: 0.7 },
               ]}
             >
               <LinearGradient
@@ -890,15 +1433,43 @@ function ReservationSheetContent({ onClose }: SheetContentProps) {
                 end={{ x: 1, y: 0 }}
                 style={sheetStyles.submitGradient}
               >
-                <Ionicons name="checkmark-circle" size={20} color={DARK} />
-                <Text style={sheetStyles.submitText}>
-                  {isSubmitting ? "Booking..." : "Confirm Reservation"}
-                </Text>
+                {loadingVans ? (
+                  <>
+                    <ActivityIndicator size="small" color={DARK} />
+                    <Text style={sheetStyles.submitText}>Loading Vans...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={20} color={DARK} />
+                    <Text style={sheetStyles.submitText}>
+                      {isSubmitting ? "Validating..." : "Confirm Reservation"}
+                    </Text>
+                  </>
+                )}
               </LinearGradient>
             </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Vans Modal */}
+      <VansModal
+        visible={vansModalVisible}
+        vans={availableVans}
+        loading={loadingVans}
+        onClose={() => setVansModalVisible(false)}
+        onEditForm={() => setVansModalVisible(false)}
+        prefilledData={{
+          office: selectedOffice,
+          category: selectedType,
+          pickupDate: pickupDate?.toISOString() || "",
+          returnDate: returnDate?.toISOString() || "",
+          pickupTime,
+          returnTime,
+          driverAge,
+        }}
+        onReservationComplete={onClose}
+      />
     </>
   );
 }
@@ -944,11 +1515,6 @@ function VoiceAIButton() {
         : Haptics.ImpactFeedbackStyle.Medium
     );
     setRecording((prev) => !prev);
-
-    // 🔊 اینجا می‌تونی روی native:
-    // - از expo-speech / third-party speech-to-text استفاده کنی
-    // - transcript رو به سرور / Cloud Function بفرستی (/api/parse-voice)
-    // - نتیجه رو روی stateهای فرم (office, times, category, age, ...) مپ کنی
   };
 
   return (
@@ -1358,5 +1924,42 @@ const sheetStyles = StyleSheet.create({
     color: "#e5e7eb",
     fontSize: 14,
     fontWeight: "600",
+  },
+  timeModalBox: {
+    width: width - 40,
+    maxHeight: height * 0.7,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  calendarModalBox: {
+    width: width - 40,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  timeModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+  },
+  dateRangeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
   },
 });

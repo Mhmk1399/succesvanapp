@@ -4,7 +4,7 @@ import { height, ACCENT, DARK } from "./constants";
 export const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.2)",
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
   modalContainer: {
     position: "absolute",
@@ -51,7 +51,7 @@ export const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.3)",
+    borderColor: "rgba(157, 154, 148, 0.11)",
   },
   vanImage: {
     width: "100%",
@@ -114,8 +114,13 @@ export const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: "900",
+    fontWeight: "700",
     color: "#f9fafb",
+  },
+  titleVan: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: ACCENT,
   },
   form: {
     paddingHorizontal: 20,
@@ -129,6 +134,7 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#e5e7eb",
     marginBottom: 8,
+    marginTop: 16,
   },
   inputWrapper: {
     flexDirection: "row",
@@ -300,6 +306,29 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(254,154,0,0.3)",
   },
+  calendarModalBox: {
+    width: "90%",
+    backgroundColor: "#1e293b",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  timeModalBox: {
+    width: "100%",
+    maxHeight: "50%",
+    backgroundColor: "#1e293b",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  timeModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: "800",
@@ -323,5 +352,125 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#e5e7eb",
+  },
+  topSection: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  summaryCard: {
+    marginTop: 12,
+    backgroundColor: "rgba(15,23,42,0.8)",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.2)",
+  },
+  summaryRow: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  summaryCol: {
+    flex: 1,
+    gap: 12,
+  },
+  summaryDivider: {
+    width: 1,
+    backgroundColor: "rgba(254,154,0,0.2)",
+  },
+  summaryItemCompact: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  summaryIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "rgba(254,154,0,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryContent: {
+    flex: 1,
+  },
+  summaryLabelCompact: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#9ca3af",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  summaryValueCompact: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#f9fafb",
+  },
+  summaryTimeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: ACCENT,
+    marginTop: 2,
+  },
+  fixedBottom: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(15,23,42,0.7)",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(254,154,0,0.2)",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  priceBreakdown: {
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  breakdownLabel: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#9ca3af",
+  },
+  breakdownValue: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#e5e7eb",
+  },
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  priceLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#9ca3af",
+  },
+  priceValue: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#22c55e",
   },
 });

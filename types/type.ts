@@ -81,9 +81,9 @@ export interface ServicesPeriod {
 }
 
 export interface PricingTier {
-  minHours: number;
-  maxHours: number;
-  pricePerHour: number;
+  minDays: number;
+  maxDays: number;
+  pricePerDay: number;
 }
 
 export interface Category {
@@ -92,8 +92,10 @@ export interface Category {
   description?: string;
   image?: string;
   type: string | Type;
+  showPrice: number;
   servicesPeriod: ServicesPeriod;
   pricingTiers: PricingTier[];
+  extraHoursRate: number;
   fuel: "gas" | "diesel" | "electric" | "hybrid";
   gear: "automatic" | "manual" | "manual,automatic";
   seats: number;

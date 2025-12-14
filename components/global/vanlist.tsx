@@ -29,7 +29,9 @@ export type Van = {
   fuel: string;
   doors: number;
   gear: string;
-  pricingTiers?: { minHours: number; maxHours: number; pricePerHour: number }[];
+  showPrice?: number;
+  pricingTiers?: { minDays: number; maxDays: number; pricePerDay: number }[];
+  extraHoursRate?: number;
   cargo?: string;
 };
 
@@ -331,9 +333,9 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                 </View>
                 <View style={styles.priceRow}>
                   <Text style={styles.priceValue}>
-                    £{van.pricingTiers?.[0]?.pricePerHour || 0}
+                    £{van.showPrice || 0}
                   </Text>
-                  <Text style={styles.priceUnit}>/ hour</Text>
+                  <Text style={styles.priceUnit}>/ day</Text>
                 </View>
               </View>
 
@@ -446,13 +448,13 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: "100%",
-    height: 260,
+    height: 430,
     overflow: "hidden",
   },
   image: {
     width: "100%",
     height: "100%",
-  },
+    },
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
   },

@@ -9,8 +9,11 @@ export type BookingModalProps = {
     category: string;
     pickupDate: string;
     returnDate: string;
+    pickupTime?: string;
+    returnTime?: string;
     driverAge?: string | number;
   };
+  onReservationComplete?: () => void;
 };
 
 export type PickerField = "pickupDate" | "pickupTime" | "returnDate" | "returnTime" | null;

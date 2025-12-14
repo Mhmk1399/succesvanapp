@@ -36,7 +36,7 @@ export default function HomeScreen() {
             fuel: cat.fuel || "Diesel",
             doors: cat.doors || 2,
             gear: cat.gear || "manual",
-            pricePerHour: cat.pricingTiers?.[0]?.pricePerHour || 0,
+            pricePerHour: cat.showPrice,
           }));
         setVans(mappedVans);
       }
