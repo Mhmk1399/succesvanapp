@@ -82,10 +82,15 @@ export default function AuthScreen() {
         if (result.data.userExists) {
           await refreshUser();
           const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
+          const pendingForm = await AsyncStorage.getItem("pendingReservationForm");
           if (pendingVan) {
             await AsyncStorage.removeItem("pendingBookingVan");
             Alert.alert("✅ Success", "Logged in! Redirecting to booking...", [
               { text: "OK", onPress: () => router.push("/vans") },
+            ]);
+          } else if (pendingForm) {
+            Alert.alert("✅ Success", "Logged in! Continuing your reservation...", [
+              { text: "OK", onPress: () => router.push("/") },
             ]);
           } else {
             Alert.alert("✅ Success", "Logged in!", [
@@ -125,12 +130,19 @@ export default function AuthScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await refreshUser();
         const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
+        const pendingForm = await AsyncStorage.getItem("pendingReservationForm");
         if (pendingVan) {
           await AsyncStorage.removeItem("pendingBookingVan");
           Alert.alert(
             "✅ Success",
             "Account created! Redirecting to booking...",
             [{ text: "OK", onPress: () => router.push("/vans") }]
+          );
+        } else if (pendingForm) {
+          Alert.alert(
+            "✅ Success",
+            "Account created! Continuing your reservation...",
+            [{ text: "OK", onPress: () => router.push("/") }]
           );
         } else {
           Alert.alert("✅ Success", "Account created!", [

@@ -237,7 +237,7 @@ export const styles = StyleSheet.create({
   submitText: {
     fontSize: 15,
     fontWeight: "800",
-    color: DARK,
+    color: "#f8f9f7ff",
   },
   inputDisabled: {
     opacity: 0.6,
@@ -292,7 +292,7 @@ export const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
@@ -308,20 +308,44 @@ export const styles = StyleSheet.create({
   },
   calendarModalBox: {
     width: "90%",
-    backgroundColor: "#1e293b",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
+    maxWidth: 400,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1.5,
     borderColor: "rgba(254,154,0,0.3)",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 12,
+      },
+    }),
   },
   timeModalBox: {
-    width: "100%",
-    maxHeight: "50%",
-    backgroundColor: "#1e293b",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
+    width: "90%",
+    maxWidth: 400,
+    maxHeight: height * 0.7,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1.5,
     borderColor: "rgba(254,154,0,0.3)",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 12,
+      },
+    }),
   },
   timeModalHeader: {
     flexDirection: "row",
@@ -417,9 +441,11 @@ export const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+
     backgroundColor: "rgba(15,23,42,0.7)",
     borderTopWidth: 1,
-    borderTopColor: "rgba(254,154,0,0.2)",
+    borderRadius: 30,
+    borderTopColor: "rgba(182, 184, 185, 0.8)",
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 20,
@@ -465,8 +491,8 @@ export const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#9ca3af",
+    fontWeight: "900",
+    color: "#efefefff",
   },
   priceValue: {
     fontSize: 28,

@@ -12,6 +12,7 @@ export type BookingModalProps = {
     pickupTime?: string;
     returnTime?: string;
     driverAge?: string | number;
+    calculatedPrice?: number;
   };
   onReservationComplete?: () => void;
 };

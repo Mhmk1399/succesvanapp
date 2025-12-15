@@ -89,13 +89,15 @@ export interface PricingTier {
 export interface Category {
   _id?: string;
   name: string;
+  expert: string;
   description?: string;
   image?: string;
-  type: string | Type;
+  type:   Type;
   showPrice: number;
   servicesPeriod: ServicesPeriod;
   pricingTiers: PricingTier[];
-  extraHoursRate: number;
+  extraHoursRate?: number;
+  extrahoursRate?: number;
   fuel: "gas" | "diesel" | "electric" | "hybrid";
   gear: "automatic" | "manual" | "manual,automatic";
   seats: number;
@@ -135,13 +137,21 @@ export interface AddOn {
   name: string;
   description?: string;
   pricingType: "flat" | "tiered";
-  flatPrice?: number;
-  tiers?: Array<{
-    _id?: string;
-    minDays: number;
-    maxDays: number;
-    price: number;
-  }>;
+  flatPrice: {
+    amount?: number;
+    isPerDay: boolean;
+  };
+  tieredPrice: {
+    isPerDay: boolean;
+    tiers: Array<{
+      _id?: string;
+      minDays: number;
+      maxDays: number;
+      price: number;
+    }>;
+  };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Reservation ------------------------------------------------------------------------------------------
@@ -149,7 +159,7 @@ export interface Reservation {
   _id?: string;
   user?: User;
   office?: { _id: string; name: string };
-  category?: { _id: string; name: string };
+  category?: Category;
   startDate: string;
   endDate: string;
   totalPrice: number;

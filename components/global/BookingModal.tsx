@@ -18,12 +18,11 @@ import { Calendar } from "react-native-calendars";
 import * as Haptics from "expo-haptics";
 import { BookingModalProps } from "./BookingModal/types";
 import { useBookingModal } from "./BookingModal/useBookingModal";
-import { VanCard } from "./BookingModal/VanCard";
 import { FormFields } from "./BookingModal/FormFields";
 import { styles } from "./BookingModal/styles";
 import { ACCENT, DARK } from "./BookingModal/constants";
 import { getSelectedOffice, getAvailableTimeSlots } from "./BookingModal/utils";
-import { calculatePrice } from "@/utils/priceCalculator";
+import { calculateAddonPrice } from "@/utils/addonCalculator";
 
 export default function BookingModal({
   visible,
@@ -79,6 +78,7 @@ export default function BookingModal({
     timeModalField,
     setTimeModalField,
     reservedSlots,
+    dynamicVanPrice,
   } = useBookingModal(
     visible,
     van,
@@ -107,7 +107,10 @@ export default function BookingModal({
             style={{ flex: 1 }}
             behavior={Platform.OS === "ios" ? "padding" : undefined}
           >
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 140 }}
+            >
               <View style={styles.header}>
                 <Text style={styles.title}>
                   Booking <Text style={styles.titleVan}>{van.name}</Text>
@@ -251,77 +254,343 @@ export default function BookingModal({
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
-          
+
           <BlurView intensity={40} tint="dark" style={styles.fixedBottom}>
             {(() => {
-              if (!pickupDate || !returnDate) return null;
+              if (
+                !pickupDate ||
+                !returnDate ||
+                !pickupTime ||
+                !returnTime ||
+                !van
+              )
+                return null;
+
               const start = new Date(pickupDate);
               const end = new Date(returnDate);
-              const [pH, pM] = pickupTime.split(':').map(Number);
-              const [rH, rM] = returnTime.split(':').map(Number);
+              const [pH, pM] = pickupTime.split(":").map(Number);
+              const [rH, rM] = returnTime.split(":").map(Number);
               start.setHours(pH, pM, 0, 0);
               end.setHours(rH, rM, 0, 0);
-              const vanPrice = calculatePrice(start, end, van?.pricingTiers || [], van?.extraHoursRate || 0);
-              const addonsPrice = Object.entries(addonSelections).reduce((sum, [id, sel]) => {
-                const addon = addons.find(a => a._id === id);
-                if (!addon) return sum;
-                if (addon.pricingType === 'flat') return sum + (addon.flatPrice || 0) * sel.quantity;
-                if (addon.pricingType === 'tiered' && sel.tierId) {
-                  const tier = addon.tiers?.find(t => t._id === sel.tierId);
-                  return sum + (tier?.price || 0) * sel.quantity;
-                }
-                return sum;
-              }, 0);
-              const total = vanPrice + addonsPrice;
-              const hasAddons = addonsPrice > 0;
-              
+
+              const diffTime = end.getTime() - start.getTime();
+              const totalMinutes = diffTime / (1000 * 60);
+              const totalHours = Math.floor(totalMinutes / 60);
+              const remainingMinutes = totalMinutes % 60;
+              const billableHours =
+                remainingMinutes > 15 ? totalHours + 1 : totalHours;
+
+              const rentalDays = Math.ceil(
+                (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+              );
+              const actualDays = Math.floor(billableHours / 24);
+              const actualExtraHours = billableHours % 24;
+
+              let totalDays = actualDays;
+              const extraHours = actualExtraHours;
+              let extraHoursPrice = 0;
+
+              if (billableHours < 24) {
+                totalDays = 1;
+              } else if (extraHours > 6) {
+                totalDays += 1;
+              } else if (extraHours > 0) {
+                extraHoursPrice = extraHours * (van.extraHoursRate || 0);
+              }
+
+              const tier =
+                van.pricingTiers?.find(
+                  (t) => totalDays >= t.minDays && totalDays <= t.maxDays
+                ) || van.pricingTiers?.[van.pricingTiers.length - 1];
+              const pricePerDay = tier?.pricePerDay || 0;
+
+              const vanPrice = dynamicVanPrice;
+              const addonsPrice = Object.entries(addonSelections).reduce(
+                (sum, [id, sel]) => {
+                  const addon = addons.find((a) => a._id === id);
+                  if (!addon) return sum;
+                  return sum + calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, sel.quantity);
+                },
+                0
+              );
+
               return (
                 <>
-                  <View style={styles.priceBreakdown}>
-                    <View style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>Van rental</Text>
-                      <Text style={styles.breakdownValue}>£{vanPrice}</Text>
+                  <View style={{ gap: 6 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <Ionicons
+                          name="calendar-outline"
+                          size={13}
+                          color="#f79515ff"
+                        />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: "#d1d5db",
+                            fontWeight: "500",
+                          }}
+                        >
+                          {rentalDays} day{rentalDays > 1 ? "s" : ""}
+                        </Text>
+                      </View>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color: "#f9fafb",
+                          fontWeight: "700",
+                        }}
+                      >
+                        £{(totalDays * pricePerDay).toFixed(0)}
+                      </Text>
                     </View>
-                    {hasAddons && (
-                      <View style={styles.breakdownRow}>
-                        <Text style={styles.breakdownLabel}>Add-ons</Text>
-                        <Text style={styles.breakdownValue}>£{addonsPrice}</Text>
+
+                    {extraHours > 0 && extraHours <= 6 && (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <Ionicons
+                            name="time-outline"
+                            size={13}
+                            color="#1e6befff"
+                          />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: "#d1d5db",
+                              fontWeight: "500",
+                            }}
+                          >
+                            {extraHours}h extra
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#f9fafb",
+                            fontWeight: "700",
+                          }}
+                        >
+                          £{extraHoursPrice.toFixed(0)}
+                        </Text>
                       </View>
                     )}
-                  </View>
-                  
-                  <View style={styles.priceRow}>
-                    <Text style={styles.priceLabel}>Total</Text>
-                    <Text style={styles.priceValue}>£{total}</Text>
+
+                    {Object.entries(addonSelections).map(([id, sel]) => {
+                      if (sel.quantity === 0) return null;
+                      const addon = addons.find((a) => a._id === id);
+                      if (!addon) return null;
+                      const price = calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, sel.quantity);
+                      return (
+                        <View
+                          key={id}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <Ionicons
+                              name="add-circle-outline"
+                              size={13}
+                              color="#08d72bff"
+                            />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: "#d1d5db",
+                                fontWeight: "500",
+                              }}
+                            >
+                              {addon.name} ×{sel.quantity}
+                            </Text>
+                          </View>
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              color: "#f9fafb",
+                              fontWeight: "700",
+                            }}
+                          >
+                            £{price.toFixed(0)}
+                          </Text>
+                        </View>
+                      );
+                    })}
+
+                    <View
+                      style={{
+                        height: 1,
+                        backgroundColor: "rgba(255,255,255,0.1)",
+                        marginVertical: 8,
+                      }}
+                    />
+
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          color: "#f9fafb",
+                          fontWeight: "600",
+                        }}
+                      >
+                        Total
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 20,
+                          color: "#22c55e",
+                          fontWeight: "900",
+                        }}
+                      >
+                        £{(vanPrice + addonsPrice).toFixed(0)}
+                      </Text>
+                    </View>
                   </View>
                 </>
               );
             })()}
-            <Pressable
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-              style={({ pressed }) => [
-                styles.submitBtn,
-                pressed && styles.submitBtnPressed,
-                isSubmitting && styles.submitBtnDisabled,
-              ]}
-            >
-              <LinearGradient
-                colors={[ACCENT, "#ff8c00"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.submitGradient}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color={DARK} size="small" />
-                ) : (
-                  <>
-                    <Text style={styles.submitText}>Confirm Booking</Text>
-                    <Ionicons name="checkmark-circle" size={20} color={DARK} />
-                  </>
-                )}
-              </LinearGradient>
-            </Pressable>
+            {(() => {
+              if (
+                !pickupDate ||
+                !returnDate ||
+                !pickupTime ||
+                !returnTime ||
+                !van
+              )
+                return (
+                  <Pressable
+                    onPress={handleSubmit}
+                    disabled={isSubmitting}
+                    style={({ pressed }) => [
+                      styles.submitBtn,
+                      pressed && styles.submitBtnPressed,
+                      isSubmitting && styles.submitBtnDisabled,
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[ACCENT, "#ff8c00"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.submitGradient}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator color={DARK} size="small" />
+                      ) : (
+                        <>
+                          <Text style={styles.submitText}>Confirm Booking</Text>
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={20}
+                            color={DARK}
+                          />
+                        </>
+                      )}
+                    </LinearGradient>
+                  </Pressable>
+                );
+
+              const start = new Date(pickupDate);
+              const end = new Date(returnDate);
+              const [pH, pM] = pickupTime.split(":").map(Number);
+              const [rH, rM] = returnTime.split(":").map(Number);
+              start.setHours(pH, pM, 0, 0);
+              end.setHours(rH, rM, 0, 0);
+
+              const vanPrice = dynamicVanPrice;
+              const addonsPrice = Object.entries(addonSelections).reduce(
+                (sum, [id, sel]) => {
+                  const addon = addons.find((a) => a._id === id);
+                  if (!addon) return sum;
+                  return sum + calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, sel.quantity);
+                },
+                0
+              );
+              const total = vanPrice + addonsPrice;
+
+              return (
+                <Pressable
+                  onPress={handleSubmit}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => [
+                    styles.submitBtn,
+                    pressed && styles.submitBtnPressed,
+                    isSubmitting && styles.submitBtnDisabled,
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[ACCENT, "#ff8c00"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.submitGradient}
+                  >
+                    {isSubmitting ? (
+                      <ActivityIndicator color={DARK} size="small" />
+                    ) : (
+                      <>
+                        <Text style={styles.submitText}>Confirm Booking</Text>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.submitText,
+                              {
+                                fontSize: 18,
+                                fontWeight: "900",
+                                color: "#0f100eff",
+                              },
+                            ]}
+                          >
+                            £{total}
+                          </Text>
+                        </View>
+                      </>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+              );
+            })()}
           </BlurView>
         </BlurView>
       </Animated.View>
@@ -475,7 +744,14 @@ export default function BookingModal({
               showsVerticalScrollIndicator
               contentContainerStyle={{ paddingBottom: 10 }}
             >
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  gap: 10,
+                }}
+              >
                 {(() => {
                   const office = getSelectedOffice(offices, selectedOffice);
                   const dateToCheck =
@@ -518,8 +794,8 @@ export default function BookingModal({
                           alignItems: "center",
                           justifyContent: "center",
                           gap: 6,
-                          paddingVertical: 10,
-                          paddingHorizontal: 14,
+                          paddingVertical: 12,
+                          paddingHorizontal: 10,
                           borderRadius: 12,
                           backgroundColor:
                             currentTime === time
@@ -530,7 +806,7 @@ export default function BookingModal({
                             currentTime === time
                               ? ACCENT
                               : "rgba(255,255,255,0.1)",
-                          width: "23%",
+                          width: "20%",
                           opacity: isAvailable ? 1 : 0.4,
                         }}
                       >
@@ -547,8 +823,8 @@ export default function BookingModal({
                         <Text
                           style={{
                             color: currentTime === time ? DARK : "#e5e7eb",
-                            fontSize: 14,
-                            fontWeight: "700",
+                            fontSize: 12,
+                            fontWeight: "600",
                           }}
                         >
                           {time}

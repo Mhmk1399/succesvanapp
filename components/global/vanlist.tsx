@@ -8,6 +8,7 @@ import {
   Pressable,
   Animated,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -15,6 +16,8 @@ import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/contexts/AuthContext";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 40;
@@ -178,6 +181,8 @@ type VanCardProps = {
 };
 
 function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
+  const { user } = useAuth();
+  const router = useRouter();
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(50)).current;
@@ -340,8 +345,27 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
               </View>
 
               <Pressable
-                onPress={(e) => {
+                onPress={async (e) => {
                   e.stopPropagation();
+                  if (!user) {
+                    await AsyncStorage.setItem("pendingBookingVan", JSON.stringify(van));
+                    Alert.alert(
+                      "Login Required",
+                      "Please login or register to book this van.",
+                      [
+                        {
+                          text: "Login",
+                          onPress: () => router.push("/register"),
+                        },
+                        {
+                          text: "Register",
+                          onPress: () => router.push("/register"),
+                        },
+                        { text: "Cancel", style: "cancel" },
+                      ]
+                    );
+                    return;
+                  }
                   onBook?.();
                 }}
                 style={({ pressed }) => [

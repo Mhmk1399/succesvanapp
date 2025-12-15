@@ -54,16 +54,19 @@ export default function VansModal({
   onReservationComplete,
 }: VansModalProps) {
   const [selectedVan, setSelectedVan] = React.useState<Van | null>(null);
+  const [calculatedPrice, setCalculatedPrice] = React.useState<number>(0);
   const [bookingModalVisible, setBookingModalVisible] = React.useState(false);
 
-  const handleBookVan = (van: Van) => {
+  const handleBookVan = (van: Van, price: number) => {
     console.log("[VansModal] Opening BookingModal with:", {
       van,
       prefilledData,
+      calculatedPrice: price,
     });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onClose();
     setSelectedVan(van);
+    setCalculatedPrice(price);
     setTimeout(() => setBookingModalVisible(true), 300);
   };
 
@@ -111,7 +114,7 @@ export default function VansModal({
                   <VanCard
                     van={item}
                     index={index}
-                    onBook={() => handleBookVan(item)}
+                    onBook={(price) => handleBookVan(item, price)}
                     prefilledData={prefilledData}
                   />
                 )}
@@ -130,8 +133,9 @@ export default function VansModal({
         onClose={() => {
           setBookingModalVisible(false);
           setSelectedVan(null);
+          setCalculatedPrice(0);
         }}
-        prefilledData={prefilledData}
+        prefilledData={prefilledData ? { ...prefilledData, calculatedPrice } : undefined}
         onReservationComplete={onReservationComplete}
       />
     </>
@@ -141,7 +145,7 @@ export default function VansModal({
 type VanCardProps = {
   van: Van;
   index: number;
-  onBook: () => void;
+  onBook: (price: number) => void;
   prefilledData?: any;
 };
 
@@ -244,7 +248,7 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
                 onPress={(e) => {
                   e.stopPropagation();
                   Haptics.selectionAsync();
-                  onBook();
+                  onBook(calculatedPrice);
                 }}
                 style={({ pressed }) => [
                   styles.bookBtn,

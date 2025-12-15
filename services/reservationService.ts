@@ -7,6 +7,11 @@ type ReservationCreate = {
   endDate: string;
   dirverAge: string | number;
   totalPrice: number;
+  addOns?: Array<{
+    addOn: string;
+    quantity: number;
+    tierId?: string;
+  }>;
 };
 
 export const reservationService = {

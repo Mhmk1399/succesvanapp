@@ -19,6 +19,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/contexts/AuthContext";
 import { reservationService } from "@/services/reservationService";
 import { Reservation } from "@/types/type";
+import { checkStatusChanges, showStatusNotification } from "@/utils/reservationNotifier";
+import { registerBackgroundTask } from "@/utils/backgroundTask";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const ACCENT = "#fe9a00";
 
@@ -38,7 +41,15 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     fetchReservations();
-  }, [user]);
+    if (user?._id) {
+      AsyncStorage.setItem("userId", user._id);
+      registerBackgroundTask();
+    }
+    const interval = setInterval(() => {
+      if (activeTab === "reservations") fetchReservations();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user, activeTab]);
 
   useEffect(() => {
     const prevTab = prevTabRef.current;
@@ -60,7 +71,12 @@ export default function ProfileScreen() {
     setIsLoading(true);
     try {
       const result = await reservationService.getAll(user._id);
-      setReservations(result.data || []);
+      const newReservations = result.data || [];
+      
+      const changed = await checkStatusChanges(newReservations);
+      changed.forEach((res) => showStatusNotification(res));
+      
+      setReservations(newReservations);
     } catch (error) {
       console.error("Error fetching reservations:", error);
     } finally {

@@ -9,12 +9,11 @@ import { addonService } from "@/services/addonService";
 import { officeService } from "@/services/officeService";
 import { reservationService } from "@/services/reservationService";
 import { calculatePrice } from "@/utils/priceCalculator";
+import { calculateAddonPrice } from "@/utils/addonCalculator";
 import { AddOn, Office } from "@/types/type";
 import { Van } from "../vanlist";
-import { PickerField } from "./types";
 import { height } from "./constants";
 import {
-  formatTime,
   playSuccessSound,
   scheduleNotification,
   getSelectedOffice,
@@ -33,6 +32,7 @@ export const useBookingModal = (
     pickupTime?: string;
     returnTime?: string;
     driverAge?: string | number;
+    calculatedPrice?: number;
   },
   onReservationComplete?: () => void
 ) => {
@@ -41,23 +41,27 @@ export const useBookingModal = (
   const router = useRouter();
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const hasCheckedAuth = useRef(false);
 
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [pickupDate, setPickupDate] = useState<Date | null>(
-    prefilledData?.pickupDate ? new Date(prefilledData.pickupDate) : new Date()
-  );
+  const [pickupDate, setPickupDate] = useState<Date | null>(() => {
+    if (!prefilledData?.pickupDate) return new Date();
+    const date = new Date(prefilledData.pickupDate);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  });
   const [pickupTime, setPickupTime] = useState<string>(
     prefilledData?.pickupTime || "07:00"
   );
-  const [returnDate, setReturnDate] = useState<Date | null>(
-    prefilledData?.returnDate
-      ? new Date(prefilledData.returnDate)
-      : new Date(Date.now() + 24 * 60 * 60 * 1000)
-  );
+  const [returnDate, setReturnDate] = useState<Date | null>(() => {
+    if (!prefilledData?.returnDate)
+      return new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const date = new Date(prefilledData.returnDate);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  });
   const [returnTime, setReturnTime] = useState<string>(
     prefilledData?.returnTime || "10:00"
   );
@@ -90,27 +94,41 @@ export const useBookingModal = (
     prefilledData?.driverAge?.toString() || ""
   );
   const [message, setMessage] = useState("");
+  const [dynamicVanPrice, setDynamicVanPrice] = useState<number>(0);
 
   useEffect(() => {
-    if (visible && !user && van && !hasCheckedAuth.current) {
-      hasCheckedAuth.current = true;
-      AsyncStorage.setItem("pendingBookingVan", JSON.stringify(van));
-      setTimeout(() => {
-        handleClose();
-        Alert.alert(
-          "Login Required",
-          "Please login or register to book a van.",
-          [
-            { text: "Register", onPress: () => router.push("/register") },
-            { text: "Cancel", style: "cancel" },
-          ]
-        );
-      }, 100);
+    if (!pickupDate || !returnDate || !pickupTime || !returnTime || !van)
+      return;
+
+    if (prefilledData?.calculatedPrice) {
+      setDynamicVanPrice(prefilledData.calculatedPrice);
+      return;
     }
-    if (!visible) {
-      hasCheckedAuth.current = false;
-    }
-  }, [visible, user, van]);
+
+    const start = new Date(pickupDate);
+    const end = new Date(returnDate);
+    const [pH, pM] = pickupTime.split(":").map(Number);
+    const [rH, rM] = returnTime.split(":").map(Number);
+    start.setHours(pH, pM, 0, 0);
+    end.setHours(rH, rM, 0, 0);
+
+    const price = calculatePrice(
+      start,
+      end,
+      van.pricingTiers || [],
+      van.extraHoursRate || 0
+    );
+    setDynamicVanPrice(price);
+  }, [
+    pickupDate,
+    returnDate,
+    pickupTime,
+    returnTime,
+    van,
+    prefilledData?.calculatedPrice,
+  ]);
+
+
 
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -300,6 +318,24 @@ export const useBookingModal = (
       setPickupTime(time);
     } else if (timeModalField === "returnTime") {
       setReturnTime(time);
+      
+      // Check if total rental is less than 6 hours
+      if (pickupDate && returnDate && pickupTime) {
+        const start = new Date(pickupDate);
+        const end = new Date(returnDate);
+        const [pH, pM] = pickupTime.split(":").map(Number);
+        const [rH, rM] = time.split(":").map(Number);
+        start.setHours(pH, pM, 0, 0);
+        end.setHours(rH, rM, 0, 0);
+        
+        const diffMs = end.getTime() - start.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+        
+        if (diffHours < 6) {
+          Alert.alert("Minimum Rental Period", "Minimum rental period is 6 hours. Please select a later return time.");
+          return;
+        }
+      }
     }
     setTimeModalVisible(false);
     setTimeModalField(null);
@@ -309,7 +345,23 @@ export const useBookingModal = (
     console.log("[BookingModal] handleSubmit called");
     if (!user) {
       console.log("[BookingModal] No user, showing login alert");
-      Alert.alert("Login Required", "Please login to book a van.");
+      await AsyncStorage.setItem("pendingBookingVan", JSON.stringify(van));
+      handleClose();
+      Alert.alert(
+        "Login Required",
+        "Please login or register to book this van.",
+        [
+          {
+            text: "Login",
+            onPress: () => router.push("/register"),
+          },
+          {
+            text: "Register",
+            onPress: () => router.push("/register"),
+          },
+          { text: "Cancel", style: "cancel" },
+        ]
+      );
       return;
     }
     console.log("[BookingModal] User exists, continuing...");
@@ -332,12 +384,28 @@ export const useBookingModal = (
     if (!driverAge || age < 25 || age > 70)
       newErrors.driverAge = "Driver age must be between 25 and 70";
 
-    setErrors(newErrors);
+    // Check minimum 6 hours rental
+    if (pickupDate && returnDate && pickupTime && returnTime) {
+      const start = new Date(pickupDate);
+      const end = new Date(returnDate);
+      const [pH, pM] = pickupTime.split(":").map(Number);
+      const [rH, rM] = returnTime.split(":").map(Number);
+      start.setHours(pH, pM, 0, 0);
+      end.setHours(rH, rM, 0, 0);
+      const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      if (diffHours < 6) {
+        Alert.alert("Minimum Rental Period", "Minimum rental period is 6 hours. Please adjust your dates and times.");
+        return;
+      }
+    }
+
     if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       console.log("[BookingModal] Validation failed, stopping");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
+    setErrors({});
 
     Keyboard.dismiss();
     setIsSubmitting(true);
@@ -360,25 +428,28 @@ export const useBookingModal = (
       const endDateTime = new Date(returnDate!);
       endDateTime.setHours(parseInt(returnHour), parseInt(returnMinute), 0, 0);
 
-      const vanPrice = calculatePrice(
-        startDateTime,
-        endDateTime,
-        van?.pricingTiers || [],
-        van?.extraHoursRate || 0
-      );
+      const vanPrice = dynamicVanPrice;
+
+      const addonsForPayload = Object.entries(addonSelections)
+        .filter(([_, selection]) => selection.quantity > 0)
+        .map(([addonId, selection]) => ({
+          addOn: addonId,
+          quantity: selection.quantity,
+        }));
 
       const addonsPrice = Object.entries(addonSelections).reduce(
         (sum, [addonId, selection]) => {
           const addon = addons.find((a) => a._id === addonId);
           if (!addon) return sum;
 
-          let addonPrice = 0;
-          if (addon.pricingType === "flat") {
-            addonPrice = (addon.flatPrice || 0) * selection.quantity;
-          } else if (addon.pricingType === "tiered" && selection.tierId) {
-            const tier = addon.tiers?.find((t) => t._id === selection.tierId);
-            addonPrice = (tier?.price || 0) * selection.quantity;
-          }
+          const addonPrice = calculateAddonPrice(
+            addon,
+            pickupDate!,
+            returnDate!,
+            pickupTime,
+            returnTime,
+            selection.quantity
+          );
           return sum + addonPrice;
         },
         0
@@ -395,23 +466,11 @@ export const useBookingModal = (
         endDate: endDateTime.toISOString(),
         dirverAge: driverAge,
         totalPrice,
+        addOns: addonsForPayload,
+        message:message
       };
+      console.log(reservationData , "reservationData")
 
-      console.log("[BookingModal] Submit data:", {
-        hasPrefilledData,
-        prefilledData,
-        van,
-        reservationData,
-        pickupTime,
-        returnTime,
-        startDateTime: startDateTime.toISOString(),
-        endDateTime: endDateTime.toISOString(),
-      });
-
-      console.log("[BookingModal] Calling API with:", {
-        userData,
-        reservationData,
-      });
       const result = await reservationService.create(userData, reservationData);
 
       if (result.success) {
@@ -488,5 +547,6 @@ export const useBookingModal = (
     timeModalField,
     setTimeModalField,
     reservedSlots,
+    dynamicVanPrice,
   };
 };

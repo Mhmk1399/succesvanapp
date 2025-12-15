@@ -8,7 +8,7 @@ export function calculatePrice(
   startDate: Date,
   endDate: Date,
   pricingTiers: PricingTier[],
-  extraHoursRate: number = 0
+  extraHoursRate: number
 ): number {
   if (!pricingTiers || pricingTiers.length === 0) return 0;
 
@@ -28,11 +28,14 @@ export function calculatePrice(
 
   let totalDays = Math.floor(billableHours / 24);
   const extraHours = billableHours % 24;
+  let extraHoursPrice = 0;
 
   if (billableHours < 24) {
     totalDays = 1;
   } else if (extraHours > 6) {
     totalDays += 1;
+  } else if (extraHours > 0) {
+    extraHoursPrice = extraHours * extraHoursRate;
   }
 
   const tier =
@@ -42,8 +45,17 @@ export function calculatePrice(
 
   const pricePerDay = tier.pricePerDay;
   const daysPrice = totalDays * pricePerDay;
-  const extraHoursPrice =
-    billableHours < 24 || extraHours > 6 ? 0 : extraHours * extraHoursRate;
+
+  console.log('[priceCalculator]', {
+    billableHours,
+    totalDays,
+    extraHours,
+    extraHoursRate,
+    extraHoursPrice,
+    pricePerDay,
+    daysPrice,
+    total: daysPrice + extraHoursPrice
+  });
 
   return daysPrice + extraHoursPrice;
 }

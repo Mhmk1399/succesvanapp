@@ -7,8 +7,10 @@ import { categoryService } from "@/services/categoryService";
 import { useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Category } from "@/types/type";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function VansScreen() {
+  const { user } = useAuth();
   const params = useLocalSearchParams();
   const [, setSelectedVan] = useState<Van | null>(null);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
@@ -20,8 +22,13 @@ export default function VansScreen() {
 
   useEffect(() => {
     loadCategories();
-    checkPendingBooking();
   }, [params]);
+
+  useEffect(() => {
+    if (user) {
+      checkPendingBooking();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (params.selectedVanId && vans.length > 0) {
@@ -68,7 +75,7 @@ export default function VansScreen() {
           gear: cat.gear || "manual",
           showPrice: cat.showPrice || 0,
           pricingTiers: cat.pricingTiers || [],
-          extraHoursRate: cat.extraHoursRate || 0,
+          extraHoursRate: cat.extrahoursRate || cat.extraHoursRate || 0,
         }));
 
         // Filter by category if provided
@@ -90,8 +97,10 @@ export default function VansScreen() {
   };
 
   const handleBookVan = (van: Van) => {
-    setBookingVan(van);
-    setBookingModalVisible(true);
+    if (user) {
+      setBookingVan(van);
+      setBookingModalVisible(true);
+    }
   };
 
   if (loading) {

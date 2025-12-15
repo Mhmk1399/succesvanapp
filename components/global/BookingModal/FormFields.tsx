@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -6,6 +6,7 @@ import { AddOn, Office, User } from "@/types/type";
 import { styles } from "./styles";
 import { ACCENT, DARK } from "./constants";
 import { formatDate, formatTime } from "./utils";
+import { getAddonDisplayPrice, calculateAddonPrice } from "@/utils/addonCalculator";
 
 type FormFieldsProps = {
   name: string;
@@ -249,6 +250,16 @@ export const FormFields = ({
           {addons.map((addon) => {
             const selection = addonSelections[addon._id];
             const isSelected = !!selection;
+            const displayPrice = pickupDate && returnDate && pickupTime && returnTime
+              ? getAddonDisplayPrice(addon, pickupDate, returnDate, pickupTime, returnTime)
+              : getAddonDisplayPrice(addon);
+            const calculatedPrice = useMemo(() => {
+              if (pickupDate && returnDate && pickupTime && returnTime && isSelected) {
+                return calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, selection.quantity);
+              }
+              return 0;
+            }, [addon, pickupDate, returnDate, pickupTime, returnTime, isSelected, selection?.quantity]);
+            
             return (
               <Pressable
                 key={addon._id}
@@ -261,7 +272,7 @@ export const FormFields = ({
                   } else {
                     setAddonSelections({
                       ...addonSelections,
-                      [addon._id]: { quantity: 1, tierId: addon.tiers?.[0]?._id },
+                      [addon._id]: { quantity: 1 },
                     });
                   }
                 }}
@@ -289,7 +300,7 @@ export const FormFields = ({
                 </View>
                 <Text style={{ color: "#9ca3af", fontSize: 10, marginBottom: 6 }} numberOfLines={2}>{addon.description}</Text>
                 <Text style={{ color: ACCENT, fontSize: 12, fontWeight: "700" }}>
-                  {addon.pricingType === "flat" ? `£${addon.flatPrice}` : "From £" + (addon.tiers?.[0]?.price || 0)}
+                  {displayPrice}
                 </Text>
                 {isSelected && (
                   <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)", gap: 6 }}>
@@ -326,39 +337,11 @@ export const FormFields = ({
                         <Ionicons name="add" size={12} color={ACCENT} />
                       </Pressable>
                     </View>
-                    {addon.pricingType === "tiered" && addon.tiers && addon.tiers.length > 0 && (
-                      <View style={{ gap: 4 }}>
-                        {addon.tiers.map((tier) => (
-                          <Pressable
-                            key={tier._id}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              Haptics.selectionAsync();
-                              setAddonSelections({
-                                ...addonSelections,
-                                [addon._id]: { ...selection, tierId: tier._id },
-                              });
-                            }}
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              backgroundColor: selection.tierId === tier._id ? "rgba(254,154,0,0.25)" : "rgba(255,255,255,0.05)",
-                              borderRadius: 6,
-                              paddingVertical: 4,
-                              paddingHorizontal: 8,
-                              borderWidth: 1,
-                              borderColor: selection.tierId === tier._id ? ACCENT : "transparent",
-                            }}
-                          >
-                            <Text style={{ color: "#e5e7eb", fontSize: 10, fontWeight: "500" }}>
-                              {tier.minDays}-{tier.maxDays}d
-                            </Text>
-                            <Text style={{ color: ACCENT, fontSize: 11, fontWeight: "700" }}>
-                              £{tier.price}
-                            </Text>
-                          </Pressable>
-                        ))}
+                    {calculatedPrice > 0 && (
+                      <View style={{ backgroundColor: "rgba(254,154,0,0.1)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                        <Text style={{ color: "#f9fafb", fontSize: 11, fontWeight: "600", textAlign: "center" }}>
+                          Total: £{calculatedPrice.toFixed(2)}
+                        </Text>
                       </View>
                     )}
                   </View>

@@ -21,17 +21,20 @@ import {
   View,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import { Audio } from "expo-av";
 import { Calendar } from "react-native-calendars";
 import { ActivityIndicator } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import { useAuth } from "@/contexts/AuthContext";
 import { typeService } from "@/services/typeService";
 import { officeService } from "@/services/officeService";
-import { Type } from "@/types/type";
+import { Category, Type } from "@/types/type";
 import VansModal from "./VansModal";
+import { sheetStyles, styles } from "./styleForm";
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
-const { height, width } = Dimensions.get("window");
+const { height } = Dimensions.get("window");
 
 type PickerField =
   | "pickupDate"
@@ -77,6 +80,17 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const shineAnim = useRef(new Animated.Value(0)).current;
 
+  // Auto-open modal if returning from login/register
+  useEffect(() => {
+    const checkPendingForm = async () => {
+      const pending = await AsyncStorage.getItem("pendingReservationForm");
+      if (pending) {
+        setTimeout(() => openSheet(), 500);
+      }
+    };
+    checkPendingForm();
+  }, []);
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -90,6 +104,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
         if (gestureState.dy > 70) {
           closeSheet();
         } else {
+          
           Animated.spring(translateY, {
             toValue: 0,
             tension: 50,
@@ -241,6 +256,8 @@ type SheetContentProps = {
 
 function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const colorScheme = useColorScheme();
+  const { user } = useAuth();
+  const router = useRouter();
 
   // ---- WEB LOGIC PORTED HERE ----
   const [offices, setOffices] = useState<Office[]>([]);
@@ -285,7 +302,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const [availableVans, setAvailableVans] = useState<any[]>([]);
   const [loadingVans, setLoadingVans] = useState(false);
 
-  // Fetch offices & types
+  // Fetch offices & types + restore saved form
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -296,6 +313,26 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         ]);
         setOffices(offData.data || []);
         setTypes(typeData || []);
+
+        // Restore saved form data if exists
+        const savedForm = await AsyncStorage.getItem("pendingReservationForm");
+        if (savedForm) {
+          const data = JSON.parse(savedForm);
+          setSelectedOffice(data.office || "");
+          setSelectedType(data.type || "");
+          setPickupDate(
+            data.pickupDate ? new Date(data.pickupDate) : new Date()
+          );
+          setPickupTime(data.pickupTime || "10:00");
+          setReturnDate(
+            data.returnDate
+              ? new Date(data.returnDate)
+              : new Date(Date.now() + 24 * 60 * 60 * 1000)
+          );
+          setReturnTime(data.returnTime || "10:00");
+          setDriverAge(data.driverAge || "");
+          await AsyncStorage.removeItem("pendingReservationForm");
+        }
       } catch (error) {
         console.log("Failed to fetch data", error);
       } finally {
@@ -515,6 +552,25 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       setPickupTime(time);
     } else if (timeModalField === "returnTime") {
       console.log("[selectTime] Setting returnTime to:", time);
+      
+      // Check if total rental is less than 6 hours
+      if (pickupDate && returnDate && pickupTime) {
+        const start = new Date(pickupDate);
+        const end = new Date(returnDate);
+        const [pH, pM] = pickupTime.split(":").map(Number);
+        const [rH, rM] = time.split(":").map(Number);
+        start.setHours(pH, pM, 0, 0);
+        end.setHours(rH, rM, 0, 0);
+        
+        const diffMs = end.getTime() - start.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+        
+        if (diffHours < 6) {
+          Alert.alert("Minimum Rental Period", "Minimum rental period is 6 hours. Please select a later return time or date.");
+          return;
+        }
+      }
+      
       setReturnTime(time);
     }
 
@@ -566,6 +622,60 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     const age = Number(driverAge);
     if (!driverAge || age < 25 || age > 70) {
       Alert.alert("Driver age", "Driver age must be between 25 and 70.");
+      return;
+    }
+
+    // Check minimum 6 hours rental
+    if (pickupDate && returnDate && pickupTime && returnTime) {
+      const start = new Date(pickupDate);
+      const end = new Date(returnDate);
+      const [pH, pM] = pickupTime.split(":").map(Number);
+      const [rH, rM] = returnTime.split(":").map(Number);
+      start.setHours(pH, pM, 0, 0);
+      end.setHours(rH, rM, 0, 0);
+      const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      if (diffHours < 6) {
+        Alert.alert("Minimum Rental Period", "Minimum rental period is 6 hours. Please adjust your dates and times.");
+        return;
+      }
+    }
+
+    // Check if user is logged in
+    if (!user) {
+      await AsyncStorage.setItem(
+        "pendingReservationForm",
+        JSON.stringify({
+          office: selectedOffice,
+          type: selectedType,
+          pickupDate: pickupDate.toISOString(),
+          returnDate: returnDate.toISOString(),
+          pickupTime,
+          returnTime,
+          driverAge,
+        })
+      );
+
+      Alert.alert(
+        "Login Required",
+        "Please login or register to continue with your reservation.",
+        [
+          {
+            text: "Login",
+            onPress: () => {
+              onClose();
+              router.push("/register");
+            },
+          },
+          {
+            text: "Register",
+            onPress: () => {
+              onClose();
+              router.push("/register");
+            },
+          },
+          { text: "Cancel", style: "cancel" },
+        ]
+      );
       return;
     }
 
@@ -629,14 +739,14 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         const officeCategoryIds = officeData.data.categories;
 
         const filteredVans = categoriesData.data
-          .filter((cat: any) => {
+          .filter((cat: Category) => {
             const matchesOffice = officeCategoryIds.includes(cat._id);
             const matchesType =
-              cat.type === selectedType || cat.type?._id === selectedType;
+              cat.type._id === selectedType || cat.type?._id === selectedType;
 
             return matchesOffice && matchesType;
           })
-          .map((cat: any) => ({
+          .map((cat: Category) => ({
             id: cat._id,
             name: cat.name,
             image: cat.image || require("@/assets/images/van.png"),
@@ -650,7 +760,6 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
             cargo: cat.expert || "",
           }));
 
-        console.log("[Filtered Vans]", filteredVans);
         setAvailableVans(filteredVans);
       }
     } catch (error) {
@@ -1232,7 +1341,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
                   ]}
                 >
                   <Ionicons
-                    name="car-sport-outline"
+                    name="car-sharp"
                     size={18}
                     color={selectedType ? ACCENT : "rgba(255,255,255,0.4)"}
                     style={sheetStyles.inputIcon}
@@ -1567,399 +1676,3 @@ function VoiceAIButton() {
     </Pressable>
   );
 }
-
-/* ===================== STYLES ===================== */
-
-const styles = StyleSheet.create({
-  mainButton: {
-    marginHorizontal: 20,
-    borderRadius: 999,
-    overflow: "hidden",
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.35,
-        shadowRadius: 14,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
-  mainButtonPressed: {
-    opacity: 0.95,
-    transform: [{ scale: 0.98 }],
-  },
-  mainButtonGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    position: "relative",
-    overflow: "hidden",
-  },
-  shineEffect: {
-    position: "absolute",
-    top: -50,
-    left: -200,
-    width: 300,
-    height: 200,
-    zIndex: 1,
-    transform: [{ rotate: "25deg" }],
-  },
-  mainButtonLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  mainButtonText: {
-    color: DARK,
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  mainButtonRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(15,23,42,0.12)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  mainButtonSubText: {
-    color: DARK,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-
-  sheetContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: height * 0.82,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: "hidden",
-    borderColor: "rgba(254,154,0,0.25)",
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 10,
-      },
-    }),
-  },
-  blurContainer: {
-    flex: 1,
-    backgroundColor: "rgba(2,6,23,0.7)",
-  },
-  handleArea: {
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: "rgba(148,163,184,0.7)",
-  },
-});
-
-const sheetStyles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 10,
-    paddingBottom: 32,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-    marginTop: 4,
-  },
-  sheetTitle: {
-    color: "#f9fafb",
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  sheetSubtitle: {
-    color: "#9ca3af",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-      },
-    }),
-  },
-
-  /* Voice button */
-  voiceButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    marginBottom: 18,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-    }),
-  },
-  voiceButtonActive: {
-    borderColor: ACCENT,
-    backgroundColor: "rgba(254,154,0,0.12)",
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-    }),
-  },
-  voiceLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  voiceIconWrapper: {
-    width: 38,
-    height: 38,
-    borderRadius: 999,
-    backgroundColor: ACCENT,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  voiceTitle: {
-    color: "#f9fafb",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  voiceSubtitle: {
-    color: "#9ca3af",
-    fontSize: 11,
-    marginTop: 2,
-  },
-  waveWrapper: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 3,
-    paddingLeft: 12,
-  },
-  waveBar: {
-    width: 3,
-    borderRadius: 999,
-    backgroundColor: ACCENT,
-  },
-
-  section: {
-    marginBottom: 18,
-  },
-  sectionLabel: {
-    color: "#9ca3af",
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  infoText: {
-    color: "#fbbf24",
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  row: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  half: {
-    flex: 1,
-  },
-
-  inputGroup: {
-    marginBottom: 12,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-    }),
-  },
-  inputWrapperFocused: {
-    borderColor: ACCENT,
-    backgroundColor: "rgba(254,154,0,0.08)",
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 6,
-      },
-    }),
-  },
-  inputIcon: {
-    marginLeft: 2,
-  },
-  input: {
-    flex: 1,
-    color: "#f9fafb",
-    fontSize: 14,
-    paddingVertical: 8,
-    fontWeight: "500",
-  },
-
-  buttonsRow: {
-    marginTop: 8,
-  },
-  submitButton: {
-    borderRadius: 18,
-    overflow: "hidden",
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
-  submitButtonPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
-  },
-  submitGradient: {
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  submitText: {
-    color: DARK,
-    fontSize: 15,
-    fontWeight: "800",
-  },
-
-  /* Select modals */
-  selectOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  selectBox: {
-    width: width - 60,
-    maxHeight: height * 0.6,
-    backgroundColor: "rgba(15,23,42,0.98)",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.3)",
-  },
-  selectTitle: {
-    color: "#f9fafb",
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 10,
-  },
-  selectItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    marginBottom: 4,
-  },
-  selectItemActive: {
-    backgroundColor: "rgba(254,154,0,0.18)",
-  },
-  selectItemText: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  timeModalBox: {
-    width: width - 40,
-    maxHeight: height * 0.7,
-    backgroundColor: "rgba(15,23,42,0.98)",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.3)",
-  },
-  calendarModalBox: {
-    width: width - 40,
-    backgroundColor: "rgba(15,23,42,0.98)",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.3)",
-  },
-  timeModalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  dateRangeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-    padding: 16,
-    gap: 12,
-  },
-});
