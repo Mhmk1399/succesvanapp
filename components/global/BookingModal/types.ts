@@ -13,6 +13,8 @@ export type BookingModalProps = {
     returnTime?: string;
     driverAge?: string | number;
     calculatedPrice?: number;
+    pickupExtensionFee?: number;
+    returnExtensionFee?: number;
   };
   onReservationComplete?: () => void;
 };

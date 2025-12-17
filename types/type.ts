@@ -11,6 +11,16 @@ export interface WorkingTime {
   isOpen: boolean;
   startTime?: string;
   endTime?: string;
+  pickupExtension?: {
+    hoursBefore: number;
+    hoursAfter: number;
+    flatPrice: number;
+  };
+  returnExtension?: {
+    hoursBefore: number;
+    hoursAfter: number;
+    flatPrice: number;
+  };
 }
 
 export interface SpecialDay {

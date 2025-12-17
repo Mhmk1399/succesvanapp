@@ -18,6 +18,7 @@ import {
   scheduleNotification,
   getSelectedOffice,
   isDateDisabled as checkDateDisabled,
+  getAvailableTimeSlots,
 } from "./utils";
 
 export const useBookingModal = (
@@ -48,22 +49,22 @@ export const useBookingModal = (
   const [phone, setPhone] = useState("");
   const [pickupDate, setPickupDate] = useState<Date | null>(() => {
     if (!prefilledData?.pickupDate) return new Date();
-    const date = new Date(prefilledData.pickupDate);
-    date.setHours(0, 0, 0, 0);
-    return date;
+    const d = new Date(prefilledData.pickupDate);
+    const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return localDate;
   });
   const [pickupTime, setPickupTime] = useState<string>(
-    prefilledData?.pickupTime || "07:00"
+    prefilledData?.pickupTime || ""
   );
   const [returnDate, setReturnDate] = useState<Date | null>(() => {
     if (!prefilledData?.returnDate)
       return new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const date = new Date(prefilledData.returnDate);
-    date.setHours(0, 0, 0, 0);
-    return date;
+    const d = new Date(prefilledData.returnDate);
+    const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return localDate;
   });
   const [returnTime, setReturnTime] = useState<string>(
-    prefilledData?.returnTime || "10:00"
+    prefilledData?.returnTime || ""
   );
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [dateRangeModalVisible, setDateRangeModalVisible] = useState(false);
@@ -112,13 +113,69 @@ export const useBookingModal = (
     start.setHours(pH, pM, 0, 0);
     end.setHours(rH, rM, 0, 0);
 
-    const price = calculatePrice(
+    let basePrice = calculatePrice(
       start,
       end,
       van.pricingTiers || [],
       van.extraHoursRate || 0
     );
-    setDynamicVanPrice(price);
+
+    // Calculate extension fees
+    let pickupExtensionFee = 0;
+    let returnExtensionFee = 0;
+    const office = getSelectedOffice(offices, selectedOffice);
+
+    if (office && pickupDate && pickupTime) {
+      const dayName = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+      ][pickupDate.getDay()];
+      const workingDay = office.workingTime?.find(
+        (w: any) => w.day === dayName
+      );
+      if (workingDay?.pickupExtension) {
+        const slots = getAvailableTimeSlots(pickupDate, office, true);
+        if (slots.normalStart && slots.normalEnd) {
+          const isExtension =
+            pickupTime < slots.normalStart || pickupTime > slots.normalEnd;
+          if (isExtension) {
+            pickupExtensionFee = workingDay.pickupExtension.flatPrice;
+          }
+        }
+      }
+    }
+
+    if (office && returnDate && returnTime) {
+      const dayName = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+      ][returnDate.getDay()];
+      const workingDay = office.workingTime?.find(
+        (w: any) => w.day === dayName
+      );
+      if (workingDay?.returnExtension) {
+        const slots = getAvailableTimeSlots(returnDate, office, false);
+        if (slots.normalStart && slots.normalEnd) {
+          const isExtension =
+            returnTime < slots.normalStart || returnTime > slots.normalEnd;
+          if (isExtension) {
+            returnExtensionFee = workingDay.returnExtension.flatPrice;
+          }
+        }
+      }
+    }
+
+    setDynamicVanPrice(basePrice + pickupExtensionFee + returnExtensionFee);
   }, [
     pickupDate,
     returnDate,
@@ -126,9 +183,9 @@ export const useBookingModal = (
     returnTime,
     van,
     prefilledData?.calculatedPrice,
+    offices,
+    selectedOffice,
   ]);
-
-
 
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -318,7 +375,7 @@ export const useBookingModal = (
       setPickupTime(time);
     } else if (timeModalField === "returnTime") {
       setReturnTime(time);
-      
+
       // Check if total rental is less than 6 hours
       if (pickupDate && returnDate && pickupTime) {
         const start = new Date(pickupDate);
@@ -327,12 +384,15 @@ export const useBookingModal = (
         const [rH, rM] = time.split(":").map(Number);
         start.setHours(pH, pM, 0, 0);
         end.setHours(rH, rM, 0, 0);
-        
+
         const diffMs = end.getTime() - start.getTime();
         const diffHours = diffMs / (1000 * 60 * 60);
-        
+
         if (diffHours < 6) {
-          Alert.alert("Minimum Rental Period", "Minimum rental period is 6 hours. Please select a later return time.");
+          Alert.alert(
+            "Minimum Rental Period",
+            "Minimum rental period is 6 hours. Please select a later return time."
+          );
           return;
         }
       }
@@ -342,9 +402,7 @@ export const useBookingModal = (
   };
 
   const handleSubmit = async () => {
-    console.log("[BookingModal] handleSubmit called");
     if (!user) {
-      console.log("[BookingModal] No user, showing login alert");
       await AsyncStorage.setItem("pendingBookingVan", JSON.stringify(van));
       handleClose();
       Alert.alert(
@@ -364,7 +422,6 @@ export const useBookingModal = (
       );
       return;
     }
-    console.log("[BookingModal] User exists, continuing...");
 
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = "Please enter your name";
@@ -394,14 +451,16 @@ export const useBookingModal = (
       end.setHours(rH, rM, 0, 0);
       const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
       if (diffHours < 6) {
-        Alert.alert("Minimum Rental Period", "Minimum rental period is 6 hours. Please adjust your dates and times.");
+        Alert.alert(
+          "Minimum Rental Period",
+          "Minimum rental period is 6 hours. Please adjust your dates and times."
+        );
         return;
       }
     }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      console.log("[BookingModal] Validation failed, stopping");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -467,9 +526,9 @@ export const useBookingModal = (
         dirverAge: driverAge,
         totalPrice,
         addOns: addonsForPayload,
-        message:message
+        messege: message,
       };
-      console.log(reservationData , "reservationData")
+      console.log(reservationData, "reservationData");
 
       const result = await reservationService.create(userData, reservationData);
 

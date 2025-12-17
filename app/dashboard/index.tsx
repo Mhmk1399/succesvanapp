@@ -45,11 +45,7 @@ export default function ProfileScreen() {
       AsyncStorage.setItem("userId", user._id);
       registerBackgroundTask();
     }
-    const interval = setInterval(() => {
-      if (activeTab === "reservations") fetchReservations();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [user, activeTab]);
+  }, [user]);
 
   useEffect(() => {
     const prevTab = prevTabRef.current;

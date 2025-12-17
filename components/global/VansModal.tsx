@@ -189,12 +189,17 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
       endDate.setHours(h, m, 0, 0);
     }
     
-    return calculatePrice(
+    const basePrice = calculatePrice(
       startDate,
       endDate,
       van.pricingTiers || [],
       van.extraHoursRate || 0
     );
+    
+    const pickupExtension = prefilledData.pickupExtensionFee || 0;
+    const returnExtension = prefilledData.returnExtensionFee || 0;
+    
+    return basePrice + pickupExtension + returnExtension;
   }, [prefilledData, van]);
 
   return (

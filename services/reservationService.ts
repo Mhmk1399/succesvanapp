@@ -37,15 +37,19 @@ export const reservationService = {
   },
 
   async getAll(userId?: string) {
-    console.log("[Reservation Service] getAll called with userId:", userId);
-    console.log("[Reservation Service] userId type:", typeof userId);
-    console.log("[Reservation Service] API_URL:", API_URL);
     const url = userId ? `${API_URL}?userId=${userId}` : API_URL;
-    console.log("[Reservation Service] Final URL:", url);
     const response = await fetch(url);
-    console.log("[Reservation Service] Response status:", response.status);
     const data = await response.json();
-    console.log("[Reservation Service] Data:", data);
+    return data;
+  },
+
+  async update(reservationId: string, updateData: Partial<ReservationCreate>) {
+    const response = await fetch(`${API_URL}/${reservationId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updateData),
+    });
+    const data = await response.json();
     return data;
   },
 };

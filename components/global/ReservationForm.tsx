@@ -63,6 +63,16 @@ type WorkingTime = {
   isOpen: boolean;
   startTime: string;
   endTime: string;
+  pickupExtension?: {
+    hoursBefore: number;
+    hoursAfter: number;
+    flatPrice: number;
+  };
+  returnExtension?: {
+    hoursBefore: number;
+    hoursAfter: number;
+    flatPrice: number;
+  };
 };
 
 type Office = {
@@ -104,7 +114,6 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
         if (gestureState.dy > 70) {
           closeSheet();
         } else {
-          
           Animated.spring(translateY, {
             toValue: 0,
             tension: 50,
@@ -267,11 +276,11 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const [selectedType, setSelectedType] = useState<string>("");
 
   const [pickupDate, setPickupDate] = useState<Date | null>(new Date());
-  const [pickupTime, setPickupTime] = useState<string>("10:00");
+  const [pickupTime, setPickupTime] = useState<string>("");
   const [returnDate, setReturnDate] = useState<Date | null>(
     new Date(Date.now() + 24 * 60 * 60 * 1000)
   );
-  const [returnTime, setReturnTime] = useState<string>("10:00");
+  const [returnTime, setReturnTime] = useState<string>("");
 
   const [driverAge, setDriverAge] = useState("");
 
@@ -323,13 +332,13 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
           setPickupDate(
             data.pickupDate ? new Date(data.pickupDate) : new Date()
           );
-          setPickupTime(data.pickupTime || "10:00");
+          setPickupTime(data.pickupTime || "");
           setReturnDate(
             data.returnDate
               ? new Date(data.returnDate)
               : new Date(Date.now() + 24 * 60 * 60 * 1000)
           );
-          setReturnTime(data.returnTime || "10:00");
+          setReturnTime(data.returnTime || "");
           setDriverAge(data.driverAge || "");
           await AsyncStorage.removeItem("pendingReservationForm");
         }
@@ -422,9 +431,18 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     return false;
   };
 
-  const getAvailableTimeSlots = (date: Date | null) => {
+  const getAvailableTimeSlots = (
+    date: Date | null,
+    isPickup: boolean = true
+  ) => {
     const office = getSelectedOffice();
-    if (!office || !date) return { start: "00:00", end: "23:59", info: "" };
+    if (!office || !date)
+      return {
+        start: "00:00",
+        end: "23:59",
+        normalStart: "00:00",
+        normalEnd: "23:59",
+      };
 
     const month = date.getMonth() + 1;
     const day = date.getDate();
@@ -443,24 +461,55 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     );
     if (specialDay && specialDay.isOpen) {
       return {
-        start: specialDay.startTime,
-        end: specialDay.endTime,
-        info: `Special day: ${specialDay.reason ?? ""} (${
-          specialDay.startTime
-        } - ${specialDay.endTime})`,
+        start: specialDay.startTime || "00:00",
+        end: specialDay.endTime || "23:59",
+        normalStart: specialDay.startTime || "00:00",
+        normalEnd: specialDay.endTime || "23:59",
       };
     }
 
     const workingDay = office.workingTime?.find((w) => w.day === dayName);
     if (workingDay && workingDay.isOpen) {
-      return {
-        start: workingDay.startTime,
-        end: workingDay.endTime,
-        info: `${workingDay.day}: ${workingDay.startTime} - ${workingDay.endTime}`,
-      };
+      let start = workingDay.startTime || "00:00";
+      let end = workingDay.endTime || "23:59";
+      const normalStart = start;
+      const normalEnd = end;
+
+      const extension = isPickup
+        ? workingDay.pickupExtension
+        : workingDay.returnExtension;
+      if (extension) {
+        const [startH, startM] = start.split(":").map(Number);
+        const [endH, endM] = end.split(":").map(Number);
+        const extendedStartMin = Math.max(
+          0,
+          startH * 60 + startM - extension.hoursBefore * 60
+        );
+        const extendedEndMin = Math.min(
+          1439,
+          endH * 60 + endM + extension.hoursAfter * 60
+        );
+        start = `${Math.floor(extendedStartMin / 60)
+          .toString()
+          .padStart(2, "0")}:${(extendedStartMin % 60)
+          .toString()
+          .padStart(2, "0")}`;
+        end = `${Math.floor(extendedEndMin / 60)
+          .toString()
+          .padStart(2, "0")}:${(extendedEndMin % 60)
+          .toString()
+          .padStart(2, "0")}`;
+      }
+
+      return { start, end, normalStart, normalEnd };
     }
 
-    return { start: "00:00", end: "23:59", info: "" };
+    return {
+      start: "00:00",
+      end: "23:59",
+      normalStart: "00:00",
+      normalEnd: "23:59",
+    };
   };
 
   // ---- FORMATTERS ----
@@ -552,7 +601,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       setPickupTime(time);
     } else if (timeModalField === "returnTime") {
       console.log("[selectTime] Setting returnTime to:", time);
-      
+
       // Check if total rental is less than 6 hours
       if (pickupDate && returnDate && pickupTime) {
         const start = new Date(pickupDate);
@@ -561,16 +610,19 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         const [rH, rM] = time.split(":").map(Number);
         start.setHours(pH, pM, 0, 0);
         end.setHours(rH, rM, 0, 0);
-        
+
         const diffMs = end.getTime() - start.getTime();
         const diffHours = diffMs / (1000 * 60 * 60);
-        
+
         if (diffHours < 6) {
-          Alert.alert("Minimum Rental Period", "Minimum rental period is 6 hours. Please select a later return time or date.");
+          Alert.alert(
+            "Minimum Rental Period",
+            "Minimum rental period is 6 hours. Please select a later return time or date."
+          );
           return;
         }
       }
-      
+
       setReturnTime(time);
     }
 
@@ -635,7 +687,10 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       end.setHours(rH, rM, 0, 0);
       const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
       if (diffHours < 6) {
-        Alert.alert("Minimum Rental Period", "Minimum rental period is 6 hours. Please adjust your dates and times.");
+        Alert.alert(
+          "Minimum Rental Period",
+          "Minimum rental period is 6 hours. Please adjust your dates and times."
+        );
         return;
       }
     }
@@ -693,6 +748,56 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     const endDateTime = new Date(returnDate);
     endDateTime.setHours(returnHour, returnMinute, 0, 0);
 
+    // Calculate extension fees
+    let pickupExtensionFee = 0;
+    let returnExtensionFee = 0;
+
+    if (pickupDate && pickupTime) {
+      const dayName = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+      ][pickupDate.getDay()];
+      const workingDay = officeObj?.workingTime?.find(
+        (w: any) => w.day === dayName
+      );
+      if (workingDay?.pickupExtension) {
+        const slots = getAvailableTimeSlots(pickupDate, true);
+        const isExtension =
+          pickupTime < slots.normalStart || pickupTime > slots.normalEnd;
+        if (isExtension) {
+          pickupExtensionFee = workingDay.pickupExtension.flatPrice;
+        }
+      }
+    }
+
+    if (returnDate && returnTime) {
+      const dayName = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+      ][returnDate.getDay()];
+      const workingDay = officeObj?.workingTime?.find(
+        (w: any) => w.day === dayName
+      );
+      if (workingDay?.returnExtension) {
+        const slots = getAvailableTimeSlots(returnDate, false);
+        const isExtension =
+          returnTime < slots.normalStart || returnTime > slots.normalEnd;
+        if (isExtension) {
+          returnExtensionFee = workingDay.returnExtension.flatPrice;
+        }
+      }
+    }
+
     const reservationPayload = {
       office: selectedOffice,
       officeName: officeObj?.name ?? "",
@@ -702,6 +807,8 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       pickupTime: pickupTime,
       returnTime: returnTime,
       driverAge,
+      pickupExtensionFee,
+      returnExtensionFee,
     };
 
     console.log("Reservation payload (mobile):", reservationPayload);
@@ -1189,76 +1296,127 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
                   );
                 }
 
-                const slots =
-                  timeModalField === "pickupTime" ? pickupSlots : returnSlots;
+                const isPickup = timeModalField === "pickupTime";
+                const dateToCheck = isPickup ? pickupDate : returnDate;
+                const slots = getAvailableTimeSlots(dateToCheck, isPickup);
                 const timeSlots = generateTimeSlots(slots.start, slots.end);
                 const selectedTime = formatTime(
-                  timeModalField === "pickupTime" ? pickupTime : returnTime
+                  isPickup ? pickupTime : returnTime
                 );
 
-                return (
-                  <View
-                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
-                  >
-                    {timeSlots.map((time) => {
-                      const isSelected = time === selectedTime;
-                      const isReserved = reservedSlots.some((slot) => {
-                        return time >= slot.startTime && time < slot.endTime;
-                      });
-                      const isAvailable = !isReserved;
+                const office = getSelectedOffice();
+                const dayName = dateToCheck
+                  ? [
+                      "sunday",
+                      "monday",
+                      "tuesday",
+                      "wednesday",
+                      "thursday",
+                      "friday",
+                      "saturday",
+                    ][dateToCheck.getDay()]
+                  : "";
+                const workingDay = office?.workingTime?.find(
+                  (w: any) => w.day === dayName
+                );
+                const extension = isPickup
+                  ? workingDay?.pickupExtension
+                  : workingDay?.returnExtension;
+                const is24Hours = slots.normalStart === slots.normalEnd;
 
-                      return (
-                        <Pressable
-                          key={time}
-                          disabled={!isAvailable}
-                          onPress={() => {
-                            if (isAvailable) {
-                              Haptics.selectionAsync();
-                              selectTime(time);
-                            }
-                          }}
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 6,
-                            paddingVertical: 10,
-                            paddingHorizontal: 14,
-                            borderRadius: 12,
-                            backgroundColor: isSelected
-                              ? ACCENT
-                              : "rgba(255,255,255,0.05)",
-                            borderWidth: 1.5,
-                            borderColor: isSelected
-                              ? ACCENT
-                              : "rgba(255,255,255,0.1)",
-                            width: "23%",
-                            opacity: isAvailable ? 1 : 0.4,
-                          }}
-                        >
+                return (
+                  <>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        justifyContent: "center",
+                        gap: 2,
+                      }}
+                    >
+                      {timeSlots.map((time) => {
+                        const isSelected = time === selectedTime;
+                        const isReserved = reservedSlots.some((slot) => {
+                          return time >= slot.startTime && time < slot.endTime;
+                        });
+                        const isAvailable = !isReserved;
+                        const isExtension =
+                          is24Hours ||
+                          time < slots.normalStart ||
+                          time > slots.normalEnd;
+                        const extensionPrice =
+                          isExtension && extension ? extension.flatPrice : 0;
+
+                        return (
                           <View
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: 3,
-                              backgroundColor: isAvailable
-                                ? "#22c55e"
-                                : "#ef4444",
-                            }}
-                          />
-                          <Text
-                            style={{
-                              color: isSelected ? DARK : "#e5e7eb",
-                              fontSize: 14,
-                              fontWeight: "700",
-                            }}
+                            key={time}
+                            style={{ width: "31%", marginBottom: 10 }}
                           >
-                            {time}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                            <Pressable
+                              disabled={!isAvailable}
+                              onPress={() => {
+                                if (isAvailable) {
+                                  Haptics.selectionAsync();
+                                  selectTime(time);
+                                }
+                              }}
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 6,
+                                 paddingVertical: 12,
+                            paddingHorizontal: 10,
+                            borderRadius: 12,
+                                backgroundColor: isSelected
+                                  ? ACCENT
+                                  : "rgba(255,255,255,0.05)",
+                                borderWidth: 1.5,
+                                borderColor: isSelected
+                                  ? ACCENT
+                                  : "rgba(255,255,255,0.1)",
+                                opacity: isAvailable ? 1 : 0.4,
+                              }}
+                            >
+                              <View
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: 3,
+                                  backgroundColor: isAvailable
+                                    ? isExtension
+                                      ? "#fbbf24"
+                                      : "#22c55e"
+                                    : "#ef4444",
+                                }}
+                              />
+                              <Text
+                                style={{
+                                  color: isSelected ? DARK : "#e5e7eb",
+                                  fontSize: 12,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                {time}
+                              </Text>
+                            </Pressable>
+                            {isExtension && extensionPrice > 0 && (
+                              <Text
+                                style={{
+                                  fontSize: 9,
+                                  color: isSelected ? "#fff" : "#fbbf24",
+                                  textAlign: "center",
+                                  marginTop: 2,
+                                }}
+                              >
+                                +£{extensionPrice}
+                              </Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </>
                 );
               })()}
             </ScrollView>
@@ -1568,15 +1726,69 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         loading={loadingVans}
         onClose={() => setVansModalVisible(false)}
         onEditForm={() => setVansModalVisible(false)}
-        prefilledData={{
-          office: selectedOffice,
-          category: selectedType,
-          pickupDate: pickupDate?.toISOString() || "",
-          returnDate: returnDate?.toISOString() || "",
-          pickupTime,
-          returnTime,
-          driverAge,
-        }}
+        prefilledData={(() => {
+          let pickupExtensionFee = 0;
+          let returnExtensionFee = 0;
+          const officeObj = getSelectedOffice();
+
+          if (pickupDate && pickupTime && officeObj) {
+            const dayName = [
+              "sunday",
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday",
+              "saturday",
+            ][pickupDate.getDay()];
+            const workingDay = officeObj.workingTime?.find(
+              (w: any) => w.day === dayName
+            );
+            if (workingDay?.pickupExtension) {
+              const slots = getAvailableTimeSlots(pickupDate, true);
+              const isExtension =
+                pickupTime < slots.normalStart || pickupTime > slots.normalEnd;
+              if (isExtension) {
+                pickupExtensionFee = workingDay.pickupExtension.flatPrice;
+              }
+            }
+          }
+
+          if (returnDate && returnTime && officeObj) {
+            const dayName = [
+              "sunday",
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday",
+              "saturday",
+            ][returnDate.getDay()];
+            const workingDay = officeObj.workingTime?.find(
+              (w: any) => w.day === dayName
+            );
+            if (workingDay?.returnExtension) {
+              const slots = getAvailableTimeSlots(returnDate, false);
+              const isExtension =
+                returnTime < slots.normalStart || returnTime > slots.normalEnd;
+              if (isExtension) {
+                returnExtensionFee = workingDay.returnExtension.flatPrice;
+              }
+            }
+          }
+
+          return {
+            office: selectedOffice,
+            category: selectedType,
+            pickupDate: pickupDate?.toISOString() || "",
+            returnDate: returnDate?.toISOString() || "",
+            pickupTime,
+            returnTime,
+            driverAge,
+            pickupExtensionFee,
+            returnExtensionFee,
+          };
+        })()}
         onReservationComplete={onClose}
       />
     </>

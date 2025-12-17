@@ -23,7 +23,22 @@ import { styles } from "./BookingModal/styles";
 import { ACCENT, DARK } from "./BookingModal/constants";
 import { getSelectedOffice, getAvailableTimeSlots } from "./BookingModal/utils";
 import { calculateAddonPrice } from "@/utils/addonCalculator";
-
+type WorkingTime = {
+  day: string; // "monday" | "tuesday" | ...
+  isOpen: boolean;
+  startTime: string;
+  endTime: string;
+  pickupExtension?: {
+    hoursBefore: number;
+    hoursAfter: number;
+    flatPrice: number;
+  };
+  returnExtension?: {
+    hoursBefore: number;
+    hoursAfter: number;
+    flatPrice: number;
+  };
+};
 export default function BookingModal({
   visible,
   van,
@@ -263,8 +278,39 @@ export default function BookingModal({
                 !pickupTime ||
                 !returnTime ||
                 !van
-              )
-                return null;
+              ) {
+                return (
+                  <Pressable
+                    onPress={handleSubmit}
+                    disabled={isSubmitting}
+                    style={({ pressed }) => [
+                      styles.submitBtn,
+                      pressed && styles.submitBtnPressed,
+                      isSubmitting && styles.submitBtnDisabled,
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[ACCENT, "#ff8c00"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.submitGradient}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator color={DARK} size="small" />
+                      ) : (
+                        <>
+                          <Text style={styles.submitText}>Confirm Booking</Text>
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={20}
+                            color={DARK}
+                          />
+                        </>
+                      )}
+                    </LinearGradient>
+                  </Pressable>
+                );
+              }
 
               const start = new Date(pickupDate);
               const end = new Date(returnDate);
@@ -273,18 +319,18 @@ export default function BookingModal({
               start.setHours(pH, pM, 0, 0);
               end.setHours(rH, rM, 0, 0);
 
+            
+
               const diffTime = end.getTime() - start.getTime();
               const totalMinutes = diffTime / (1000 * 60);
               const totalHours = Math.floor(totalMinutes / 60);
               const remainingMinutes = totalMinutes % 60;
               const billableHours =
                 remainingMinutes > 15 ? totalHours + 1 : totalHours;
-
-              const rentalDays = Math.ceil(
-                (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-              );
               const actualDays = Math.floor(billableHours / 24);
               const actualExtraHours = billableHours % 24;
+
+          
 
               let totalDays = actualDays;
               const extraHours = actualExtraHours;
@@ -304,15 +350,91 @@ export default function BookingModal({
                 ) || van.pricingTiers?.[van.pricingTiers.length - 1];
               const pricePerDay = tier?.pricePerDay || 0;
 
+              let pickupExtFee = prefilledData?.pickupExtensionFee || 0;
+              let returnExtFee = prefilledData?.returnExtensionFee || 0;
+
+              if (!hasPrefilledData) {
+                const office = getSelectedOffice(offices, selectedOffice);
+                if (office && pickupDate && pickupTime) {
+                  const dayName = [
+                    "sunday",
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                  ][pickupDate.getDay()];
+                  const workingDay = office.workingTime?.find(
+                    (w: any) => w.day === dayName
+                  );
+                  if (workingDay?.pickupExtension) {
+                    const slots = getAvailableTimeSlots(
+                      pickupDate,
+                      office,
+                      true
+                    );
+                    if (
+                      slots.normalStart &&
+                      slots.normalEnd &&
+                      (pickupTime < slots.normalStart ||
+                        pickupTime > slots.normalEnd)
+                    ) {
+                      pickupExtFee = workingDay.pickupExtension.flatPrice;
+                    }
+                  }
+                }
+                if (office && returnDate && returnTime) {
+                  const dayName = [
+                    "sunday",
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                  ][returnDate.getDay()];
+                  const workingDay = office.workingTime?.find(
+                    (w: any) => w.day === dayName
+                  );
+                  if (workingDay?.returnExtension) {
+                    const slots = getAvailableTimeSlots(
+                      returnDate,
+                      office,
+                      false
+                    );
+                    if (
+                      slots.normalStart &&
+                      slots.normalEnd &&
+                      (returnTime < slots.normalStart ||
+                        returnTime > slots.normalEnd)
+                    ) {
+                      returnExtFee = workingDay.returnExtension.flatPrice;
+                    }
+                  }
+                }
+              }
+
               const vanPrice = dynamicVanPrice;
               const addonsPrice = Object.entries(addonSelections).reduce(
                 (sum, [id, sel]) => {
                   const addon = addons.find((a) => a._id === id);
                   if (!addon) return sum;
-                  return sum + calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, sel.quantity);
+                  return (
+                    sum +
+                    calculateAddonPrice(
+                      addon,
+                      pickupDate,
+                      returnDate,
+                      pickupTime,
+                      returnTime,
+                      sel.quantity
+                    )
+                  );
                 },
                 0
               );
+              const total = vanPrice + addonsPrice;
 
               return (
                 <>
@@ -343,7 +465,8 @@ export default function BookingModal({
                             fontWeight: "500",
                           }}
                         >
-                          {rentalDays} day{rentalDays > 1 ? "s" : ""}
+                          ({actualDays}d {actualExtraHours}h) {totalDays} day
+                          {totalDays > 1 ? "s" : ""} × £{pricePerDay}
                         </Text>
                       </View>
                       <Text
@@ -384,7 +507,7 @@ export default function BookingModal({
                               fontWeight: "500",
                             }}
                           >
-                            {extraHours}h extra
+                            {extraHours}h extra × £{van.extraHoursRate || 0}
                           </Text>
                         </View>
                         <Text
@@ -399,11 +522,102 @@ export default function BookingModal({
                       </View>
                     )}
 
+                    {pickupExtFee > 0 && (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <Ionicons
+                            name="arrow-up-circle-outline"
+                            size={13}
+                            color="#fbbf24"
+                          />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: "#d1d5db",
+                              fontWeight: "500",
+                            }}
+                          >
+                            Pickup extra
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#f9fafb",
+                            fontWeight: "700",
+                          }}
+                        >
+                          £{pickupExtFee}
+                        </Text>
+                      </View>
+                    )}
+
+                    {returnExtFee > 0 && (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <Ionicons
+                            name="arrow-down-circle-outline"
+                            size={13}
+                            color="#fbbf24"
+                          />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: "#d1d5db",
+                              fontWeight: "500",
+                            }}
+                          >
+                            Return extra
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#f9fafb",
+                            fontWeight: "700",
+                          }}
+                        >
+                          £{returnExtFee}
+                        </Text>
+                      </View>
+                    )}
+
                     {Object.entries(addonSelections).map(([id, sel]) => {
                       if (sel.quantity === 0) return null;
                       const addon = addons.find((a) => a._id === id);
                       if (!addon) return null;
-                      const price = calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, sel.quantity);
+                      const price = calculateAddonPrice(
+                        addon,
+                        pickupDate,
+                        returnDate,
+                        pickupTime,
+                        returnTime,
+                        sel.quantity
+                      );
                       return (
                         <View
                           key={id}
@@ -479,22 +693,11 @@ export default function BookingModal({
                           fontWeight: "900",
                         }}
                       >
-                        £{(vanPrice + addonsPrice).toFixed(0)}
+                        £{total.toFixed(0)}
                       </Text>
                     </View>
                   </View>
-                </>
-              );
-            })()}
-            {(() => {
-              if (
-                !pickupDate ||
-                !returnDate ||
-                !pickupTime ||
-                !returnTime ||
-                !van
-              )
-                return (
+
                   <Pressable
                     onPress={handleSubmit}
                     disabled={isSubmitting}
@@ -515,80 +718,19 @@ export default function BookingModal({
                       ) : (
                         <>
                           <Text style={styles.submitText}>Confirm Booking</Text>
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color={DARK}
-                          />
+                          <Text
+                            style={[
+                              styles.submitText,
+                              { fontSize: 18, fontWeight: "900" },
+                            ]}
+                          >
+                            £{total.toFixed(0)}
+                          </Text>
                         </>
                       )}
                     </LinearGradient>
                   </Pressable>
-                );
-
-              const start = new Date(pickupDate);
-              const end = new Date(returnDate);
-              const [pH, pM] = pickupTime.split(":").map(Number);
-              const [rH, rM] = returnTime.split(":").map(Number);
-              start.setHours(pH, pM, 0, 0);
-              end.setHours(rH, rM, 0, 0);
-
-              const vanPrice = dynamicVanPrice;
-              const addonsPrice = Object.entries(addonSelections).reduce(
-                (sum, [id, sel]) => {
-                  const addon = addons.find((a) => a._id === id);
-                  if (!addon) return sum;
-                  return sum + calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, sel.quantity);
-                },
-                0
-              );
-              const total = vanPrice + addonsPrice;
-
-              return (
-                <Pressable
-                  onPress={handleSubmit}
-                  disabled={isSubmitting}
-                  style={({ pressed }) => [
-                    styles.submitBtn,
-                    pressed && styles.submitBtnPressed,
-                    isSubmitting && styles.submitBtnDisabled,
-                  ]}
-                >
-                  <LinearGradient
-                    colors={[ACCENT, "#ff8c00"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.submitGradient}
-                  >
-                    {isSubmitting ? (
-                      <ActivityIndicator color={DARK} size="small" />
-                    ) : (
-                      <>
-                        <Text style={styles.submitText}>Confirm Booking</Text>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                        >
-                          <Text
-                            style={[
-                              styles.submitText,
-                              {
-                                fontSize: 18,
-                                fontWeight: "900",
-                                color: "#0f100eff",
-                              },
-                            ]}
-                          >
-                            £{total}
-                          </Text>
-                        </View>
-                      </>
-                    )}
-                  </LinearGradient>
-                </Pressable>
+                </>
               );
             })()}
           </BlurView>
@@ -749,16 +891,17 @@ export default function BookingModal({
                   flexDirection: "row",
                   flexWrap: "wrap",
                   justifyContent: "center",
-                  gap: 10,
+                  gap: 2,
                 }}
               >
                 {(() => {
                   const office = getSelectedOffice(offices, selectedOffice);
                   const dateToCheck =
                     timeModalField === "pickupTime" ? pickupDate : returnDate;
+                  const isPickup = timeModalField === "pickupTime";
                   const slots =
                     office && dateToCheck
-                      ? getAvailableTimeSlots(dateToCheck, office)
+                      ? getAvailableTimeSlots(dateToCheck, office, isPickup)
                       : null;
                   if (!slots?.start || !slots?.end) return null;
 
@@ -777,6 +920,23 @@ export default function BookingModal({
                     }
                   }
 
+                  const dayName = [
+                    "sunday",
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                  ][dateToCheck?.getDay() || 0];
+                  const workingDay = office?.workingTime?.find(
+                    (w: any) => w.day === dayName
+                  );
+                  const extension = isPickup
+                    ? workingDay?.pickupExtension
+                    : workingDay?.returnExtension;
+                  const is24Hours = slots.normalStart === slots.normalEnd;
+
                   return times.map((time) => {
                     const isReserved = reservedSlots.some(
                       (slot) => time === slot.startTime
@@ -784,52 +944,77 @@ export default function BookingModal({
                     const currentTime =
                       timeModalField === "pickupTime" ? pickupTime : returnTime;
                     const isAvailable = !isReserved;
+                    const isExtension =
+                      !is24Hours &&
+                      slots.normalStart &&
+                      slots.normalEnd &&
+                      (time < slots.normalStart || time > slots.normalEnd);
+                    const extensionPrice =
+                      isExtension && extension ? extension.flatPrice : 0;
+
                     return (
-                      <Pressable
+                      <View
                         key={time}
-                        disabled={!isAvailable}
-                        onPress={() => isAvailable && selectTime(time)}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 6,
-                          paddingVertical: 12,
-                          paddingHorizontal: 10,
-                          borderRadius: 12,
-                          backgroundColor:
-                            currentTime === time
-                              ? ACCENT
-                              : "rgba(255,255,255,0.05)",
-                          borderWidth: 1.5,
-                          borderColor:
-                            currentTime === time
-                              ? ACCENT
-                              : "rgba(255,255,255,0.1)",
-                          width: "20%",
-                          opacity: isAvailable ? 1 : 0.4,
-                        }}
+                        style={{ width: "31%", marginBottom: 10 }}
                       >
-                        <View
+                        <Pressable
+                          disabled={!isAvailable}
+                          onPress={() => isAvailable && selectTime(time)}
                           style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: isAvailable
-                              ? "#22c55e"
-                              : "#ef4444",
-                          }}
-                        />
-                        <Text
-                          style={{
-                            color: currentTime === time ? DARK : "#e5e7eb",
-                            fontSize: 12,
-                            fontWeight: "600",
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                            paddingVertical: 12,
+                            paddingHorizontal: 10,
+                            borderRadius: 12,
+                            backgroundColor:
+                              currentTime === time
+                                ? ACCENT
+                                : "rgba(255,255,255,0.05)",
+                            borderWidth: 1.5,
+                            borderColor:
+                              currentTime === time
+                                ? ACCENT
+                                : "rgba(255,255,255,0.1)",
+                            opacity: isAvailable ? 1 : 0.4,
                           }}
                         >
-                          {time}
-                        </Text>
-                      </Pressable>
+                          <View
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: isAvailable
+                                ? isExtension
+                                  ? "#fbbf24"
+                                  : "#22c55e"
+                                : "#ef4444",
+                            }}
+                          />
+                          <Text
+                            style={{
+                              color: currentTime === time ? DARK : "#e5e7eb",
+                              fontSize: 12,
+                              fontWeight: "600",
+                            }}
+                          >
+                            {time}
+                          </Text>
+                        </Pressable>
+                        {isExtension && extensionPrice > 0 && (
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              color: currentTime === time ? "#fff" : "#fbbf24",
+                              textAlign: "center",
+                              marginTop: 2,
+                            }}
+                          >
+                            +£{extensionPrice}
+                          </Text>
+                        )}
+                      </View>
                     );
                   });
                 })()}

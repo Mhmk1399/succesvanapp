@@ -1,26 +1,32 @@
 // components/dashboard/UserReservations.tsx
-import React, { useState, useRef, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  RefreshControl,
-  Pressable,
-  Modal,
-  ScrollView,
-  Animated,
-  PanResponder,
-  Dimensions,
-} from "react-native";
+import { reservationService } from "@/services/reservationService";
+import { Reservation } from "@/types/type";
+import { calculateAddonPrice } from "@/utils/addonCalculator";
+import { calculatePrice } from "@/utils/priceCalculator";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Haptics from "expo-haptics";
-import { Reservation } from "@/types/type";
- 
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  FlatList,
+  Modal,
+  PanResponder,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Calendar } from "react-native-calendars";
+
 const { height } = Dimensions.get("window");
 
 const ACCENT = "#fe9a00";
@@ -30,6 +36,23 @@ type UserReservationsProps = {
   isLoading?: boolean;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+};
+
+type WorkingTime = {
+  day: string;
+  isOpen: boolean;
+  startTime: string;
+  endTime: string;
+  pickupExtension?: {
+    hoursBefore: number;
+    hoursAfter: number;
+    flatPrice: number;
+  };
+  returnExtension?: {
+    hoursBefore: number;
+    hoursAfter: number;
+    flatPrice: number;
+  };
 };
 
 const formatDate = (dateStr: string) => {
@@ -50,6 +73,26 @@ export default function UserReservations({
 }: UserReservationsProps) {
   const [selectedReservation, setSelectedReservation] =
     useState<Reservation | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editPickupDate, setEditPickupDate] = useState<Date | null>(null);
+  const [editPickupTime, setEditPickupTime] = useState("");
+  const [editReturnDate, setEditReturnDate] = useState<Date | null>(null);
+  const [editReturnTime, setEditReturnTime] = useState("");
+  const [dateModalVisible, setDateModalVisible] = useState(false);
+  const [timeModalVisible, setTimeModalVisible] = useState(false);
+  const [selectingDate, setSelectingDate] = useState<"pickup" | "return">(
+    "pickup"
+  );
+  const [timeModalField, setTimeModalField] = useState<
+    "pickup" | "return" | null
+  >(null);
+  const [tempPickupDate, setTempPickupDate] = useState<Date | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [reservedSlots, setReservedSlots] = useState<
+    { startTime: string; endTime: string }[]
+  >([]);
+  const [dynamicPrice, setDynamicPrice] = useState(0);
+  const [editMessage, setEditMessage] = useState("");
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -108,7 +151,277 @@ export default function UserReservations({
         duration: 300,
         useNativeDriver: true,
       }),
-    ]).start(() => setSelectedReservation(null));
+    ]).start(() => {
+      setSelectedReservation(null);
+      setIsEditing(false);
+    });
+  };
+
+  const startEditing = () => {
+    if (!selectedReservation) return;
+    const pickup = new Date(selectedReservation.startDate);
+    const returnD = new Date(selectedReservation.endDate);
+    setEditPickupDate(pickup);
+    setEditPickupTime(
+      `${pickup.getHours().toString().padStart(2, "0")}:${pickup
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}`
+    );
+    setEditReturnDate(returnD);
+    setEditReturnTime(
+      `${returnD.getHours().toString().padStart(2, "0")}:${returnD
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}`
+    );
+    setEditMessage(selectedReservation.messege || "");
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+  };
+
+  useEffect(() => {
+    const fetchReservedSlots = async () => {
+      if (
+        !timeModalVisible ||
+        !selectedReservation?.office?._id ||
+        !timeModalField
+      )
+        return;
+      const dateToFetch =
+        timeModalField === "pickup" ? editPickupDate : editReturnDate;
+      if (!dateToFetch) return;
+      try {
+        const dateStr = dateToFetch.toISOString().split("T")[0];
+        const url = `${process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API}?office=${selectedReservation.office._id}&startDate=${dateStr}&endDate=${dateStr}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.success && data.reservedSlots)
+          setReservedSlots(data.reservedSlots);
+      } catch (error) {
+        setReservedSlots([]);
+      }
+    };
+    fetchReservedSlots();
+  }, [
+    timeModalVisible,
+    selectedReservation,
+    timeModalField,
+    editPickupDate,
+    editReturnDate,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isEditing ||
+      !editPickupDate ||
+      !editReturnDate ||
+      !editPickupTime ||
+      !editReturnTime ||
+      !selectedReservation
+    )
+      return;
+    const start = new Date(editPickupDate);
+    const end = new Date(editReturnDate);
+    const [pH, pM] = editPickupTime.split(":").map(Number);
+    const [rH, rM] = editReturnTime.split(":").map(Number);
+    start.setHours(pH, pM, 0, 0);
+    end.setHours(rH, rM, 0, 0);
+    const vanPrice = calculatePrice(
+      start,
+      end,
+      selectedReservation.category?.pricingTiers || [],
+      selectedReservation.category?.extrahoursRate ||
+        selectedReservation.category?.extraHoursRate ||
+        0
+    );
+    const addonsPrice =
+      selectedReservation.addOns?.reduce(
+        (sum, addon) => {
+          if (!addon.addOn) return sum;
+          return sum + calculateAddonPrice(
+            addon.addOn,
+            editPickupDate,
+            editReturnDate,
+            editPickupTime,
+            editReturnTime,
+            addon.quantity
+          );
+        },
+        0
+      ) || 0;
+    setDynamicPrice(vanPrice + addonsPrice);
+  }, [
+    editPickupDate,
+    editReturnDate,
+    editPickupTime,
+    editReturnTime,
+    isEditing,
+  ]);
+
+  const getAvailableTimeSlots = (
+    date: Date | null,
+    office: any,
+    isPickup: boolean
+  ) => {
+    if (!office || !date)
+      return {
+        start: "00:00",
+        end: "23:59",
+        normalStart: "00:00",
+        normalEnd: "23:59",
+      };
+    const dayName = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ][date.getDay()];
+    const workingDay = office.workingTime?.find(
+      (w: WorkingTime) => w.day === dayName
+    );
+    if (workingDay && workingDay.isOpen) {
+      let start = workingDay.startTime || "00:00";
+      let end = workingDay.endTime || "23:59";
+      const normalStart = start;
+      const normalEnd = end;
+      const extension = isPickup
+        ? workingDay.pickupExtension
+        : workingDay.returnExtension;
+      if (extension) {
+        const [startH, startM] = start.split(":").map(Number);
+        const [endH, endM] = end.split(":").map(Number);
+        const extendedStartMin = Math.max(
+          0,
+          startH * 60 + startM - extension.hoursBefore * 60
+        );
+        const extendedEndMin = Math.min(
+          1439,
+          endH * 60 + endM + extension.hoursAfter * 60
+        );
+        start = `${Math.floor(extendedStartMin / 60)
+          .toString()
+          .padStart(2, "0")}:${(extendedStartMin % 60)
+          .toString()
+          .padStart(2, "0")}`;
+        end = `${Math.floor(extendedEndMin / 60)
+          .toString()
+          .padStart(2, "0")}:${(extendedEndMin % 60)
+          .toString()
+          .padStart(2, "0")}`;
+      }
+      return { start, end, normalStart, normalEnd };
+    }
+    return {
+      start: "00:00",
+      end: "23:59",
+      normalStart: "00:00",
+      normalEnd: "23:59",
+    };
+  };
+
+  const handleDateSelect = (dateString: string) => {
+    const date = new Date(dateString);
+    Haptics.selectionAsync();
+    if (selectingDate === "pickup") {
+      setEditPickupDate(date);
+      setTempPickupDate(date);
+      setSelectingDate("return");
+    } else {
+      if (tempPickupDate && date < tempPickupDate) {
+        Alert.alert("Invalid Date", "Return date must be after pickup date.");
+        return;
+      }
+      setEditReturnDate(date);
+      setDateModalVisible(false);
+      setSelectingDate("pickup");
+      setTempPickupDate(null);
+    }
+  };
+
+  const selectTime = (time: string) => {
+    Haptics.selectionAsync();
+    if (timeModalField === "pickup") {
+      setEditPickupTime(time);
+    } else {
+      setEditReturnTime(time);
+    }
+    setTimeModalVisible(false);
+    setTimeModalField(null);
+  };
+
+  const saveChanges = async () => {
+    if (!selectedReservation || !editPickupDate || !editReturnDate) return;
+
+    // Check minimum 6 hours
+    const start = new Date(editPickupDate);
+    const end = new Date(editReturnDate);
+    const [pH, pM] = editPickupTime.split(":").map(Number);
+    const [rH, rM] = editReturnTime.split(":").map(Number);
+    start.setHours(pH, pM, 0, 0);
+    end.setHours(rH, rM, 0, 0);
+    const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    if (diffHours < 6) {
+      Alert.alert("Minimum Rental Period", "Minimum rental period is 6 hours.");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const vanPrice = calculatePrice(
+        start,
+        end,
+        selectedReservation.category?.pricingTiers || [],
+        selectedReservation.category?.extrahoursRate ||
+          selectedReservation.category?.extraHoursRate ||
+          0
+      );
+
+      const addonsPrice =
+        selectedReservation.addOns?.reduce((sum, addon) => {
+          if (!addon.addOn) return sum;
+          const price = calculateAddonPrice(
+            addon.addOn,
+            editPickupDate,
+            editReturnDate,
+            editPickupTime,
+            editReturnTime,
+            addon.quantity
+          );
+          return sum + price;
+        }, 0) || 0;
+
+      const totalPrice = vanPrice + addonsPrice;
+
+      const result = await reservationService.update(
+        selectedReservation._id || "",
+        {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          totalPrice,
+          messege: editMessage,
+        } as any
+      );
+
+      if (result.success) {
+        Alert.alert("Success", "Reservation updated successfully");
+        setIsEditing(false);
+        closeModal();
+        onRefresh?.();
+      } else {
+        Alert.alert("Error", result.error || "Failed to update reservation");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to update reservation");
+    } finally {
+      setIsUpdating(false);
+    }
   };
   const renderStatus = (status: string) => {
     let label = "";
@@ -240,173 +553,591 @@ export default function UserReservations({
         }
       />
 
-      <Modal
-        visible={!!selectedReservation}
-        transparent
-        animationType="none"
-        onRequestClose={closeModal}
-      >
-        <Pressable style={styles.modalOverlay} onPress={closeModal}>
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity }]} />
-        </Pressable>
+      {!dateModalVisible && !timeModalVisible && (
+        <Modal
+          visible={!!selectedReservation}
+          transparent
+          animationType="none"
+          onRequestClose={closeModal}
+        >
+          <Pressable style={styles.modalOverlay} onPress={closeModal}>
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity }]} />
+          </Pressable>
 
-        {selectedReservation && (
-          <Animated.View
-            style={[styles.modalContainer, { transform: [{ translateY }] }]}
-          >
-            <BlurView intensity={90} tint="dark" style={styles.modalContent}>
-              <View {...panResponder.panHandlers} style={styles.handleArea}>
-                <View style={styles.handle} />
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Reservation Details</Text>
-                  <Pressable onPress={closeModal} style={styles.closeBtn}>
-                    <Ionicons name="close" size={24} color="#e5e7eb" />
-                  </Pressable>
+          {selectedReservation && (
+            <Animated.View
+              style={[styles.modalContainer, { transform: [{ translateY }] }]}
+            >
+              <BlurView intensity={90} tint="dark" style={styles.modalContent}>
+                <View {...panResponder.panHandlers} style={styles.handleArea}>
+                  <View style={styles.handle} />
                 </View>
-
-                {selectedReservation.category?.image && (
-                  <View style={styles.vanImageContainer}>
-                    <Image
-                      source={{ uri: selectedReservation.category.image }}
-                      style={styles.vanImage}
-                      contentFit="cover"
-                    />
-                    <LinearGradient
-                      colors={["rgba(0,0,0,0.6)", "transparent"]}
-                      style={styles.imageGradient}
-                    />
-                  </View>
-                )}
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.vanNameLarge}>
-                    {selectedReservation.category?.name || "Van"}
-                  </Text>
-                  <Text style={styles.officeText}>
-                    <Ionicons name="location" size={14} color={ACCENT} />{" "}
-                    {selectedReservation.office?.name}
-                  </Text>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.sectionTitle}>Rental Period</Text>
-                  <View style={styles.dateRow}>
-                    <View style={styles.dateCol}>
-                      <View style={styles.dateIcon}>
-                        <Ionicons
-                          name="arrow-up-circle"
-                          size={20}
-                          color="#22c55e"
-                        />
-                      </View>
-                      <Text style={styles.dateLabel}>Pickup</Text>
-                      <Text style={styles.dateText}>
-                        {formatDate(selectedReservation.startDate)}
-                      </Text>
-                    </View>
-                    <View style={styles.dateCol}>
-                      <View style={styles.dateIcon}>
-                        <Ionicons
-                          name="arrow-down-circle"
-                          size={20}
-                          color="#ef4444"
-                        />
-                      </View>
-                      <Text style={styles.dateLabel}>Return</Text>
-                      <Text style={styles.dateText}>
-                        {formatDate(selectedReservation.endDate)}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                <View style={styles.infoRow}>
-                  <View style={styles.infoBox}>
-                    <Text style={styles.sectionTitle}>Status</Text>
-                    {renderStatus(selectedReservation.status)}
-                  </View>
-
-                  {selectedReservation.addOns &&
-                    selectedReservation.addOns.length > 0 && (
-                      <View style={[styles.infoBox, { flex: 1 }]}>
-                        <Text style={styles.sectionTitle}>
-                          Add-ons ({selectedReservation.addOns.length})
-                        </Text>
-                        {selectedReservation.addOns.map((addon, index) => (
-                          <View key={index} style={styles.addonRow}>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>
+                      {isEditing ? "Edit Reservation" : "Reservation Details"}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      {!isEditing &&
+                        selectedReservation.status === "pending" && (
+                          <Pressable
+                            onPress={startEditing}
+                            style={styles.editBtn}
+                          >
                             <Ionicons
-                              name="checkmark-circle"
-                              size={16}
+                              name="create-outline"
+                              size={20}
                               color={ACCENT}
                             />
-                            <Text style={styles.addonText}>
-                              {addon.addOn?.name || "Add-on"} x{addon.quantity}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.sectionTitle}>Price Breakdown</Text>
-                  {(() => {
-                    const start = new Date(selectedReservation.startDate);
-                    const end = new Date(selectedReservation.endDate);
-                    const diffTime = end.getTime() - start.getTime();
-                    const totalHours = Math.floor(diffTime / (1000 * 60 * 60));
-                    const days = Math.floor(totalHours / 24);
-                    const hours = totalHours % 24;
-
-                    const addOnsPrice =
-                      selectedReservation.addOns?.reduce((sum, addon) => {
-                        if (addon.addOn?.pricingType === "flat") {
-                          return sum + (addon.addOn?.flatPrice || 0) * addon.quantity;
-                        }
-                        if (addon.addOn?.pricingType === "tiered" && addon.addOn?.tiers) {
-                          const rentalDays = Math.ceil(days + hours / 24);
-                          const tier = addon.addOn.tiers.find(
-                            (t: any) => rentalDays >= t.minDays && rentalDays <= t.maxDays
-                          );
-                          return sum + (tier?.price || 0) * addon.quantity;
-                        }
-                        return sum;
-                      }, 0) || 0;
-
-                    const vanPrice = selectedReservation.totalPrice - addOnsPrice;
-
-                    return (
-                      <>
-                        <View style={styles.priceBreakdownRow}>
-                          <Text style={styles.breakdownLabel}>Rental Duration</Text>
-                          <Text style={styles.breakdownValue}>{days}d {hours}h</Text>
-                        </View>
-                        <View style={styles.priceBreakdownRow}>
-                          <Text style={styles.breakdownLabel}>Van Rental</Text>
-                          <Text style={styles.breakdownValue}>£{vanPrice}</Text>
-                        </View>
-
-                        {selectedReservation.addOns && selectedReservation.addOns.length > 0 && (
-                          <View style={styles.priceBreakdownRow}>
-                            <Text style={styles.breakdownLabel}>Add-ons</Text>
-                            <Text style={styles.breakdownValue}>£{addOnsPrice}</Text>
-                          </View>
+                             
+                          </Pressable>
                         )}
+                      <Pressable
+                        onPress={isEditing ? cancelEditing : closeModal}
+                        style={styles.closeBtn}
+                      >
+                        <Ionicons name="close" size={24} color="#e5e7eb" />
+                      </Pressable>
+                    </View>
+                  </View>
 
-                        <View style={[styles.priceBreakdownRow, styles.totalRow]}>
-                          <Text style={styles.totalLabel}>Total</Text>
-                          <Text style={styles.totalValue}>£{selectedReservation.totalPrice}</Text>
+                  {selectedReservation.category?.image && (
+                    <View style={styles.vanImageContainer}>
+                      <Image
+                        source={{ uri: selectedReservation.category.image }}
+                        style={styles.vanImage}
+                        contentFit="cover"
+                      />
+                      <LinearGradient
+                        colors={["rgba(0,0,0,0.6)", "transparent"]}
+                        style={styles.imageGradient}
+                      />
+                    </View>
+                  )}
+
+                  <View style={styles.detailSection}>
+                    <Text style={styles.vanNameLarge}>
+                      {selectedReservation.category?.name || "Van"}
+                    </Text>
+                    <Text style={styles.officeText}>
+                      <Ionicons name="location" size={14} color={ACCENT} />{" "}
+                      {selectedReservation.office?.name}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailSection}>
+                    <Text style={styles.sectionTitle}>Rental Period</Text>
+                    {isEditing ? (
+                      <>
+                        <Pressable
+                          onPress={() => {
+                            setSelectingDate("pickup");
+                            setTempPickupDate(null);
+                            setDateModalVisible(true);
+                          }}
+                          style={styles.editField}
+                        >
+                          <Ionicons name="calendar" size={16} color={ACCENT} />
+                          <Text style={styles.editFieldLabel}>Dates</Text>
+                          <Text style={styles.editFieldValue}>
+                            {editPickupDate?.toLocaleDateString()} -{" "}
+                            {editReturnDate?.toLocaleDateString()}
+                          </Text>
+                        </Pressable>
+                        <View
+                          style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
+                        >
+                          <Pressable
+                            onPress={() => {
+                              setTimeModalField("pickup");
+                              setTimeModalVisible(true);
+                            }}
+                            style={[styles.editField, { flex: 1 }]}
+                          >
+                            <Ionicons name="time" size={16} color="#22c55e" />
+                            <Text style={styles.editFieldLabel}>Pickup</Text>
+                            <Text style={styles.editFieldValue}>
+                              {editPickupTime}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => {
+                              setTimeModalField("return");
+                              setTimeModalVisible(true);
+                            }}
+                            style={[styles.editField, { flex: 1 }]}
+                          >
+                            <Ionicons name="time" size={16} color="#ef4444" />
+                            <Text style={styles.editFieldLabel}>Return</Text>
+                            <Text style={styles.editFieldValue}>
+                              {editReturnTime}
+                            </Text>
+                          </Pressable>
                         </View>
                       </>
+                    ) : (
+                      <View style={styles.dateRow}>
+                        <View style={styles.dateCol}>
+                          <View style={styles.dateIcon}>
+                            <Ionicons
+                              name="arrow-up-circle"
+                              size={20}
+                              color="#22c55e"
+                            />
+                          </View>
+                          <Text style={styles.dateLabel}>Pickup</Text>
+                          <Text style={styles.dateText}>
+                            {formatDate(selectedReservation.startDate)}
+                          </Text>
+                        </View>
+                        <View style={styles.dateCol}>
+                          <View style={styles.dateIcon}>
+                            <Ionicons
+                              name="arrow-down-circle"
+                              size={20}
+                              color="#ef4444"
+                            />
+                          </View>
+                          <Text style={styles.dateLabel}>Return</Text>
+                          <Text style={styles.dateText}>
+                            {formatDate(selectedReservation.endDate)}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+
+                  {selectedReservation.messege && !isEditing && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.sectionTitle}>Message</Text>
+                      <View style={styles.messageBox}>
+                        <Text style={styles.messageText}>{selectedReservation.messege}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {isEditing && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.sectionTitle}>Message (Optional)</Text>
+                      <TextInput
+                        style={styles.messageInput}
+                        placeholder="Add a message..."
+                        placeholderTextColor="rgba(255,255,255,0.3)"
+                        value={editMessage}
+                        onChangeText={setEditMessage}
+                        multiline
+                        numberOfLines={3}
+                        textAlignVertical="top"
+                      />
+                    </View>
+                  )}
+
+                  <View style={styles.infoRow}>
+                    <View style={styles.infoBox}>
+                      <Text style={styles.sectionTitle}>Status</Text>
+                      {renderStatus(selectedReservation.status)}
+                    </View>
+
+                    {selectedReservation.addOns &&
+                      selectedReservation.addOns.length > 0 && (
+                        <View style={[styles.infoBox, { flex: 1 }]}>
+                          <Text style={styles.sectionTitle}>
+                            Add-ons ({selectedReservation.addOns.length})
+                          </Text>
+                          {selectedReservation.addOns.map((addon, index) => (
+                            <View key={index} style={styles.addonRow}>
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={16}
+                                color={ACCENT}
+                              />
+                              <Text style={styles.addonText}>
+                                {addon.addOn?.name || "Add-on"} x
+                                {addon.quantity}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                  </View>
+
+                  <View style={styles.detailSection}>
+                    <Text style={styles.sectionTitle}>Price Breakdown</Text>
+                    {(() => {
+                      const start =
+                        isEditing && editPickupDate
+                          ? new Date(editPickupDate)
+                          : new Date(selectedReservation.startDate);
+                      const end =
+                        isEditing && editReturnDate
+                          ? new Date(editReturnDate)
+                          : new Date(selectedReservation.endDate);
+                      if (isEditing && editPickupTime && editReturnTime) {
+                        const [pH, pM] = editPickupTime.split(":").map(Number);
+                        const [rH, rM] = editReturnTime.split(":").map(Number);
+                        start.setHours(pH, pM, 0, 0);
+                        end.setHours(rH, rM, 0, 0);
+                      }
+                      const diffTime = end.getTime() - start.getTime();
+                      const totalHours = Math.floor(
+                        diffTime / (1000 * 60 * 60)
+                      );
+                      const days = Math.floor(totalHours / 24);
+                      const hours = totalHours % 24;
+
+                      const addOnsPrice =
+                        selectedReservation.addOns?.reduce((sum, addon) => {
+                          if (addon.addOn?.pricingType === "flat")
+                            return (
+                              sum +
+                              (addon.addOn?.flatPrice || 0) * addon.quantity
+                            );
+                          if (
+                            addon.addOn?.pricingType === "tiered" &&
+                            addon.addOn?.tiers
+                          ) {
+                            const rentalDays = Math.ceil(days + hours / 24);
+                            const tier = addon.addOn.tiers.find(
+                              (t: any) =>
+                                rentalDays >= t.minDays &&
+                                rentalDays <= t.maxDays
+                            );
+                            return sum + (tier?.price || 0) * addon.quantity;
+                          }
+                          return sum;
+                        }, 0) || 0;
+
+                      const totalPrice = isEditing
+                        ? dynamicPrice
+                        : selectedReservation.totalPrice;
+                      const vanPrice = totalPrice - addOnsPrice;
+
+                      return (
+                        <>
+                          <View style={styles.priceBreakdownRow}>
+                            <Text style={styles.breakdownLabel}>
+                              Rental Duration
+                            </Text>
+                            <Text style={styles.breakdownValue}>
+                              {days}d {hours}h
+                            </Text>
+                          </View>
+                          <View style={styles.priceBreakdownRow}>
+                            <Text style={styles.breakdownLabel}>
+                              Van Rental
+                            </Text>
+                            <Text style={styles.breakdownValue}>
+                              £{vanPrice.toFixed(0)}
+                            </Text>
+                          </View>
+                          {selectedReservation.addOns &&
+                            selectedReservation.addOns.length > 0 && (
+                              <View style={styles.priceBreakdownRow}>
+                                <Text style={styles.breakdownLabel}>
+                                  Add-ons
+                                </Text>
+                                <Text style={styles.breakdownValue}>
+                                  £{addOnsPrice}
+                                </Text>
+                              </View>
+                            )}
+                          <View
+                            style={[styles.priceBreakdownRow, styles.totalRow]}
+                          >
+                            <Text style={styles.totalLabel}>Total</Text>
+                            <Text style={styles.totalValue}>
+                              £{totalPrice.toFixed(0)}
+                            </Text>
+                          </View>
+                        </>
+                      );
+                    })()}
+                  </View>
+
+                  {isEditing && (
+                    <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+                      <Pressable
+                        onPress={saveChanges}
+                        disabled={isUpdating}
+                        style={({ pressed }) => [
+                          styles.saveBtn,
+                          pressed && { opacity: 0.8 },
+                          isUpdating && { opacity: 0.5 },
+                        ]}
+                      >
+                        <LinearGradient
+                          colors={[ACCENT, "#ff8c00"]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.saveBtnGradient}
+                        >
+                          {isUpdating ? (
+                            <ActivityIndicator color="#0f172a" />
+                          ) : (
+                            <>
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={20}
+                                color="#0f172a"
+                              />
+                              <Text style={styles.saveBtnText}>
+                                Save Changes
+                              </Text>
+                            </>
+                          )}
+                        </LinearGradient>
+                      </Pressable>
+                    </View>
+                  )}
+                </ScrollView>
+              </BlurView>
+            </Animated.View>
+          )}
+        </Modal>
+      )}
+
+      {dateModalVisible && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setDateModalVisible(false)}
+          >
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={styles.calendarBox}
+            >
+              <View style={styles.calendarHeader}>
+                <Text style={styles.modalTitle}>
+                  {selectingDate === "pickup"
+                    ? "📅 Pickup Date"
+                    : "📅 Return Date"}
+                </Text>
+                <Pressable
+                  onPress={() => setDateModalVisible(false)}
+                  style={styles.closeBtn}
+                >
+                  <Ionicons name="close" size={20} color="#e5e7eb" />
+                </Pressable>
+              </View>
+              <Calendar
+                onDayPress={(day) => handleDateSelect(day.dateString)}
+                markedDates={(() => {
+                  const marked: any = {};
+                  const currentPickup = tempPickupDate || editPickupDate;
+                  if (
+                    currentPickup &&
+                    editReturnDate &&
+                    selectingDate === "pickup"
+                  ) {
+                    const start = new Date(currentPickup);
+                    const end = new Date(editReturnDate);
+                    const current = new Date(start);
+                    while (current <= end) {
+                      const dateStr = current.toISOString().split("T")[0];
+                      const isStart = current.getTime() === start.getTime();
+                      const isEnd = current.getTime() === end.getTime();
+                      marked[dateStr] = {
+                        color:
+                          isStart || isEnd ? ACCENT : "rgba(254,154,0,0.3)",
+                        textColor: isStart || isEnd ? "#fff" : "#f9fafb",
+                        startingDay: isStart,
+                        endingDay: isEnd,
+                      };
+                      current.setDate(current.getDate() + 1);
+                    }
+                  } else if (currentPickup) {
+                    marked[currentPickup.toISOString().split("T")[0]] = {
+                      selected: true,
+                      selectedColor: ACCENT,
+                    };
+                  }
+                  return marked;
+                })()}
+                markingType="period"
+                minDate={
+                  selectingDate === "pickup"
+                    ? new Date().toISOString().split("T")[0]
+                    : tempPickupDate?.toISOString().split("T")[0]
+                }
+                theme={{
+                  calendarBackground: "transparent",
+                  textSectionTitleColor: "#9ca3af",
+                  selectedDayBackgroundColor: ACCENT,
+                  todayTextColor: "#06cb48ff",
+                  dayTextColor: "#f9fafb",
+                  textDisabledColor: "#4b5563",
+                  monthTextColor: "#f9fafb",
+                  arrowColor: ACCENT,
+                }}
+              />
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
+      {timeModalVisible && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setTimeModalVisible(false)}
+          >
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={styles.timeBox}
+            >
+              <View style={styles.calendarHeader}>
+                <Text style={styles.modalTitle}>
+                  {timeModalField === "pickup" ? "Pickup Time" : "Return Time"}
+                </Text>
+                <Pressable
+                  onPress={() => setTimeModalVisible(false)}
+                  style={styles.closeBtn}
+                >
+                  <Ionicons name="close" size={20} color="#e5e7eb" />
+                </Pressable>
+              </View>
+              <ScrollView
+                showsVerticalScrollIndicator
+                contentContainerStyle={{ paddingBottom: 10 }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    padding: 16,
+                  }}
+                >
+                  {(() => {
+                    const office = selectedReservation?.office;
+                    const dateToCheck =
+                      timeModalField === "pickup"
+                        ? editPickupDate
+                        : editReturnDate;
+                    const isPickup = timeModalField === "pickup";
+                    const slots =
+                      office && dateToCheck
+                        ? getAvailableTimeSlots(dateToCheck, office, isPickup)
+                        : null;
+                    if (!slots?.start || !slots?.end) return null;
+                    const [startH, startM] = slots.start.split(":").map(Number);
+                    const [endH, endM] = slots.end.split(":").map(Number);
+                    const times: string[] = [];
+                    for (let h = startH; h <= endH; h++) {
+                      const startMin = h === startH ? startM : 0;
+                      const endMin = h === endH ? endM : 45;
+                      for (let m = startMin; m <= endMin; m += 15) {
+                        times.push(
+                          `${h.toString().padStart(2, "0")}:${m
+                            .toString()
+                            .padStart(2, "0")}`
+                        );
+                      }
+                    }
+                    const currentTime =
+                      timeModalField === "pickup"
+                        ? editPickupTime
+                        : editReturnTime;
+                    const dayName = [
+                      "sunday",
+                      "monday",
+                      "tuesday",
+                      "wednesday",
+                      "thursday",
+                      "friday",
+                      "saturday",
+                    ][dateToCheck?.getDay() || 0];
+                    const workingDay = office?.workingTime?.find(
+                      (w: any) => w.day === dayName
                     );
+                    const extension = isPickup
+                      ? workingDay?.pickupExtension
+                      : workingDay?.returnExtension;
+                    const is24Hours = slots.normalStart === slots.normalEnd;
+
+                    return times.map((time) => {
+                      const isReserved = reservedSlots.some(
+                        (slot) => time >= slot.startTime && time < slot.endTime
+                      );
+                      const isAvailable = !isReserved;
+                      const isExtension =
+                        !is24Hours &&
+                        slots.normalStart &&
+                        slots.normalEnd &&
+                        (time < slots.normalStart || time > slots.normalEnd);
+                      const extensionPrice =
+                        isExtension && extension ? extension.flatPrice : 0;
+
+                      return (
+                        <View
+                          key={time}
+                          style={{ width: "31%", marginBottom: 10 }}
+                        >
+                          <Pressable
+                            disabled={!isAvailable}
+                            onPress={() => isAvailable && selectTime(time)}
+                            style={[
+                              styles.timeSlot,
+                              currentTime === time && styles.timeSlotActive,
+                              !isAvailable && { opacity: 0.4 },
+                            ]}
+                          >
+                            <View
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: 3,
+                                backgroundColor: isAvailable
+                                  ? isExtension
+                                    ? "#fbbf24"
+                                    : "#22c55e"
+                                  : "#ef4444",
+                                marginRight: 6,
+                              }}
+                            />
+                            <Text
+                              style={[
+                                styles.timeSlotText,
+                                currentTime === time &&
+                                  styles.timeSlotTextActive,
+                              ]}
+                            >
+                              {time}
+                            </Text>
+                          </Pressable>
+                          {isExtension && extensionPrice > 0 && (
+                            <Text
+                              style={{
+                                fontSize: 9,
+                                color:
+                                  currentTime === time ? "#fff" : "#fbbf24",
+                                textAlign: "center",
+                                marginTop: 2,
+                              }}
+                            >
+                              +£{extensionPrice}
+                            </Text>
+                          )}
+                        </View>
+                      );
+                    });
                   })()}
                 </View>
               </ScrollView>
-            </BlurView>
-          </Animated.View>
-        )}
-      </Modal>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </>
   );
 }
@@ -537,7 +1268,9 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContainer: {
     position: "absolute",
@@ -700,5 +1433,120 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.15)",
+  },
+  editBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(254,154,0,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.15)",
+  },
+  editFieldLabel: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontWeight: "600",
+  },
+  editFieldValue: {
+    fontSize: 13,
+    color: "#f9fafb",
+    fontWeight: "700",
+    flex: 1,
+  },
+  saveBtn: {
+    borderRadius: 16,
+    overflow: "hidden",
+    marginTop: 12,
+  },
+  saveBtnGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 16,
+  },
+  saveBtnText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0f172a",
+  },
+  calendarBox: {
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 24,
+    padding: 20,
+    width: "90%",
+    maxHeight: height * 0.7,
+    zIndex: 10000,
+    elevation: 10,
+  },
+  calendarHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  timeBox: {
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 24,
+    padding: 20,
+    width: "90%",
+    maxHeight: height * 0.6,
+    zIndex: 10000,
+    elevation: 10,
+  },
+  timeSlot: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  timeSlotActive: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  timeSlotText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#e5e7eb",
+  },
+  timeSlotTextActive: {
+    color: "#0f172a",
+  },
+  messageBox: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.15)",
+  },
+  messageText: {
+    fontSize: 14,
+    color: "#e5e7eb",
+    lineHeight: 20,
+  },
+  messageInput: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.15)",
+    color: "#f9fafb",
+    fontSize: 14,
+    minHeight: 80,
   },
 });
