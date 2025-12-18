@@ -1,10 +1,17 @@
 // components/ReservationForm.tsx
+import { useAuth } from "@/contexts/AuthContext";
+import { officeService } from "@/services/officeService";
+import { typeService } from "@/services/typeService";
+import { Category, Type } from "@/types/type";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
@@ -20,15 +27,8 @@ import {
   useColorScheme,
   View,
 } from "react-native";
-import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { Calendar } from "react-native-calendars";
-import { ActivityIndicator } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
-import { useAuth } from "@/contexts/AuthContext";
-import { typeService } from "@/services/typeService";
-import { officeService } from "@/services/officeService";
-import { Category, Type } from "@/types/type";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
 import VansModal from "./VansModal";
 import { sheetStyles, styles } from "./styleForm";
 
@@ -363,11 +363,16 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       try {
         const startDateStr = targetDate.toISOString().split("T")[0];
         const endDateStr = targetDate.toISOString().split("T")[0];
+        
+        // Construct the correct API URL
         const baseUrl =
-          process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API || "";
+          process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API ||
+          "https://succesvan.vercel.app/api/reservations/by-office";
+        
         const url = `${baseUrl}?office=${selectedOffice}&startDate=${startDateStr}&endDate=${endDateStr}`;
 
         console.log("[Fetching Reserved Slots] URL:", url);
+        console.log("[Fetching Reserved Slots] Office ID:", selectedOffice);
 
         const response = await fetch(url);
         const data = await response.json();
@@ -380,8 +385,12 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         } else if (data.success && data.reservedSlots) {
           console.log("[Reserved Slots]", data.reservedSlots);
           setReservedSlots(data.reservedSlots);
+        } else if (Array.isArray(data)) {
+          // Handle case where API returns array directly
+          console.log("[Reserved Slots] Array response:", data);
+          setReservedSlots(data);
         } else {
-          console.log("[Reserved Slots] No slots found");
+          console.log("[Reserved Slots] No slots found, response:", data);
           setReservedSlots([]);
         }
       } catch (error) {
