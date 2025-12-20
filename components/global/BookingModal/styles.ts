@@ -106,11 +106,38 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: 20,
-    marginBottom: 20,
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "rgba(254,154,0,0.08)",
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.2)",
+  },
+  headerIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(254,154,0,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "rgba(254,154,0,0.3)",
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#9ca3af",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   title: {
     fontSize: 20,
@@ -127,7 +154,7 @@ export const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 2,
   },
   label: {
     fontSize: 13,

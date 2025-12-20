@@ -1,12 +1,21 @@
 import React from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { AddOn, Office, User } from "@/types/type";
 import { styles } from "./styles";
 import { ACCENT, DARK } from "./constants";
 import { formatDate, formatTime } from "./utils";
-import { getAddonDisplayPrice, calculateAddonPrice } from "@/utils/addonCalculator";
+import {
+  getAddonDisplayPrice,
+  calculateAddonPrice,
+} from "@/utils/addonCalculator";
 
 type FormFieldsProps = {
   name: string;
@@ -33,10 +42,15 @@ type FormFieldsProps = {
   openTimePicker: (field: "pickupTime" | "returnTime") => void;
   addons: AddOn[];
   addonSelections: Record<string, { quantity: number; tierId?: string }>;
-  setAddonSelections: (v: Record<string, { quantity: number; tierId?: string }>) => void;
+  setAddonSelections: (
+    v: Record<string, { quantity: number; tierId?: string }>
+  ) => void;
   isLoadingData: boolean;
   message: string;
   setMessage: (v: string) => void;
+  selectedGear: "manual" | "automatic";
+  setSelectedGear: (v: "manual" | "automatic") => void;
+  van: any;
 };
 
 export const FormFields = ({
@@ -68,6 +82,9 @@ export const FormFields = ({
   isLoadingData,
   message,
   setMessage,
+  selectedGear,
+  setSelectedGear,
+  van,
 }: FormFieldsProps) => (
   <>
     <View style={styles.inputGroup}>
@@ -213,33 +230,205 @@ export const FormFields = ({
         {errors.pickup && <Text style={styles.errorText}>{errors.pickup}</Text>}
         {errors.return && <Text style={styles.errorText}>{errors.return}</Text>}
         <Pressable onPress={openDatePicker} style={[styles.inputWrapper]}>
-          <Ionicons name="calendar-outline" size={18} color={pickupDate && returnDate ? ACCENT : "#9ca3af"} />
-          <Text style={[styles.input, (!pickupDate || !returnDate) && { color: "#6b7280" }]}>
-            {pickupDate && returnDate ? `${formatDate(pickupDate)} - ${formatDate(returnDate)}` : "Select dates"}
+          <Ionicons
+            name="calendar-outline"
+            size={18}
+            color={pickupDate && returnDate ? ACCENT : "#9ca3af"}
+          />
+          <Text
+            style={[
+              styles.input,
+              (!pickupDate || !returnDate) && { color: "#6b7280" },
+            ]}
+          >
+            {pickupDate && returnDate
+              ? `${formatDate(pickupDate)} - ${formatDate(returnDate)}`
+              : "Select dates"}
           </Text>
         </Pressable>
 
         <View style={styles.row}>
           <View style={styles.half}>
             <Text style={styles.label}>Pickup Time</Text>
-            <Pressable onPress={() => openTimePicker("pickupTime")} style={styles.inputWrapper}>
-              <Ionicons name="time-outline" size={18} color={pickupTime ? ACCENT : "#9ca3af"} />
-              <Text style={[styles.input, !pickupTime && { color: "#6b7280" }]}>{formatTime(pickupTime)}</Text>
+            <Pressable
+              onPress={() => openTimePicker("pickupTime")}
+              style={styles.inputWrapper}
+            >
+              <Ionicons
+                name="time-outline"
+                size={18}
+                color={pickupTime ? ACCENT : "#9ca3af"}
+              />
+              <Text style={[styles.input, !pickupTime && { color: "#6b7280" }]}>
+                {formatTime(pickupTime)}
+              </Text>
             </Pressable>
           </View>
           <View style={styles.half}>
             <Text style={styles.label}>Return Time</Text>
-            <Pressable onPress={() => openTimePicker("returnTime")} style={styles.inputWrapper}>
-              <Ionicons name="time-outline" size={18} color={returnTime ? ACCENT : "#9ca3af"} />
-              <Text style={[styles.input, !returnTime && { color: "#6b7280" }]}>{formatTime(returnTime)}</Text>
+            <Pressable
+              onPress={() => openTimePicker("returnTime")}
+              style={styles.inputWrapper}
+            >
+              <Ionicons
+                name="time-outline"
+                size={18}
+                color={returnTime ? ACCENT : "#9ca3af"}
+              />
+              <Text style={[styles.input, !returnTime && { color: "#6b7280" }]}>
+                {formatTime(returnTime)}
+              </Text>
             </Pressable>
           </View>
         </View>
       </>
     )}
 
+    {(() => {
+      return van?.gear?.availableTypes && van.gear.availableTypes.length > 1;
+    })() && (
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Gear Type</Text>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              setSelectedGear("manual");
+            }}
+            style={{
+              flex: 1,
+              backgroundColor:
+                selectedGear === "manual"
+                  ? "rgba(254,154,0,0.15)"
+                  : "rgba(255,255,255,0.05)",
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 2,
+              borderColor:
+                selectedGear === "manual" ? ACCENT : "rgba(255,255,255,0.1)",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor:
+                  selectedGear === "manual"
+                    ? "rgba(254,154,0,0.2)"
+                    : "rgba(255,255,255,0.05)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons
+                name="hand-left"
+                size={24}
+                color={selectedGear === "manual" ? ACCENT : "#9ca3af"}
+              />
+            </View>
+            <Text
+              style={{
+                color: selectedGear === "manual" ? ACCENT : "#e5e7eb",
+                fontSize: 14,
+                fontWeight: "700",
+              }}
+            >
+              Manual
+            </Text>
+            <Text
+              style={{ color: "#9ca3af", fontSize: 11, textAlign: "center" }}
+            >
+              Standard
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              setSelectedGear("automatic");
+            }}
+            style={{
+              flex: 1,
+              backgroundColor:
+                selectedGear === "automatic"
+                  ? "rgba(254,154,0,0.15)"
+                  : "rgba(255,255,255,0.05)",
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 2,
+              borderColor:
+                selectedGear === "automatic" ? ACCENT : "rgba(255,255,255,0.1)",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor:
+                  selectedGear === "automatic"
+                    ? "rgba(254,154,0,0.2)"
+                    : "rgba(255,255,255,0.05)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons
+                name="settings"
+                size={24}
+                color={selectedGear === "automatic" ? ACCENT : "#9ca3af"}
+              />
+            </View>
+            <Text
+              style={{
+                color: selectedGear === "automatic" ? ACCENT : "#e5e7eb",
+                fontSize: 14,
+                fontWeight: "700",
+              }}
+            >
+              Automatic
+            </Text>
+            {van.gear.automaticExtraCost > 0 ? (
+              <View
+                style={{
+                  backgroundColor:
+                    selectedGear === "automatic"
+                      ? "rgba(254,154,0,0.2)"
+                      : "rgba(255,255,255,0.05)",
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    color: selectedGear === "automatic" ? ACCENT : "#9ca3af",
+                    fontSize: 11,
+                    fontWeight: "600",
+                  }}
+                >
+                  +£{van.gear.automaticExtraCost}/day
+                </Text>
+              </View>
+            ) : (
+              <Text style={{ color: "#9ca3af", fontSize: 11 }}>
+                No extra cost
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    )}
+
     {isLoadingData ? (
-      <View style={{ marginTop: 10, alignItems: "center", paddingVertical: 20 }}>
+      <View
+        style={{ marginTop: 10, alignItems: "center", paddingVertical: 20 }}
+      >
         <ActivityIndicator color={ACCENT} size="small" />
         <Text style={[styles.label, { marginTop: 8 }]}>Loading add-ons...</Text>
       </View>
@@ -250,109 +439,215 @@ export const FormFields = ({
           {addons
             .filter((addon) => {
               if (addon.pricingType === "flat") {
-                return addon.flatPrice?.amount !== undefined && addon.flatPrice?.amount !== null;
+                return (
+                  addon.flatPrice?.amount !== undefined &&
+                  addon.flatPrice?.amount !== null
+                );
               }
-              return addon.tieredPrice?.tiers && addon.tieredPrice.tiers.length > 0;
+              return (
+                addon.tieredPrice?.tiers && addon.tieredPrice.tiers.length > 0
+              );
             })
             .map((addon) => {
-            const selection = addonSelections[addon._id];
-            const isSelected = !!selection;
-            const displayPrice = pickupDate && returnDate && pickupTime && returnTime
-              ? getAddonDisplayPrice(addon, pickupDate, returnDate, pickupTime, returnTime)
-              : getAddonDisplayPrice(addon);
-            const calculatedPrice = (pickupDate && returnDate && pickupTime && returnTime && isSelected)
-              ? calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, selection.quantity)
-              : 0;
-            
-            return (
-              <Pressable
-                key={addon._id}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  if (isSelected) {
-                    const newSelections = { ...addonSelections };
-                    delete newSelections[addon._id];
-                    setAddonSelections(newSelections);
-                  } else {
-                    setAddonSelections({
-                      ...addonSelections,
-                      [addon._id]: { quantity: 1 },
-                    });
-                  }
-                }}
-                style={{
-                  width: "48%",
-                  backgroundColor: isSelected ? "rgba(254,154,0,0.15)" : "rgba(255,255,255,0.05)",
-                  borderRadius: 12,
-                  padding: 12,
-                  borderWidth: 1.5,
-                  borderColor: isSelected ? ACCENT : "rgba(255,255,255,0.1)",
-                }}
-              >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                  <Text style={{ color: "#f9fafb", fontSize: 13, fontWeight: "700", flex: 1 }}>{addon.name}</Text>
-                  <View style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: isSelected ? ACCENT : "rgba(255,255,255,0.1)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    {isSelected && <Ionicons name="checkmark" size={14} color={DARK} />}
+              const selection = addonSelections[addon._id];
+              const isSelected = !!selection;
+              const displayPrice =
+                pickupDate && returnDate && pickupTime && returnTime
+                  ? getAddonDisplayPrice(
+                      addon,
+                      pickupDate,
+                      returnDate,
+                      pickupTime,
+                      returnTime
+                    )
+                  : getAddonDisplayPrice(addon);
+              const calculatedPrice =
+                pickupDate &&
+                returnDate &&
+                pickupTime &&
+                returnTime &&
+                isSelected
+                  ? calculateAddonPrice(
+                      addon,
+                      pickupDate,
+                      returnDate,
+                      pickupTime,
+                      returnTime,
+                      selection.quantity
+                    )
+                  : 0;
+
+              return (
+                <Pressable
+                  key={addon._id}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    if (isSelected) {
+                      const newSelections = { ...addonSelections };
+                      delete newSelections[addon._id];
+                      setAddonSelections(newSelections);
+                    } else {
+                      setAddonSelections({
+                        ...addonSelections,
+                        [addon._id]: { quantity: 1 },
+                      });
+                    }
+                  }}
+                  style={{
+                    width: "48%",
+                    backgroundColor: isSelected
+                      ? "rgba(254,154,0,0.15)"
+                      : "rgba(255,255,255,0.05)",
+                    borderRadius: 12,
+                    padding: 12,
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? ACCENT : "rgba(255,255,255,0.1)",
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      marginBottom: 6,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#f9fafb",
+                        fontSize: 13,
+                        fontWeight: "700",
+                        flex: 1,
+                      }}
+                    >
+                      {addon.name}
+                    </Text>
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        backgroundColor: isSelected
+                          ? ACCENT
+                          : "rgba(255,255,255,0.1)",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={14} color={DARK} />
+                      )}
+                    </View>
                   </View>
-                </View>
-                <Text style={{ color: "#9ca3af", fontSize: 10, marginBottom: 6 }} numberOfLines={2}>{addon.description}</Text>
-                <Text style={{ color: ACCENT, fontSize: 12, fontWeight: "700" }}>
-                  {displayPrice}
-                </Text>
-                {isSelected && (
-                  <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)", gap: 6 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          Haptics.selectionAsync();
-                          if (selection.quantity > 1) {
+                  <Text
+                    style={{ color: "#9ca3af", fontSize: 10, marginBottom: 6 }}
+                    numberOfLines={2}
+                  >
+                    {addon.description}
+                  </Text>
+                  <Text
+                    style={{ color: ACCENT, fontSize: 12, fontWeight: "700" }}
+                  >
+                    {displayPrice}
+                  </Text>
+                  {isSelected && (
+                    <View
+                      style={{
+                        marginTop: 8,
+                        paddingTop: 8,
+                        borderTopWidth: 1,
+                        borderTopColor: "rgba(255,255,255,0.1)",
+                        gap: 6,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            Haptics.selectionAsync();
+                            if (selection.quantity > 1) {
+                              setAddonSelections({
+                                ...addonSelections,
+                                [addon._id]: {
+                                  ...selection,
+                                  quantity: selection.quantity - 1,
+                                },
+                              });
+                            }
+                          }}
+                          style={{
+                            backgroundColor: "rgba(254,154,0,0.2)",
+                            borderRadius: 6,
+                            padding: 4,
+                          }}
+                        >
+                          <Ionicons name="remove" size={12} color={ACCENT} />
+                        </Pressable>
+                        <Text
+                          style={{
+                            color: "#f9fafb",
+                            fontSize: 13,
+                            fontWeight: "700",
+                            minWidth: 24,
+                            textAlign: "center",
+                          }}
+                        >
+                          {selection.quantity}
+                        </Text>
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            Haptics.selectionAsync();
                             setAddonSelections({
                               ...addonSelections,
-                              [addon._id]: { ...selection, quantity: selection.quantity - 1 },
+                              [addon._id]: {
+                                ...selection,
+                                quantity: selection.quantity + 1,
+                              },
                             });
-                          }
-                        }}
-                        style={{ backgroundColor: "rgba(254,154,0,0.2)", borderRadius: 6, padding: 4 }}
-                      >
-                        <Ionicons name="remove" size={12} color={ACCENT} />
-                      </Pressable>
-                      <Text style={{ color: "#f9fafb", fontSize: 13, fontWeight: "700", minWidth: 24, textAlign: "center" }}>
-                        {selection.quantity}
-                      </Text>
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          Haptics.selectionAsync();
-                          setAddonSelections({
-                            ...addonSelections,
-                            [addon._id]: { ...selection, quantity: selection.quantity + 1 },
-                          });
-                        }}
-                        style={{ backgroundColor: "rgba(254,154,0,0.2)", borderRadius: 6, padding: 4 }}
-                      >
-                        <Ionicons name="add" size={12} color={ACCENT} />
-                      </Pressable>
-                    </View>
-                    {calculatedPrice > 0 && (
-                      <View style={{ backgroundColor: "rgba(254,154,0,0.1)", borderRadius: 6, padding: 6, marginTop: 4 }}>
-                        <Text style={{ color: "#f9fafb", fontSize: 11, fontWeight: "600", textAlign: "center" }}>
-                          Total: £{calculatedPrice.toFixed(2)}
-                        </Text>
+                          }}
+                          style={{
+                            backgroundColor: "rgba(254,154,0,0.2)",
+                            borderRadius: 6,
+                            padding: 4,
+                          }}
+                        >
+                          <Ionicons name="add" size={12} color={ACCENT} />
+                        </Pressable>
                       </View>
-                    )}
-                  </View>
-                )}
-              </Pressable>
-            );
-          })}
+                      {calculatedPrice > 0 && (
+                        <View
+                          style={{
+                            backgroundColor: "rgba(254,154,0,0.1)",
+                            borderRadius: 6,
+                            padding: 6,
+                            marginTop: 4,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#f9fafb",
+                              fontSize: 11,
+                              fontWeight: "600",
+                              textAlign: "center",
+                            }}
+                          >
+                            Total: £{calculatedPrice.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
         </View>
       </View>
     ) : null}

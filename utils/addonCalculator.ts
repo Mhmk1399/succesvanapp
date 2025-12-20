@@ -36,6 +36,11 @@ export const calculateAddonPrice = (
     return price;
   }
 
+  console.warn(`[addonCalculator] Addon "${addon.name}" has invalid pricing:`, {
+    pricingType: addon.pricingType,
+    flatPrice: addon.flatPrice,
+    tieredPrice: addon.tieredPrice,
+  });
   return 0;
 };
 

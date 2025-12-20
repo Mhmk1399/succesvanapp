@@ -109,11 +109,15 @@ export interface Category {
   extraHoursRate?: number;
   extrahoursRate?: number;
   fuel: "gas" | "diesel" | "electric" | "hybrid";
-  gear: "automatic" | "manual" | "manual,automatic";
+  gear?: {
+    availableTypes: ("manual" | "automatic")[];
+    automaticExtraCost: number;
+  };
   seats: number;
   doors: number;
   createdAt?: Date;
   updatedAt?: Date;
+  properties: Property[];
 }
 
 // Type -------------------------------------------------------------------------------------------
@@ -168,7 +172,7 @@ export interface AddOn {
 export interface Reservation {
   _id?: string;
   user?: User;
-  office?: { _id: string; name: string };
+  office?: { _id: string; name: string; workingTime?: WorkingTime[] };
   category?: Category;
   startDate: string;
   endDate: string;
@@ -260,7 +264,10 @@ export interface VanData {
   };
   pricingTiers?: PricingTier[];
   fuel: "gas" | "diesel" | "electric" | "hybrid";
-  gear: "automatic" | "manual" | "manual,automatic";
+  gear?: {
+    availableTypes: ("manual" | "automatic")[];
+    automaticExtraCost: number;
+  };
   seats: number;
   doors: number;
   id?: number;

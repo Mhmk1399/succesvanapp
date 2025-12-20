@@ -25,7 +25,12 @@ export type Van = {
   seats: number;
   fuel: string;
   doors: number;
-  gear: string;
+  gear:
+    | string
+    | {
+        availableTypes: ("manual" | "automatic")[];
+        automaticExtraCost: number;
+      };
   pricePerHour: number;
   cargo?: string;
 };
@@ -190,10 +195,10 @@ function VanCard({ van, index, scale, opacity, onPress }: VanCardProps) {
         </View>
 
         <View style={styles.content}>
-          <View style={styles.badge}>
+          {/* <View style={styles.badge}>
             <Ionicons name="star" size={12} color={ACCENT} />
             <Text style={styles.badgeText}>Featured</Text>
-          </View>
+          </View> */}
 
           <Text style={styles.vanName} numberOfLines={1}>
             {van.name}
@@ -208,7 +213,11 @@ function VanCard({ van, index, scale, opacity, onPress }: VanCardProps) {
             <View style={styles.specItem}>
               <Ionicons name="car-sport" size={14} color={ACCENT} />
               <Text style={styles.specText}>
-                {van.gear === "manual,automatic" ? "Auto" : van.gear}
+                {typeof van.gear === "object"
+                  ? van.gear.availableTypes.join("/")
+                  : van.gear === "manual,automatic"
+                  ? "Auto"
+                  : van.gear}
               </Text>
             </View>
             <View style={styles.specDivider} />
@@ -264,6 +273,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 999,
+    borderWidth: 1,
+    borderColor: ACCENT,
+    backgroundColor: "rgba(254, 154, 0, 0.1)",
   },
   viewAllText: {
     color: ACCENT,
@@ -283,7 +295,7 @@ const styles = StyleSheet.create({
   },
   imageWrapper: {
     width: "100%",
-    height: 200,
+    height: 250,
   },
   image: {
     width: "100%",

@@ -22,7 +22,7 @@ export default function VansScreen() {
 
   useEffect(() => {
     loadCategories();
-  }, [params]);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -72,10 +72,16 @@ export default function VansScreen() {
           seats: cat.seats || 2,
           fuel: cat.fuel || "Diesel",
           doors: cat.doors || 2,
-          gear: cat.gear || "manual",
+          gear:
+            typeof cat.gear === "object" && cat.gear?.availableTypes
+              ? cat.gear
+              : "manual",
           showPrice: cat.showPrice || 0,
           pricingTiers: cat.pricingTiers || [],
           extraHoursRate: cat.extrahoursRate || cat.extraHoursRate || 0,
+          expert:cat.expert || "No",
+           properties: cat.properties || [],
+       
         }));
 
         // Filter by category if provided

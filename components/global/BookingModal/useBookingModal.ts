@@ -96,6 +96,9 @@ export const useBookingModal = (
   );
   const [message, setMessage] = useState("");
   const [dynamicVanPrice, setDynamicVanPrice] = useState<number>(0);
+  const [selectedGear, setSelectedGear] = useState<"manual" | "automatic">(
+    "manual"
+  );
 
   useEffect(() => {
     if (!pickupDate || !returnDate || !pickupTime || !returnTime || !van)
@@ -119,6 +122,17 @@ export const useBookingModal = (
       van.pricingTiers || [],
       van.extraHoursRate || 0
     );
+
+    // Add automatic gear cost
+    if (
+      selectedGear === "automatic" &&
+      typeof van.gear === "object" &&
+      van.gear.automaticExtraCost
+    ) {
+      const diffMs = end.getTime() - start.getTime();
+      const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      basePrice += van.gear.automaticExtraCost * days;
+    }
 
     // Calculate extension fees
     let pickupExtensionFee = 0;
@@ -185,6 +199,7 @@ export const useBookingModal = (
     prefilledData?.calculatedPrice,
     offices,
     selectedOffice,
+    selectedGear,
   ]);
 
   const handleClose = () => {
@@ -241,17 +256,23 @@ export const useBookingModal = (
       pickupTime: prefilledData?.pickupTime,
       returnTime: prefilledData?.returnTime,
     });
-    
+
     if (prefilledData?.pickupDate) {
       const d = new Date(prefilledData.pickupDate);
       const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      console.log("[useBookingModal] Setting pickupDate to:", localDate.toISOString().split("T")[0]);
+      console.log(
+        "[useBookingModal] Setting pickupDate to:",
+        localDate.toISOString().split("T")[0]
+      );
       setPickupDate(localDate);
     }
     if (prefilledData?.returnDate) {
       const d = new Date(prefilledData.returnDate);
       const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      console.log("[useBookingModal] Setting returnDate to:", localDate.toISOString().split("T")[0]);
+      console.log(
+        "[useBookingModal] Setting returnDate to:",
+        localDate.toISOString().split("T")[0]
+      );
       setReturnDate(localDate);
     }
     if (prefilledData?.driverAge) {
@@ -299,7 +320,7 @@ export const useBookingModal = (
         const type = timeModalField === "pickupTime" ? "start" : "end";
         const EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API =
           process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API;
-        
+
         console.log("[BookingModal.fetchReservedSlots] Fetching:", {
           dateStr,
           type,
@@ -307,11 +328,13 @@ export const useBookingModal = (
         });
 
         const response = await fetch(
-          `${EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API}?office=${selectedOffice}&${type === "start" ? "startDate" : "endDate"}=${dateStr}&type=${type}`
+          `${EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API}?office=${selectedOffice}&${
+            type === "start" ? "startDate" : "endDate"
+          }=${dateStr}&type=${type}`
         );
         const data = await response.json();
         console.log("[BookingModal.fetchReservedSlots] Response:", data);
-        
+
         if (data.success && data.data?.reservedSlots) {
           // Filter slots to only those that match the exact date
           const filteredSlots = data.data.reservedSlots.filter((slot: any) => {
@@ -321,7 +344,10 @@ export const useBookingModal = (
               return slot.endDate === dateStr;
             }
           });
-          console.log("[BookingModal.fetchReservedSlots] Filtered slots:", filteredSlots);
+          console.log(
+            "[BookingModal.fetchReservedSlots] Filtered slots:",
+            filteredSlots
+          );
           setReservedSlots(filteredSlots);
         }
       } catch (error) {
@@ -653,5 +679,7 @@ export const useBookingModal = (
     setTimeModalField,
     reservedSlots,
     dynamicVanPrice,
+    selectedGear,
+    setSelectedGear,
   };
 };

@@ -9,6 +9,8 @@ import {
   Animated,
   RefreshControl,
   Alert,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -30,12 +32,19 @@ export type Van = {
   image: string | number;
   seats: number;
   fuel: string;
+  expert: string;
   doors: number;
-  gear: string;
+  gear?:
+    | {
+        availableTypes: ("manual" | "automatic")[];
+        automaticExtraCost: number;
+      }
+    | string;
   showPrice?: number;
   pricingTiers?: { minDays: number; maxDays: number; pricePerDay: number }[];
   extraHoursRate?: number;
   cargo?: string;
+  properties?: { key: string; value: string; _id: string }[];
 };
 
 type VanListProps = {
@@ -183,6 +192,7 @@ type VanCardProps = {
 function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
   const { user } = useAuth();
   const router = useRouter();
+  const [showDimensionsModal, setShowDimensionsModal] = useState(false);
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(50)).current;
@@ -316,7 +326,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                 {van.name}
               </Text>
               <Text style={styles.vanSub}>
-                {van.cargo ? van.cargo : "Modern van · or similar"}
+                {van.expert ? van.expert : "Modern van · or similar"}
               </Text>
 
               <View style={styles.chipsRow}>
@@ -327,20 +337,47 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
             </View>
 
             <View style={styles.bottomRow}>
-              <View>
+              <View style={styles.leftSection}>
+                {van.properties && van.properties.length > 0 && (
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setShowDimensionsModal(true);
+                    }}
+                    style={styles.dimensionsChip}
+                  >
+                    <Text style={styles.dimensionsText}>
+                      Vehicle Dimensions
+                    </Text>
+                    <Ionicons
+                      name="arrow-forward"
+                      size={14}
+                      color="#fafdffff"
+                    />
+                  </Pressable>
+                )}
                 <View style={styles.gearRow}>
-                  <Ionicons name="settings-outline" size={14} color={ACCENT} />
+                  <Ionicons
+                    name="settings-outline"
+                    size={14}
+                    color={"#07bc1fff"}
+                  />
                   <Text style={styles.gearText}>
-                    {van.gear === "manual,automatic"
-                      ? "Manual & Automatic"
-                      : van.gear.charAt(0).toUpperCase() + van.gear.slice(1)}
+                    {typeof van.gear === "string"
+                      ? van.gear === "manual,automatic"
+                        ? "Manual & Automatic"
+                        : van.gear.charAt(0).toUpperCase() + van.gear.slice(1)
+                      : van.gear?.availableTypes
+                          ?.join(" & ")
+                          .replace(/manual/g, "Manual")
+                          .replace(/automatic/g, "Automatic") || "Manual"}
                   </Text>
                 </View>
                 <View style={styles.priceRow}>
-                  <Text style={styles.priceValue}>
-                    £{van.showPrice || 0}
-                  </Text>
-                  <Text style={styles.priceUnit}>/ day</Text>
+                  <Text style={styles.priceLabel}>from </Text>
+                  <Text style={styles.priceValue}>£{van.showPrice || 0}</Text>
+                  <Text style={styles.priceLabel}> / day</Text>
                 </View>
               </View>
 
@@ -348,7 +385,10 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                 onPress={async (e) => {
                   e.stopPropagation();
                   if (!user) {
-                    await AsyncStorage.setItem("pendingBookingVan", JSON.stringify(van));
+                    await AsyncStorage.setItem(
+                      "pendingBookingVan",
+                      JSON.stringify(van)
+                    );
                     Alert.alert(
                       "Login Required",
                       "Please login or register to book this van.",
@@ -379,6 +419,56 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
             </View>
           </View>
         </Pressable>
+
+        <Modal
+          visible={showDimensionsModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowDimensionsModal(false)}
+        >
+          <BlurView intensity={80} tint="dark" style={styles.modalOverlay}>
+            <Pressable
+              style={styles.modalContent}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.modalBlur}>
+                <View style={styles.modalHeader}>
+                  <View>
+                    <Text style={styles.modalTitle}>Vehicle Dimensions</Text>
+                    <Text style={styles.modalSubtitle}>{van.name}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setShowDimensionsModal(false)}
+                    style={styles.closeButton}
+                  >
+                    <Ionicons name="close" size={24} color="#f9fafb" />
+                  </Pressable>
+                </View>
+
+                <ScrollView
+                  style={styles.dimensionsList}
+                  contentContainerStyle={styles.dimensionsContent}
+                  showsVerticalScrollIndicator={true}
+                >
+                  <View style={styles.dimensionsGrid}>
+                    {van.properties?.map((prop) => (
+                      <View key={prop._id} style={styles.dimensionItem}>
+                        <View style={styles.dimensionTextBox}>
+                          <Text style={styles.dimensionKey} numberOfLines={2}>
+                            {prop.key}
+                          </Text>
+                          <Text style={styles.dimensionValue}>
+                            {prop.value}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+            </Pressable>
+          </BlurView>
+        </Modal>
       </Animated.View>
     </Animated.View>
   );
@@ -478,7 +568,7 @@ const styles = StyleSheet.create({
   image: {
     width: "100%",
     height: "100%",
-    },
+  },
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -524,11 +614,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-end",
   },
+  leftSection: {
+    flex: 1,
+    marginRight: 12,
+    gap: 10,
+  },
   gearRow: {
     flexDirection: "row",
     alignItems: "center",
     columnGap: 4,
-    marginBottom: 4,
   },
   gearText: {
     color: "#e5e7eb",
@@ -537,19 +631,17 @@ const styles = StyleSheet.create({
   },
   priceRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    columnGap: 4,
+    alignItems: "baseline",
+  },
+  priceLabel: {
+    color: "#9ca3af",
+    fontSize: 13,
+    fontWeight: "600",
   },
   priceValue: {
     color: "#f9fafb",
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "900",
-  },
-  priceUnit: {
-    color: "#d1d5db",
-    fontSize: 11,
-    fontWeight: "600",
-    marginBottom: 2,
   },
   bookButton: {
     flexDirection: "row",
@@ -600,5 +692,102 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: "center",
     lineHeight: 20,
+  },
+  dimensionsChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.79)",
+    gap: 6,
+  },
+  dimensionsText: {
+    color: "#f9fafb",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    maxHeight: "80%",
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.3)",
+    backgroundColor: ACCENT,
+  },
+  modalBlur: {
+    padding: 24,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#f9fafb",
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: "#000000ff",
+    marginTop: 2,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  dimensionsList: {
+    maxHeight: 600,
+  },
+  dimensionsContent: {
+    paddingBottom: 10,
+  },
+  dimensionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  dimensionItem: {
+    flexDirection: "column",
+    width: "48%",
+    backgroundColor: "rgba(15,23,42,0.2)",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.2)",
+    
+  },
+  dimensionIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "rgba(233, 231, 229, 0.75)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  dimensionTextBox: {
+    flex: 1,
+  },
+  dimensionKey: {
+    fontSize: 10,
+    color: "#ffffffff",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  dimensionValue: {
+    fontSize: 14,
+    color: "#000000ff",
+    fontWeight: "700",
   },
 });

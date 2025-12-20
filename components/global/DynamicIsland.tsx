@@ -13,22 +13,35 @@ import { useRouter, usePathname, Href } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Svg, { Path } from "react-native-svg";
+
+const VanIcon = ({ size = 24, color = "#fff", filled = false }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M17 6H3C1.9 6 1 6.9 1 8V15C1 16.1 1.9 17 3 17H4C4 18.66 5.34 20 7 20C8.66 20 10 18.66 10 17H14C14 18.66 15.34 20 17 20C18.66 20 20 18.66 20 17H21C22.1 17 23 16.1 23 15V11L20 6H17ZM7 18.5C6.17 18.5 5.5 17.83 5.5 17C5.5 16.17 6.17 15.5 7 15.5C7.83 15.5 8.5 16.17 8.5 17C8.5 17.83 7.83 18.5 7 18.5ZM17 18.5C16.17 18.5 15.5 17.83 15.5 17C15.5 16.17 16.17 15.5 17 15.5C17.83 15.5 18.5 16.17 18.5 17C18.5 17.83 17.83 18.5 17 18.5ZM3 13V8H17V13H3ZM18 10.5L20.5 13.5H18V10.5Z"
+      fill={filled ? color : "none"}
+      stroke={color}
+      strokeWidth={filled ? 0 : 1.5}
+    />
+  </Svg>
+);
 
 type NavItem = {
   label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  activeIcon: keyof typeof Ionicons.glyphMap;
+  icon: keyof typeof Ionicons.glyphMap | "van";
+  activeIcon: keyof typeof Ionicons.glyphMap | "van-filled";
   route: "/" | "/vans" | "/dashboard";
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Home", icon: "home-outline", activeIcon: "home", route: "/" },
   {
     label: "Reserve",
-    icon: "add-circle-sharp",
-    activeIcon: "add-circle",
+    icon: "van",
+    activeIcon: "van-filled",
     route: "/vans",
   },
+  { label: "Home", icon: "home-outline", activeIcon: "home", route: "/" },
+
   {
     label: "Profile",
     icon: "person-outline",
@@ -350,7 +363,7 @@ export default function DynamicIsland() {
 
   const handlePress = useCallback(
     async (route: "/" | "/vans" | "/dashboard", index: number) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
 
       // Quick tap animation
       Animated.sequence([
@@ -385,8 +398,8 @@ export default function DynamicIsland() {
     const isActive = activeIndex === index;
 
     // Change icon for Profile/Login based on auth status
-    let displayIcon = item.icon;
-    let displayActiveIcon = item.activeIcon;
+    let displayIcon: string = item.icon;
+    let displayActiveIcon: string = item.activeIcon;
     if (item.route === "/dashboard" && !isAuthenticated) {
       displayIcon = "log-in-outline";
       displayActiveIcon = "log-in";
@@ -436,11 +449,19 @@ export default function DynamicIsland() {
               },
             ]}
           >
-            <Ionicons
-              name={isActive ? displayActiveIcon : displayIcon}
-              size={isActive ? 24 : 22}
-              color={isActive ? ACCENT : "rgba(255,255,255,0.3)"}
-            />
+            {displayIcon === "van" || displayActiveIcon === "van-filled" ? (
+              <VanIcon
+                size={isActive ? 26 : 24}
+                color={isActive ? ACCENT : "rgba(255,255,255,0.3)"}
+                filled={isActive}
+              />
+            ) : (
+              <Ionicons
+                name={(isActive ? displayActiveIcon : displayIcon) as any}
+                size={isActive ? 26 : 24}
+                color={isActive ? ACCENT : "rgba(255,255,255,0.3)"}
+              />
+            )}
           </Animated.View>
         </Pressable>
       </Animated.View>

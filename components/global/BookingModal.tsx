@@ -5,16 +5,16 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
-    ActivityIndicator,
-    Animated,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Animated,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { ACCENT, DARK } from "./BookingModal/constants";
@@ -23,22 +23,7 @@ import { styles } from "./BookingModal/styles";
 import { BookingModalProps } from "./BookingModal/types";
 import { useBookingModal } from "./BookingModal/useBookingModal";
 import { getAvailableTimeSlots, getSelectedOffice } from "./BookingModal/utils";
-type WorkingTime = {
-  day: string; // "monday" | "tuesday" | ...
-  isOpen: boolean;
-  startTime: string;
-  endTime: string;
-  pickupExtension?: {
-    hoursBefore: number;
-    hoursAfter: number;
-    flatPrice: number;
-  };
-  returnExtension?: {
-    hoursBefore: number;
-    hoursAfter: number;
-    flatPrice: number;
-  };
-};
+ 
 export default function BookingModal({
   visible,
   van,
@@ -94,6 +79,8 @@ export default function BookingModal({
     setTimeModalField,
     reservedSlots,
     dynamicVanPrice,
+    selectedGear,
+    setSelectedGear,
   } = useBookingModal(
     visible,
     van,
@@ -127,9 +114,17 @@ export default function BookingModal({
               contentContainerStyle={{ paddingBottom: 140 }}
             >
               <View style={styles.header}>
-                <Text style={styles.title}>
-                  Booking <Text style={styles.titleVan}>{van.name}</Text>
-                </Text>
+                <View style={styles.headerContent}>
+                  <View style={styles.headerIconBox}>
+                    <Ionicons name="car-sport" size={24} color={ACCENT} />
+                  </View>
+                  <View style={styles.headerTextContainer}>
+                    <Text style={styles.headerSubtitle}>Complete Your Booking</Text>
+                    <Text style={styles.title}>
+                      <Text style={styles.titleVan}>{van.name}</Text>
+                    </Text>
+                  </View>
+                </View>
               </View>
 
               <View style={styles.topSection}>
@@ -265,6 +260,9 @@ export default function BookingModal({
                   isLoadingData={isLoadingData}
                   message={message}
                   setMessage={setMessage}
+                  selectedGear={selectedGear}
+                  setSelectedGear={setSelectedGear}
+                  van={van}
                 />
               </View>
             </ScrollView>
@@ -319,8 +317,6 @@ export default function BookingModal({
               start.setHours(pH, pM, 0, 0);
               end.setHours(rH, rM, 0, 0);
 
-            
-
               const diffTime = end.getTime() - start.getTime();
               const totalMinutes = diffTime / (1000 * 60);
               const totalHours = Math.floor(totalMinutes / 60);
@@ -329,8 +325,6 @@ export default function BookingModal({
                 remainingMinutes > 15 ? totalHours + 1 : totalHours;
               const actualDays = Math.floor(billableHours / 24);
               const actualExtraHours = billableHours % 24;
-
-          
 
               let totalDays = actualDays;
               const extraHours = actualExtraHours;
@@ -343,6 +337,13 @@ export default function BookingModal({
               } else if (extraHours > 0) {
                 extraHoursPrice = extraHours * (van.extraHoursRate || 0);
               }
+
+              const automaticGearCost =
+                selectedGear === "automatic" &&
+                typeof van.gear === "object" &&
+                van.gear.automaticExtraCost
+                  ? van.gear.automaticExtraCost * totalDays
+                  : 0;
 
               const tier =
                 van.pricingTiers?.find(
@@ -434,7 +435,10 @@ export default function BookingModal({
                 },
                 0
               );
-              const total = vanPrice + addonsPrice;
+              const total =
+                vanPrice +
+                addonsPrice +
+                (hasPrefilledData ? automaticGearCost : 0);
 
               return (
                 <>
@@ -661,6 +665,52 @@ export default function BookingModal({
                         </View>
                       );
                     })}
+
+                    {automaticGearCost > 0 && (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <Ionicons
+                            name="settings-outline"
+                            size={13}
+                            color="#a78bfa"
+                          />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: "#d1d5db",
+                              fontWeight: "500",
+                            }}
+                          >
+                            Automatic gear ({totalDays}d × £
+                            {typeof van.gear === "object"
+                              ? van.gear.automaticExtraCost
+                              : 0}
+                            )
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#f9fafb",
+                            fontWeight: "700",
+                          }}
+                        >
+                          £{automaticGearCost.toFixed(0)}
+                        </Text>
+                      </View>
+                    )}
 
                     <View
                       style={{

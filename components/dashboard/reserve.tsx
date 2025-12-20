@@ -1,8 +1,9 @@
 // components/dashboard/UserReservations.tsx
 import { reservationService } from "@/services/reservationService";
-import { Reservation } from "@/types/type";
+import { Reservation, AddOn } from "@/types/type";
 import { calculateAddonPrice } from "@/utils/addonCalculator";
 import { calculatePrice } from "@/utils/priceCalculator";
+import { addonService } from "@/services/addonService";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
@@ -26,6 +27,7 @@ import {
   View,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
+import { JSX } from "react/jsx-runtime";
 
 const { height } = Dimensions.get("window");
 
@@ -41,8 +43,8 @@ type UserReservationsProps = {
 type WorkingTime = {
   day: string;
   isOpen: boolean;
-  startTime: string;
-  endTime: string;
+  startTime?: string;
+  endTime?: string;
   pickupExtension?: {
     hoursBefore: number;
     hoursAfter: number;
@@ -95,6 +97,10 @@ export default function UserReservations({
   const [editMessage, setEditMessage] = useState("");
   const [isValidRental, setIsValidRental] = useState(true);
   const [rentalHours, setRentalHours] = useState(0);
+  const [editAddonSelections, setEditAddonSelections] = useState<
+    Record<string, number>
+  >({});
+  const [availableAddons, setAvailableAddons] = useState<AddOn[]>([]);
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -178,6 +184,19 @@ export default function UserReservations({
         .padStart(2, "0")}`
     );
     setEditMessage(selectedReservation.messege || "");
+
+    const addonMap: Record<string, number> = {};
+    selectedReservation.addOns?.forEach((addon) => {
+      if (addon.addOn?._id) {
+        addonMap[addon.addOn._id] = addon.quantity;
+      }
+    });
+    setEditAddonSelections(addonMap);
+
+    addonService.getAll().then((res) => {
+      if (res.success) setAvailableAddons(res.data || []);
+    });
+
     setIsEditing(true);
   };
 
@@ -256,7 +275,6 @@ export default function UserReservations({
     start.setHours(pH, pM, 0, 0);
     end.setHours(rH, rM, 0, 0);
 
-    // Calculate rental hours
     const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
     setRentalHours(diffHours);
     setIsValidRental(diffHours >= 6);
@@ -269,21 +287,32 @@ export default function UserReservations({
         selectedReservation.category?.extraHoursRate ||
         0
     );
-    const addonsPrice =
-      selectedReservation.addOns?.reduce((sum, addon) => {
-        if (!addon.addOn) return sum;
-        return (
-          sum +
-          calculateAddonPrice(
-            addon.addOn,
-            editPickupDate,
-            editReturnDate,
-            editPickupTime,
-            editReturnTime,
-            addon.quantity
-          )
-        );
-      }, 0) || 0;
+
+    const allAddons = [
+      ...(selectedReservation.addOns?.map((a) => a.addOn).filter(Boolean) ||
+        []),
+      ...availableAddons,
+    ];
+    const uniqueAddons = allAddons.filter(
+      (addon, index, self) =>
+        addon && self.findIndex((a) => a?._id === addon._id) === index
+    );
+
+    const addonsPrice = uniqueAddons.reduce((sum, addon) => {
+      if (!addon || !editPickupDate || !editReturnDate) return sum;
+      const quantity = editAddonSelections[addon._id] || 0;
+      if (quantity === 0) return sum;
+      const price = calculateAddonPrice(
+        addon,
+        editPickupDate,
+        editReturnDate,
+        editPickupTime,
+        editReturnTime,
+        quantity
+      );
+      return sum + price;
+    }, 0);
+
     setDynamicPrice(vanPrice + addonsPrice);
   }, [
     editPickupDate,
@@ -291,6 +320,9 @@ export default function UserReservations({
     editPickupTime,
     editReturnTime,
     isEditing,
+    selectedReservation,
+    editAddonSelections,
+    availableAddons,
   ]);
 
   const getAvailableTimeSlots = (
@@ -390,7 +422,6 @@ export default function UserReservations({
   const saveChanges = async () => {
     if (!selectedReservation || !editPickupDate || !editReturnDate) return;
 
-    // Check minimum 6 hours
     const start = new Date(editPickupDate);
     const end = new Date(editReturnDate);
     const [pH, pM] = editPickupTime.split(":").map(Number);
@@ -405,38 +436,21 @@ export default function UserReservations({
 
     setIsUpdating(true);
     try {
-      const vanPrice = calculatePrice(
-        start,
-        end,
-        selectedReservation.category?.pricingTiers || [],
-        selectedReservation.category?.extrahoursRate ||
-          selectedReservation.category?.extraHoursRate ||
-          0
-      );
-
-      const addonsPrice =
-        selectedReservation.addOns?.reduce((sum, addon) => {
-          if (!addon.addOn) return sum;
-          const price = calculateAddonPrice(
-            addon.addOn,
-            editPickupDate,
-            editReturnDate,
-            editPickupTime,
-            editReturnTime,
-            addon.quantity
-          );
-          return sum + price;
-        }, 0) || 0;
-
-      const totalPrice = vanPrice + addonsPrice;
+      const updatedAddOns = Object.entries(editAddonSelections)
+        .filter(([_, quantity]) => quantity > 0)
+        .map(([addonId, quantity]) => ({
+          addOn: addonId,
+          quantity,
+        }));
 
       const result = await reservationService.update(
         selectedReservation._id || "",
         {
           startDate: start.toISOString(),
           endDate: end.toISOString(),
-          totalPrice,
+          totalPrice: dynamicPrice,
           messege: editMessage,
+          addOns: updatedAddOns,
         } as any
       );
 
@@ -768,6 +782,8 @@ export default function UserReservations({
                   </View>
                 )}
 
+
+
                 <View style={styles.infoRow}>
                   <View style={styles.infoBox}>
                     <Text style={styles.sectionTitle}>Status</Text>
@@ -818,61 +834,179 @@ export default function UserReservations({
                     const days = Math.floor(totalHours / 24);
                     const hours = totalHours % 24;
 
-                    const addOnsPrice =
-                      selectedReservation.addOns?.reduce((sum, addon) => {
-                        if (addon.addOn?.pricingType === "flat")
-                          return (
-                            sum + (addon.addOn?.flatPrice || 0) * addon.quantity
-                          );
-                        if (
-                          addon.addOn?.pricingType === "tiered" &&
-                          addon.addOn?.tiers
-                        ) {
-                          const rentalDays = Math.ceil(days + hours / 24);
-                          const tier = addon.addOn.tiers.find(
-                            (t: any) =>
-                              rentalDays >= t.minDays && rentalDays <= t.maxDays
-                          );
-                          return sum + (tier?.price || 0) * addon.quantity;
-                        }
-                        return sum;
-                      }, 0) || 0;
+                    const allAddons = [
+                      ...(selectedReservation.addOns
+                        ?.map((a) => a.addOn)
+                        .filter(Boolean) || []),
+                      ...availableAddons,
+                    ];
+                    const uniqueAddons = allAddons.filter(
+                      (addon, index, self) =>
+                        addon &&
+                        self.findIndex((a) => a?._id === addon._id) === index
+                    );
 
                     const totalPrice = isEditing
                       ? dynamicPrice
                       : selectedReservation.totalPrice;
+
+                    let addOnsPrice = 0;
+                    const addonItems: JSX.Element[] = [];
+
+                    uniqueAddons.forEach((addon) => {
+                      if (!addon) return;
+                      const quantity = isEditing
+                        ? editAddonSelections[addon._id] || 0
+                        : selectedReservation.addOns?.find(
+                            (a) => a.addOn?._id === addon._id
+                          )?.quantity || 0;
+                      if (quantity === 0) return;
+
+                      const pickupDate =
+                        isEditing && editPickupDate ? editPickupDate : start;
+                      const returnDate =
+                        isEditing && editReturnDate ? editReturnDate : end;
+                      const pickupTime = isEditing
+                        ? editPickupTime
+                        : editPickupTime;
+                      const returnTime = isEditing
+                        ? editReturnTime
+                        : editReturnTime;
+
+                      const price = calculateAddonPrice(
+                        addon,
+                        pickupDate,
+                        returnDate,
+                        pickupTime,
+                        returnTime,
+                        quantity
+                      );
+                      console.log(`[reserve.tsx] Addon: ${addon.name}, Type: ${addon.pricingType}, Quantity: ${quantity}, Price: ${price}`);
+                      addOnsPrice += price;
+
+                      addonItems.push(
+                        <View
+                          key={addon._id}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: 6,
+                          }}
+                        >
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <Ionicons
+                              name="add-circle-outline"
+                              size={13}
+                              color="#08d72bff"
+                            />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: "#d1d5db",
+                                fontWeight: "500",
+                              }}
+                            >
+                              {addon.name} ×{quantity}
+                            </Text>
+                          </View>
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              color: "#f9fafb",
+                              fontWeight: "700",
+                            }}
+                          >
+                            £{price.toFixed(0)}
+                          </Text>
+                        </View>
+                      );
+                    });
+
                     const vanPrice = totalPrice - addOnsPrice;
 
                     return (
                       <>
-                        <View style={styles.priceBreakdownRow}>
-                          <Text style={styles.breakdownLabel}>
-                            Rental Duration
-                          </Text>
-                          <Text style={styles.breakdownValue}>
-                            {days}d {hours}h
-                          </Text>
-                        </View>
-                        <View style={styles.priceBreakdownRow}>
-                          <Text style={styles.breakdownLabel}>Van Rental</Text>
-                          <Text style={styles.breakdownValue}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: 6,
+                          }}
+                        >
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <Ionicons
+                              name="calendar-outline"
+                              size={13}
+                              color="#f79515ff"
+                            />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: "#d1d5db",
+                                fontWeight: "500",
+                              }}
+                            >
+                              {days}d {hours}h rental
+                            </Text>
+                          </View>
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              color: "#f9fafb",
+                              fontWeight: "700",
+                            }}
+                          >
                             £{vanPrice.toFixed(0)}
                           </Text>
                         </View>
-                        {selectedReservation.addOns &&
-                          selectedReservation.addOns.length > 0 && (
-                            <View style={styles.priceBreakdownRow}>
-                              <Text style={styles.breakdownLabel}>Add-ons</Text>
-                              <Text style={styles.breakdownValue}>
-                                £{addOnsPrice}
-                              </Text>
-                            </View>
-                          )}
+
+                        {addonItems}
+
                         <View
-                          style={[styles.priceBreakdownRow, styles.totalRow]}
+                          style={{
+                            height: 1,
+                            backgroundColor: "rgba(255,255,255,0.1)",
+                            marginVertical: 8,
+                          }}
+                        />
+
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
                         >
-                          <Text style={styles.totalLabel}>Total</Text>
-                          <Text style={styles.totalValue}>
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: "#f9fafb",
+                              fontWeight: "600",
+                            }}
+                          >
+                            Total
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 20,
+                              color: "#22c55e",
+                              fontWeight: "900",
+                            }}
+                          >
                             £{totalPrice.toFixed(0)}
                           </Text>
                         </View>
@@ -883,6 +1017,43 @@ export default function UserReservations({
 
                 {isEditing && (
                   <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+                    <View
+                      style={{
+                        backgroundColor: "rgba(34, 197, 94, 0.15)",
+                        padding: 14,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: "rgba(34, 197, 94, 0.3)",
+                        marginBottom: 12,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#86efac",
+                            fontSize: 13,
+                            fontWeight: "600",
+                          }}
+                        >
+                          New Total Price
+                        </Text>
+                        <Text
+                          style={{
+                            color: "#22c55e",
+                            fontSize: 20,
+                            fontWeight: "900",
+                          }}
+                        >
+                          £{dynamicPrice.toFixed(0)}
+                        </Text>
+                      </View>
+                    </View>
                     {!isValidRental && (
                       <View
                         style={{
@@ -1111,7 +1282,7 @@ export default function UserReservations({
                       "saturday",
                     ][dateToCheck?.getDay() || 0];
                     const workingDay = office?.workingTime?.find(
-                      (w: any) => w.day === dayName
+                      (w: WorkingTime) => w.day === dayName
                     );
                     const extension = isPickup
                       ? workingDay?.pickupExtension
@@ -1606,5 +1777,37 @@ const styles = StyleSheet.create({
     color: "#f9fafb",
     fontSize: 14,
     minHeight: 80,
+  },
+  addonEditRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  addonEditName: {
+    color: "#f9fafb",
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
+  },
+  addonEditControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  addonEditBtn: {
+    backgroundColor: "rgba(254,154,0,0.2)",
+    borderRadius: 8,
+    padding: 6,
+  },
+  addonEditQty: {
+    color: "#f9fafb",
+    fontSize: 16,
+    fontWeight: "700",
+    minWidth: 30,
+    textAlign: "center",
   },
 });

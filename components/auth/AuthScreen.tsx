@@ -47,21 +47,23 @@ export default function AuthScreen() {
 
     setIsSubmitting(true);
     try {
-      console.log("Sending code to:", phone);
-      const result = await authService.sendCode(phone);
-      console.log("Result:", result);
+      const fullPhone = `+44${phone}`;
+      const result = await authService.sendCode(fullPhone);
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        if (result.data?.code) {
-          Alert.alert("Dev Code", `Your code: ${result.data.code}`);
-        }
+        // if (result.data?.code) {
+        //   Alert.alert("Dev Code", `Your code: ${result.data.code}`);
+        // }
         setStep("code");
       } else {
         Alert.alert("Error", result.message || "Failed to send code");
       }
     } catch (error) {
       console.error("Send code error:", error);
-      Alert.alert("Error", error instanceof Error ? error.message : "Network error");
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Network error"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -76,22 +78,27 @@ export default function AuthScreen() {
 
     setIsSubmitting(true);
     try {
-      const result = await authService.verifyCode(phone, code);
+      const fullPhone = `+44${phone}`;
+      const result = await authService.verifyCode(fullPhone, code);
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (result.data.userExists) {
           await refreshUser();
           const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
-          const pendingForm = await AsyncStorage.getItem("pendingReservationForm");
+          const pendingForm = await AsyncStorage.getItem(
+            "pendingReservationForm"
+          );
           if (pendingVan) {
             await AsyncStorage.removeItem("pendingBookingVan");
             Alert.alert("✅ Success", "Logged in! Redirecting to booking...", [
               { text: "OK", onPress: () => router.push("/vans") },
             ]);
           } else if (pendingForm) {
-            Alert.alert("✅ Success", "Logged in! Continuing your reservation...", [
-              { text: "OK", onPress: () => router.push("/") },
-            ]);
+            Alert.alert(
+              "✅ Success",
+              "Logged in! Continuing your reservation...",
+              [{ text: "OK", onPress: () => router.push("/") }]
+            );
           } else {
             Alert.alert("✅ Success", "Logged in!", [
               { text: "OK", onPress: () => router.push("/dashboard") },
@@ -104,7 +111,10 @@ export default function AuthScreen() {
         Alert.alert("Error", result.message || "Invalid code");
       }
     } catch (error) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Network error");
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Network error"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -125,12 +135,15 @@ export default function AuthScreen() {
 
     setIsSubmitting(true);
     try {
-      const result = await authService.register(phone, name, lastName, email);
+      const fullPhone = `+44${phone}`;
+      const result = await authService.register(fullPhone, name, lastName, email);
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await refreshUser();
         const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
-        const pendingForm = await AsyncStorage.getItem("pendingReservationForm");
+        const pendingForm = await AsyncStorage.getItem(
+          "pendingReservationForm"
+        );
         if (pendingVan) {
           await AsyncStorage.removeItem("pendingBookingVan");
           Alert.alert(
@@ -153,7 +166,10 @@ export default function AuthScreen() {
         Alert.alert("Error", result.message || "Registration failed");
       }
     } catch (error) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Network error");
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Network error"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -201,8 +217,9 @@ export default function AuthScreen() {
                       size={18}
                       color={focusedInput === "phone" ? ACCENT : "#9ca3af"}
                     />
+                    <Text style={styles.prefix}>+44</Text>
                     <TextInput
-                      placeholder="+44 7700 900000"
+                      placeholder="7700 900000"
                       placeholderTextColor="#6b7280"
                       value={phone}
                       onChangeText={(text) => {
@@ -253,7 +270,7 @@ export default function AuthScreen() {
             {step === "code" && (
               <>
                 <Text style={styles.stepTitle}>Enter Verification Code</Text>
-                <Text style={styles.stepDesc}>Code sent to {phone}</Text>
+                <Text style={styles.stepDesc}>Code sent to +44{phone}</Text>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Code</Text>
                   <View
@@ -538,4 +555,9 @@ const styles = StyleSheet.create({
     minHeight: 56,
   },
   submitText: { fontSize: 16, fontWeight: "800", color: DARK },
+  prefix: {
+    color: "#f9fafb",
+    fontSize: 16,
+    fontWeight: "600",
+  },
 });
