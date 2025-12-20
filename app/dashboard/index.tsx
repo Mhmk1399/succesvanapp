@@ -203,9 +203,10 @@ export default function ProfileScreen() {
             showsVerticalScrollIndicator={false}
           >
             <UserProfileCard
-              name={user ? `${user.name} ${user.lastName}` : "User"}
-              email={user?.emaildata.emailAddress || ""}
-              phone={user?.phoneData.phoneNumber || ""}
+              // name={user ? `${user.name} ${user.lastName}` : "User"}
+              // email={user?.emaildata.emailAddress || ""}
+              // phone={user?.phoneData.phoneNumber || ""}
+              // address={user?.address || ""}
             />
 
             {/* میتونی اینجا کارتهای دیگه مثل Payment Method / Address اضافه کنی */}

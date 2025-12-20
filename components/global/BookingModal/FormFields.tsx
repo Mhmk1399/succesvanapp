@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -247,18 +247,22 @@ export const FormFields = ({
       <View style={{ marginTop: 10 }}>
         <Text style={styles.sectionLabel}>Add-ons (Optional)</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {addons.map((addon) => {
+          {addons
+            .filter((addon) => {
+              if (addon.pricingType === "flat") {
+                return addon.flatPrice?.amount !== undefined && addon.flatPrice?.amount !== null;
+              }
+              return addon.tieredPrice?.tiers && addon.tieredPrice.tiers.length > 0;
+            })
+            .map((addon) => {
             const selection = addonSelections[addon._id];
             const isSelected = !!selection;
             const displayPrice = pickupDate && returnDate && pickupTime && returnTime
               ? getAddonDisplayPrice(addon, pickupDate, returnDate, pickupTime, returnTime)
               : getAddonDisplayPrice(addon);
-            const calculatedPrice = useMemo(() => {
-              if (pickupDate && returnDate && pickupTime && returnTime && isSelected) {
-                return calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, selection.quantity);
-              }
-              return 0;
-            }, [addon, pickupDate, returnDate, pickupTime, returnTime, isSelected, selection?.quantity]);
+            const calculatedPrice = (pickupDate && returnDate && pickupTime && returnTime && isSelected)
+              ? calculateAddonPrice(addon, pickupDate, returnDate, pickupTime, returnTime, selection.quantity)
+              : 0;
             
             return (
               <Pressable

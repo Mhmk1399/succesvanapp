@@ -1,15 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authService } from "@/services/authService";
+import { User } from "@/types/type";
 
-type User = {
-  _id: string;
-  name: string;
-  lastName: string;
-  emaildata: { emailAddress: string; isVerified: boolean };
-  phoneData: { phoneNumber: string; isVerified: boolean };
-  role: string;
-};
+ 
 
 type AuthContextType = {
   user: User | null;

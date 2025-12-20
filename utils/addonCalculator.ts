@@ -21,31 +21,18 @@ export const calculateAddonPrice = (
   const totalHours = diffMs / (1000 * 60 * 60);
   const totalDays = Math.max(1, Math.ceil(totalHours / 24));
 
-  console.log(`[Addon Calculator] ${addon.name}:`, {
-    pricingType: addon.pricingType,
-    totalHours,
-    totalDays,
-    quantity,
-    isPerDay: addon.pricingType === "flat" ? addon.flatPrice?.isPerDay : addon.tieredPrice?.isPerDay
-  });
-
   if (addon.pricingType === "flat" && addon.flatPrice?.amount !== undefined) {
     const amount = addon.flatPrice.amount;
     const price = addon.flatPrice.isPerDay ? amount * totalDays * quantity : amount * quantity;
-    console.log(`[Addon Flat] ${addon.name}: £${amount} x ${addon.flatPrice.isPerDay ? totalDays + ' days' : '1'} x ${quantity} = £${price}`);
     return price;
   } else if (addon.pricingType === "tiered" && addon.tieredPrice?.tiers) {
     const tier = addon.tieredPrice.tiers.find(
       (t) => totalDays >= t.minDays && totalDays <= t.maxDays
     );
     
-    if (!tier) {
-      console.log(`[Addon Tiered] ${addon.name}: No tier found for ${totalDays} days`);
-      return 0;
-    }
+    if (!tier) return 0;
 
     const price = addon.tieredPrice.isPerDay ? tier.price * totalDays * quantity : tier.price * quantity;
-    console.log(`[Addon Tiered] ${addon.name}: £${tier.price} (${tier.minDays}-${tier.maxDays}d) x ${addon.tieredPrice.isPerDay ? totalDays + ' days' : '1'} x ${quantity} = £${price}`);
     return price;
   }
 
@@ -61,7 +48,10 @@ export const getAddonDisplayPrice = (
 ): string => {
   if (!addon) return "N/A";
 
-  if (addon.pricingType === "flat" && addon.flatPrice?.amount !== undefined) {
+  if (addon.pricingType === "flat") {
+    if (!addon.flatPrice || addon.flatPrice.amount === undefined || addon.flatPrice.amount === null) {
+      return "N/A";
+    }
     const amount = addon.flatPrice.amount;
     if (addon.flatPrice.isPerDay) {
       if (pickupDate && returnDate && pickupTime && returnTime) {

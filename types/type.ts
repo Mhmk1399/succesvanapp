@@ -226,8 +226,20 @@ export interface User {
   _id: string;
   name: string;
   lastName: string;
-  emaildata: string;
-  phoneData: string;
+  emaildata: {
+    emailAddress: string;
+    isVerified: boolean;
+  };
+  phoneData: {
+    phoneNumber: string;
+    isVerified: boolean;
+  };
+  address?: string;
+  licenceAttached?: {
+    front?: string;
+    back?: string;
+  };
+  role?: string;
   createdAt: Date;
 }
 

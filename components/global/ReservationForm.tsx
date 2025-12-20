@@ -289,6 +289,9 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const [pickerField, setPickerField] = useState<PickerField>(null);
   const [pickerMode] = useState<"date" | "time">("date");
   const isPickerVisible = pickerField !== null;
+  const [dateRange, setDateRange] = useState<
+    { startDate: Date; endDate: Date; key: string }[]
+  >([]);
 
   const [officeModalVisible, setOfficeModalVisible] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
@@ -302,14 +305,52 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   );
   const [tempPickupDate, setTempPickupDate] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [reservedSlots, setReservedSlots] = useState<
-    { startTime: string; endTime: string }[]
+  const [startDateReservedSlots, setStartDateReservedSlots] = useState<
+    {
+      startDate: string;
+      endDate: string;
+      startTime: string;
+      endTime: string;
+      isSameDay: boolean;
+    }[]
+  >([]);
+  const [endDateReservedSlots, setEndDateReservedSlots] = useState<
+    {
+      startDate: string;
+      endDate: string;
+      startTime: string;
+      endTime: string;
+      isSameDay: boolean;
+    }[]
   >([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [vansModalVisible, setVansModalVisible] = useState(false);
   const [availableVans, setAvailableVans] = useState<any[]>([]);
   const [loadingVans, setLoadingVans] = useState(false);
+
+  // Sync dateRange with pickupDate and returnDate
+  useEffect(() => {
+    if (pickupDate && returnDate) {
+      console.log("[dateSync] Setting dateRange:", { pickupDate, returnDate });
+      setDateRange([
+        {
+          startDate: pickupDate,
+          endDate: returnDate,
+          key: "selection",
+        },
+      ]);
+    } else if (pickupDate) {
+      console.log("[dateSync] Setting dateRange with pickup only:", pickupDate);
+      setDateRange([
+        {
+          startDate: pickupDate,
+          endDate: pickupDate,
+          key: "selection",
+        },
+      ]);
+    }
+  }, [pickupDate, returnDate]);
 
   // Fetch offices & types + restore saved form
   useEffect(() => {
@@ -353,60 +394,84 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
 
   // Fetch reserved slots when office and dates change
   useEffect(() => {
-    const fetchReservedSlots = async () => {
-      if (!selectedOffice || !timeModalVisible) return;
+    if (selectedOffice && pickupDate) {
+      const date = pickupDate;
+      const startDateStr = date.toISOString().split("T")[0];
+      setStartDateReservedSlots([]);
 
-      const targetDate =
-        timeModalField === "returnTime" ? returnDate : pickupDate;
-      if (!targetDate) return;
+      const baseUrl =
+        process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API ||
+        "https://succesvan.vercel.app/api/reservations/by-office";
 
-      try {
-        const startDateStr = targetDate.toISOString().split("T")[0];
-        const endDateStr = targetDate.toISOString().split("T")[0];
-        
-        // Construct the correct API URL
-        const baseUrl =
-          process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API ||
-          "https://succesvan.vercel.app/api/reservations/by-office";
-        
-        const url = `${baseUrl}?office=${selectedOffice}&startDate=${startDateStr}&endDate=${endDateStr}`;
-
-        console.log("[Fetching Reserved Slots] URL:", url);
-        console.log("[Fetching Reserved Slots] Office ID:", selectedOffice);
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        console.log("[Reserved Slots API Response]", data);
-
-        if (data.success && data.data?.reservedSlots) {
-          console.log("[Reserved Slots]", data.data.reservedSlots);
-          setReservedSlots(data.data.reservedSlots);
-        } else if (data.success && data.reservedSlots) {
-          console.log("[Reserved Slots]", data.reservedSlots);
-          setReservedSlots(data.reservedSlots);
-        } else if (Array.isArray(data)) {
-          // Handle case where API returns array directly
-          console.log("[Reserved Slots] Array response:", data);
-          setReservedSlots(data);
-        } else {
-          console.log("[Reserved Slots] No slots found, response:", data);
-          setReservedSlots([]);
+      fetch(
+        `${baseUrl}?office=${selectedOffice}&startDate=${startDateStr}&type=start`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
         }
-      } catch (error) {
-        console.log("Failed to fetch reserved slots:", error);
-        setReservedSlots([]);
-      }
-    };
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("[Start Date Reserved Slots Response]", data);
+          if (data.data?.reservedSlots) {
+            // Only keep slots that START on this pickup date
+            const filteredSlots = data.data.reservedSlots.filter(
+              (slot: any) => {
+                return slot.startDate === startDateStr;
+              }
+            );
+            console.log("[Start Date Filtered Slots]", filteredSlots);
+            setStartDateReservedSlots(filteredSlots);
+          }
+        })
+        .catch((err) => {
+          console.log("Failed to fetch start date slots:", err);
+          setStartDateReservedSlots([]);
+        });
+    }
+  }, [selectedOffice, pickupDate]);
 
-    fetchReservedSlots();
-  }, [
-    selectedOffice,
-    pickupDate,
-    returnDate,
-    timeModalField,
-    timeModalVisible,
-  ]);
+  useEffect(() => {
+    if (selectedOffice && returnDate) {
+      const date = returnDate;
+      const endDateStr = date.toISOString().split("T")[0];
+      setEndDateReservedSlots([]);
+
+      const baseUrl =
+        process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API ||
+        "https://succesvan.vercel.app/api/reservations/by-office";
+
+      fetch(
+        `${baseUrl}?office=${selectedOffice}&endDate=${endDateStr}&type=end`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("[End Date Reserved Slots Response]", data);
+          if (data.data?.reservedSlots) {
+            // Only keep slots that END on this return date
+            const filteredSlots = data.data.reservedSlots.filter(
+              (slot: any) => {
+                return slot.endDate === endDateStr;
+              }
+            );
+            console.log("[End Date Filtered Slots]", filteredSlots);
+            setEndDateReservedSlots(filteredSlots);
+          }
+        })
+        .catch((err) => {
+          console.log("Failed to fetch end date slots:", err);
+          setEndDateReservedSlots([]);
+        });
+    }
+  }, [selectedOffice, returnDate]);
 
   const getSelectedOffice = (): Office | undefined =>
     offices.find((o) => o._id === selectedOffice);
@@ -564,6 +629,13 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   };
 
   const selectDate = (date: Date) => {
+    console.log("[selectDate] Called with:", {
+      date: date.toISOString().split("T")[0],
+      selectingDate,
+      currentPickupDate: pickupDate?.toISOString().split("T")[0],
+      currentReturnDate: returnDate?.toISOString().split("T")[0],
+    });
+
     if (isDateDisabled(date)) {
       Alert.alert("Office Closed", "This date is not available.");
       return;
@@ -571,6 +643,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
 
     Haptics.selectionAsync();
     if (selectingDate === "pickup") {
+      console.log("[selectDate] Setting as pickup date");
       setTempPickupDate(date);
       setPickupDate(date);
       setReturnDate(null);
@@ -581,6 +654,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         Alert.alert("Invalid Date", "Return date must be after pickup date.");
         return;
       }
+      console.log("[selectDate] Setting as return date");
       setReturnDate(date);
       setDateRangeModalVisible(false);
       setSelectingDate("pickup");
@@ -672,12 +746,25 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   const handleBlur = () => setFocusedInput(null);
 
   const handleSubmit = async () => {
+    console.log("[handleSubmit] Form state at submission:", {
+      pickupDate: pickupDate?.toISOString().split("T")[0],
+      returnDate: returnDate?.toISOString().split("T")[0],
+      pickupTime,
+      returnTime,
+      selectedOffice,
+      selectedType,
+    });
+
     if (!selectedOffice || !selectedType) {
       Alert.alert("Missing details", "Please select office and category.");
       return;
     }
     if (!pickupDate || !returnDate) {
       Alert.alert("Missing dates", "Please choose pickup and return dates.");
+      return;
+    }
+    if (!pickupTime || !returnTime) {
+      Alert.alert("Missing times", "Please choose pickup and return times.");
       return;
     }
     const age = Number(driverAge);
@@ -711,8 +798,8 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         JSON.stringify({
           office: selectedOffice,
           type: selectedType,
-          pickupDate: pickupDate.toISOString(),
-          returnDate: returnDate.toISOString(),
+          pickupDate: pickupDate?.toISOString(),
+          returnDate: returnDate?.toISOString(),
           pickupTime,
           returnTime,
           driverAge,
@@ -751,10 +838,10 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     const [pickupHour, pickupMinute] = pickupTime.split(":").map(Number);
     const [returnHour, returnMinute] = returnTime.split(":").map(Number);
 
-    const startDateTime = new Date(pickupDate);
+    const startDateTime = new Date(pickupDate || new Date());
     startDateTime.setHours(pickupHour, pickupMinute, 0, 0);
 
-    const endDateTime = new Date(returnDate);
+    const endDateTime = new Date(returnDate || new Date());
     endDateTime.setHours(returnHour, returnMinute, 0, 0);
 
     // Calculate extension fees
@@ -1345,8 +1432,21 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
                     >
                       {timeSlots.map((time) => {
                         const isSelected = time === selectedTime;
-                        const isReserved = reservedSlots.some((slot) => {
-                          return time >= slot.startTime && time < slot.endTime;
+
+                        // Use appropriate reserved slots based on whether it's pickup or return time
+                        const relevantSlots = isPickup
+                          ? startDateReservedSlots
+                          : endDateReservedSlots;
+
+                        // Only disable the exact start/end time slot
+                        const isReserved = relevantSlots.some((slot) => {
+                          if (isPickup) {
+                            // For pickup, disable the startTime
+                            return time === slot.startTime;
+                          } else {
+                            // For return, disable the endTime
+                            return time === slot.endTime;
+                          }
                         });
                         const isAvailable = !isReserved;
                         const isExtension =
@@ -1374,9 +1474,9 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
                                 alignItems: "center",
                                 justifyContent: "center",
                                 gap: 6,
-                                 paddingVertical: 12,
-                            paddingHorizontal: 10,
-                            borderRadius: 12,
+                                paddingVertical: 12,
+                                paddingHorizontal: 10,
+                                borderRadius: 12,
                                 backgroundColor: isSelected
                                   ? ACCENT
                                   : "rgba(255,255,255,0.05)",

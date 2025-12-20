@@ -1,24 +1,24 @@
-import { useRef, useEffect, useState } from "react";
-import { Animated, PanResponder, Alert, Keyboard } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Haptics from "expo-haptics";
-import { Audio } from "expo-av";
 import { useAuth } from "@/contexts/AuthContext";
-import { useRouter } from "expo-router";
 import { addonService } from "@/services/addonService";
 import { officeService } from "@/services/officeService";
 import { reservationService } from "@/services/reservationService";
-import { calculatePrice } from "@/utils/priceCalculator";
-import { calculateAddonPrice } from "@/utils/addonCalculator";
 import { AddOn, Office } from "@/types/type";
+import { calculateAddonPrice } from "@/utils/addonCalculator";
+import { calculatePrice } from "@/utils/priceCalculator";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Audio } from "expo-av";
+import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Animated, Keyboard, PanResponder } from "react-native";
 import { Van } from "../vanlist";
 import { height } from "./constants";
 import {
-  playSuccessSound,
-  scheduleNotification,
-  getSelectedOffice,
   isDateDisabled as checkDateDisabled,
   getAvailableTimeSlots,
+  getSelectedOffice,
+  playSuccessSound,
+  scheduleNotification,
 } from "./utils";
 
 export const useBookingModal = (
@@ -235,6 +235,25 @@ export const useBookingModal = (
   }, [user]);
 
   useEffect(() => {
+    console.log("[useBookingModal] Syncing prefilledData:", {
+      pickupDate: prefilledData?.pickupDate,
+      returnDate: prefilledData?.returnDate,
+      pickupTime: prefilledData?.pickupTime,
+      returnTime: prefilledData?.returnTime,
+    });
+    
+    if (prefilledData?.pickupDate) {
+      const d = new Date(prefilledData.pickupDate);
+      const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      console.log("[useBookingModal] Setting pickupDate to:", localDate.toISOString().split("T")[0]);
+      setPickupDate(localDate);
+    }
+    if (prefilledData?.returnDate) {
+      const d = new Date(prefilledData.returnDate);
+      const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      console.log("[useBookingModal] Setting returnDate to:", localDate.toISOString().split("T")[0]);
+      setReturnDate(localDate);
+    }
     if (prefilledData?.driverAge) {
       setDriverAge(prefilledData.driverAge.toString());
     }
@@ -277,17 +296,37 @@ export const useBookingModal = (
 
       try {
         const dateStr = dateToFetch.toISOString().split("T")[0];
+        const type = timeModalField === "pickupTime" ? "start" : "end";
         const EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API =
           process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API;
+        
+        console.log("[BookingModal.fetchReservedSlots] Fetching:", {
+          dateStr,
+          type,
+          timeModalField,
+        });
+
         const response = await fetch(
-          `${EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API}?office=${selectedOffice}&startDate=${dateStr}&endDate=${dateStr}`
+          `${EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API}?office=${selectedOffice}&${type === "start" ? "startDate" : "endDate"}=${dateStr}&type=${type}`
         );
         const data = await response.json();
-        if (data.success && data.reservedSlots) {
-          setReservedSlots(data.reservedSlots);
+        console.log("[BookingModal.fetchReservedSlots] Response:", data);
+        
+        if (data.success && data.data?.reservedSlots) {
+          // Filter slots to only those that match the exact date
+          const filteredSlots = data.data.reservedSlots.filter((slot: any) => {
+            if (type === "start") {
+              return slot.startDate === dateStr;
+            } else {
+              return slot.endDate === dateStr;
+            }
+          });
+          console.log("[BookingModal.fetchReservedSlots] Filtered slots:", filteredSlots);
+          setReservedSlots(filteredSlots);
         }
       } catch (error) {
         console.log("Failed to fetch reserved slots", error);
+        setReservedSlots([]);
       }
     };
     fetchReservedSlots();
@@ -486,6 +525,13 @@ export const useBookingModal = (
 
       const endDateTime = new Date(returnDate!);
       endDateTime.setHours(parseInt(returnHour), parseInt(returnMinute), 0, 0);
+
+      console.log("[BookingModal.handleSubmit] Dates before reservation:", {
+        pickupDate: pickupDate?.toISOString().split("T")[0],
+        returnDate: returnDate?.toISOString().split("T")[0],
+        startDateTime: startDateTime.toISOString(),
+        endDateTime: endDateTime.toISOString(),
+      });
 
       const vanPrice = dynamicVanPrice;
 

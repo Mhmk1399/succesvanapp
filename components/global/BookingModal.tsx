@@ -1,28 +1,28 @@
+import { calculateAddonPrice } from "@/utils/addonCalculator";
+import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
-  View,
-  Text,
-  Modal,
-  Animated,
-  Pressable,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  StyleSheet,
+    ActivityIndicator,
+    Animated,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import { Calendar } from "react-native-calendars";
-import * as Haptics from "expo-haptics";
-import { BookingModalProps } from "./BookingModal/types";
-import { useBookingModal } from "./BookingModal/useBookingModal";
+import { ACCENT, DARK } from "./BookingModal/constants";
 import { FormFields } from "./BookingModal/FormFields";
 import { styles } from "./BookingModal/styles";
-import { ACCENT, DARK } from "./BookingModal/constants";
-import { getSelectedOffice, getAvailableTimeSlots } from "./BookingModal/utils";
-import { calculateAddonPrice } from "@/utils/addonCalculator";
+import { BookingModalProps } from "./BookingModal/types";
+import { useBookingModal } from "./BookingModal/useBookingModal";
+import { getAvailableTimeSlots, getSelectedOffice } from "./BookingModal/utils";
 type WorkingTime = {
   day: string; // "monday" | "tuesday" | ...
   isOpen: boolean;
@@ -938,9 +938,14 @@ export default function BookingModal({
                   const is24Hours = slots.normalStart === slots.normalEnd;
 
                   return times.map((time) => {
-                    const isReserved = reservedSlots.some(
-                      (slot) => time === slot.startTime
-                    );
+                    const isPickup = timeModalField === "pickupTime";
+                    const isReserved = reservedSlots.some((slot) => {
+                      if (isPickup) {
+                        return time === slot.startTime;
+                      } else {
+                        return time === slot.endTime;
+                      }
+                    });
                     const currentTime =
                       timeModalField === "pickupTime" ? pickupTime : returnTime;
                     const isAvailable = !isReserved;

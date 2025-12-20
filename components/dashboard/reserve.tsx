@@ -93,6 +93,8 @@ export default function UserReservations({
   >([]);
   const [dynamicPrice, setDynamicPrice] = useState(0);
   const [editMessage, setEditMessage] = useState("");
+  const [isValidRental, setIsValidRental] = useState(true);
+  const [rentalHours, setRentalHours] = useState(0);
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -196,12 +198,35 @@ export default function UserReservations({
       if (!dateToFetch) return;
       try {
         const dateStr = dateToFetch.toISOString().split("T")[0];
-        const url = `${process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API}?office=${selectedReservation.office._id}&startDate=${dateStr}&endDate=${dateStr}`;
+        const type = timeModalField === "pickup" ? "start" : "end";
+        const url = `${
+          process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API
+        }?office=${selectedReservation.office._id}&${
+          type === "start" ? "startDate" : "endDate"
+        }=${dateStr}&type=${type}`;
+
+        console.log("[reserve.tsx] Fetching reserved slots:", {
+          dateStr,
+          type,
+          timeModalField,
+        });
+
         const response = await fetch(url);
         const data = await response.json();
-        if (data.success && data.reservedSlots)
-          setReservedSlots(data.reservedSlots);
+
+        if (data.success && data.data?.reservedSlots) {
+          const filteredSlots = data.data.reservedSlots.filter((slot: any) => {
+            if (type === "start") {
+              return slot.startDate === dateStr;
+            } else {
+              return slot.endDate === dateStr;
+            }
+          });
+          console.log("[reserve.tsx] Filtered slots:", filteredSlots);
+          setReservedSlots(filteredSlots);
+        }
       } catch (error) {
+        console.log("[reserve.tsx] Failed to fetch reserved slots:", error);
         setReservedSlots([]);
       }
     };
@@ -230,6 +255,12 @@ export default function UserReservations({
     const [rH, rM] = editReturnTime.split(":").map(Number);
     start.setHours(pH, pM, 0, 0);
     end.setHours(rH, rM, 0, 0);
+
+    // Calculate rental hours
+    const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    setRentalHours(diffHours);
+    setIsValidRental(diffHours >= 6);
+
     const vanPrice = calculatePrice(
       start,
       end,
@@ -239,20 +270,20 @@ export default function UserReservations({
         0
     );
     const addonsPrice =
-      selectedReservation.addOns?.reduce(
-        (sum, addon) => {
-          if (!addon.addOn) return sum;
-          return sum + calculateAddonPrice(
+      selectedReservation.addOns?.reduce((sum, addon) => {
+        if (!addon.addOn) return sum;
+        return (
+          sum +
+          calculateAddonPrice(
             addon.addOn,
             editPickupDate,
             editReturnDate,
             editPickupTime,
             editReturnTime,
             addon.quantity
-          );
-        },
-        0
-      ) || 0;
+          )
+        );
+      }, 0) || 0;
     setDynamicPrice(vanPrice + addonsPrice);
   }, [
     editPickupDate,
@@ -553,352 +584,374 @@ export default function UserReservations({
         }
       />
 
-      {!dateModalVisible && !timeModalVisible && (
-        <Modal
-          visible={!!selectedReservation}
-          transparent
-          animationType="none"
-          onRequestClose={closeModal}
-        >
-          <Pressable style={styles.modalOverlay} onPress={closeModal}>
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity }]} />
-          </Pressable>
+      <Modal
+        visible={
+          !!selectedReservation && !dateModalVisible && !timeModalVisible
+        }
+        transparent
+        animationType="none"
+        onRequestClose={closeModal}
+      >
+        <Pressable style={styles.modalOverlay} onPress={closeModal}>
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity }]} />
+        </Pressable>
 
-          {selectedReservation && (
-            <Animated.View
-              style={[styles.modalContainer, { transform: [{ translateY }] }]}
-            >
-              <BlurView intensity={90} tint="dark" style={styles.modalContent}>
-                <View {...panResponder.panHandlers} style={styles.handleArea}>
-                  <View style={styles.handle} />
-                </View>
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>
-                      {isEditing ? "Edit Reservation" : "Reservation Details"}
-                    </Text>
-                    <View style={{ flexDirection: "row", gap: 8 }}>
-                      {!isEditing &&
-                        selectedReservation.status === "pending" && (
-                          <Pressable
-                            onPress={startEditing}
-                            style={styles.editBtn}
-                          >
-                            <Ionicons
-                              name="create-outline"
-                              size={20}
-                              color={ACCENT}
-                            />
-                             
-                          </Pressable>
-                        )}
-                      <Pressable
-                        onPress={isEditing ? cancelEditing : closeModal}
-                        style={styles.closeBtn}
-                      >
-                        <Ionicons name="close" size={24} color="#e5e7eb" />
+        {selectedReservation && (
+          <Animated.View
+            style={[styles.modalContainer, { transform: [{ translateY }] }]}
+          >
+            <BlurView intensity={90} tint="dark" style={styles.modalContent}>
+              <View {...panResponder.panHandlers} style={styles.handleArea}>
+                <View style={styles.handle} />
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>
+                    {isEditing ? "Edit Reservation" : "Reservation Details"}
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {!isEditing && selectedReservation.status === "pending" && (
+                      <Pressable onPress={startEditing} style={styles.editBtn}>
+                        <Ionicons
+                          name="create-outline"
+                          size={20}
+                          color={ACCENT}
+                        />
                       </Pressable>
-                    </View>
+                    )}
+                    <Pressable
+                      onPress={isEditing ? cancelEditing : closeModal}
+                      style={styles.closeBtn}
+                    >
+                      <Ionicons name="close" size={24} color="#e5e7eb" />
+                    </Pressable>
                   </View>
+                </View>
 
-                  {selectedReservation.category?.image && (
-                    <View style={styles.vanImageContainer}>
-                      <Image
-                        source={{ uri: selectedReservation.category.image }}
-                        style={styles.vanImage}
-                        contentFit="cover"
-                      />
-                      <LinearGradient
-                        colors={["rgba(0,0,0,0.6)", "transparent"]}
-                        style={styles.imageGradient}
-                      />
-                    </View>
-                  )}
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.vanNameLarge}>
-                      {selectedReservation.category?.name || "Van"}
-                    </Text>
-                    <Text style={styles.officeText}>
-                      <Ionicons name="location" size={14} color={ACCENT} />{" "}
-                      {selectedReservation.office?.name}
-                    </Text>
+                {selectedReservation.category?.image && (
+                  <View style={styles.vanImageContainer}>
+                    <Image
+                      source={{ uri: selectedReservation.category.image }}
+                      style={styles.vanImage}
+                      contentFit="cover"
+                    />
+                    <LinearGradient
+                      colors={["rgba(0,0,0,0.6)", "transparent"]}
+                      style={styles.imageGradient}
+                    />
                   </View>
+                )}
 
-                  <View style={styles.detailSection}>
-                    <Text style={styles.sectionTitle}>Rental Period</Text>
-                    {isEditing ? (
-                      <>
+                <View style={styles.detailSection}>
+                  <Text style={styles.vanNameLarge}>
+                    {selectedReservation.category?.name || "Van"}
+                  </Text>
+                  <Text style={styles.officeText}>
+                    <Ionicons name="location" size={14} color={ACCENT} />{" "}
+                    {selectedReservation.office?.name}
+                  </Text>
+                </View>
+
+                <View style={styles.detailSection}>
+                  <Text style={styles.sectionTitle}>Rental Period</Text>
+                  {isEditing ? (
+                    <>
+                      <Pressable
+                        onPress={() => {
+                          console.log("[reserve.tsx] Opening date modal");
+                          setSelectingDate("pickup");
+                          setTempPickupDate(null);
+                          setDateModalVisible(true);
+                        }}
+                        style={styles.editField}
+                      >
+                        <Ionicons name="calendar" size={16} color={ACCENT} />
+                        <Text style={styles.editFieldLabel}>Dates</Text>
+                        <Text style={styles.editFieldValue}>
+                          {editPickupDate?.toLocaleDateString()} -{" "}
+                          {editReturnDate?.toLocaleDateString()}
+                        </Text>
+                      </Pressable>
+                      <View
+                        style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
+                      >
                         <Pressable
                           onPress={() => {
-                            setSelectingDate("pickup");
-                            setTempPickupDate(null);
-                            setDateModalVisible(true);
+                            console.log(
+                              "[reserve.tsx] Opening pickup time modal"
+                            );
+                            setTimeModalField("pickup");
+                            setTimeModalVisible(true);
                           }}
-                          style={styles.editField}
+                          style={[styles.editField, { flex: 1 }]}
                         >
-                          <Ionicons name="calendar" size={16} color={ACCENT} />
-                          <Text style={styles.editFieldLabel}>Dates</Text>
+                          <Ionicons name="time" size={16} color="#22c55e" />
+                          <Text style={styles.editFieldLabel}>Pickup</Text>
                           <Text style={styles.editFieldValue}>
-                            {editPickupDate?.toLocaleDateString()} -{" "}
-                            {editReturnDate?.toLocaleDateString()}
+                            {editPickupTime}
                           </Text>
                         </Pressable>
-                        <View
-                          style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
+                        <Pressable
+                          onPress={() => {
+                            console.log(
+                              "[reserve.tsx] Opening return time modal"
+                            );
+                            setTimeModalField("return");
+                            setTimeModalVisible(true);
+                          }}
+                          style={[styles.editField, { flex: 1 }]}
                         >
-                          <Pressable
-                            onPress={() => {
-                              setTimeModalField("pickup");
-                              setTimeModalVisible(true);
-                            }}
-                            style={[styles.editField, { flex: 1 }]}
-                          >
-                            <Ionicons name="time" size={16} color="#22c55e" />
-                            <Text style={styles.editFieldLabel}>Pickup</Text>
-                            <Text style={styles.editFieldValue}>
-                              {editPickupTime}
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => {
-                              setTimeModalField("return");
-                              setTimeModalVisible(true);
-                            }}
-                            style={[styles.editField, { flex: 1 }]}
-                          >
-                            <Ionicons name="time" size={16} color="#ef4444" />
-                            <Text style={styles.editFieldLabel}>Return</Text>
-                            <Text style={styles.editFieldValue}>
-                              {editReturnTime}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </>
-                    ) : (
-                      <View style={styles.dateRow}>
-                        <View style={styles.dateCol}>
-                          <View style={styles.dateIcon}>
-                            <Ionicons
-                              name="arrow-up-circle"
-                              size={20}
-                              color="#22c55e"
-                            />
-                          </View>
-                          <Text style={styles.dateLabel}>Pickup</Text>
-                          <Text style={styles.dateText}>
-                            {formatDate(selectedReservation.startDate)}
+                          <Ionicons name="time" size={16} color="#ef4444" />
+                          <Text style={styles.editFieldLabel}>Return</Text>
+                          <Text style={styles.editFieldValue}>
+                            {editReturnTime}
                           </Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : (
+                    <View style={styles.dateRow}>
+                      <View style={styles.dateCol}>
+                        <View style={styles.dateIcon}>
+                          <Ionicons
+                            name="arrow-up-circle"
+                            size={20}
+                            color="#22c55e"
+                          />
                         </View>
-                        <View style={styles.dateCol}>
-                          <View style={styles.dateIcon}>
+                        <Text style={styles.dateLabel}>Pickup</Text>
+                        <Text style={styles.dateText}>
+                          {formatDate(selectedReservation.startDate)}
+                        </Text>
+                      </View>
+                      <View style={styles.dateCol}>
+                        <View style={styles.dateIcon}>
+                          <Ionicons
+                            name="arrow-down-circle"
+                            size={20}
+                            color="#ef4444"
+                          />
+                        </View>
+                        <Text style={styles.dateLabel}>Return</Text>
+                        <Text style={styles.dateText}>
+                          {formatDate(selectedReservation.endDate)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+
+                {selectedReservation.messege && !isEditing && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.sectionTitle}>Message</Text>
+                    <View style={styles.messageBox}>
+                      <Text style={styles.messageText}>
+                        {selectedReservation.messege}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {isEditing && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.sectionTitle}>Message (Optional)</Text>
+                    <TextInput
+                      style={styles.messageInput}
+                      placeholder="Add a message..."
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      value={editMessage}
+                      onChangeText={setEditMessage}
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                    />
+                  </View>
+                )}
+
+                <View style={styles.infoRow}>
+                  <View style={styles.infoBox}>
+                    <Text style={styles.sectionTitle}>Status</Text>
+                    {renderStatus(selectedReservation.status)}
+                  </View>
+
+                  {selectedReservation.addOns &&
+                    selectedReservation.addOns.length > 0 && (
+                      <View style={[styles.infoBox, { flex: 1 }]}>
+                        <Text style={styles.sectionTitle}>
+                          Add-ons ({selectedReservation.addOns.length})
+                        </Text>
+                        {selectedReservation.addOns.map((addon, index) => (
+                          <View key={index} style={styles.addonRow}>
                             <Ionicons
-                              name="arrow-down-circle"
-                              size={20}
-                              color="#ef4444"
+                              name="checkmark-circle"
+                              size={16}
+                              color={ACCENT}
                             />
+                            <Text style={styles.addonText}>
+                              {addon.addOn?.name || "Add-on"} x{addon.quantity}
+                            </Text>
                           </View>
-                          <Text style={styles.dateLabel}>Return</Text>
-                          <Text style={styles.dateText}>
-                            {formatDate(selectedReservation.endDate)}
-                          </Text>
-                        </View>
+                        ))}
                       </View>
                     )}
-                  </View>
+                </View>
 
-                  {selectedReservation.messege && !isEditing && (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.sectionTitle}>Message</Text>
-                      <View style={styles.messageBox}>
-                        <Text style={styles.messageText}>{selectedReservation.messege}</Text>
-                      </View>
-                    </View>
-                  )}
+                <View style={styles.detailSection}>
+                  <Text style={styles.sectionTitle}>Price Breakdown</Text>
+                  {(() => {
+                    const start =
+                      isEditing && editPickupDate
+                        ? new Date(editPickupDate)
+                        : new Date(selectedReservation.startDate);
+                    const end =
+                      isEditing && editReturnDate
+                        ? new Date(editReturnDate)
+                        : new Date(selectedReservation.endDate);
+                    if (isEditing && editPickupTime && editReturnTime) {
+                      const [pH, pM] = editPickupTime.split(":").map(Number);
+                      const [rH, rM] = editReturnTime.split(":").map(Number);
+                      start.setHours(pH, pM, 0, 0);
+                      end.setHours(rH, rM, 0, 0);
+                    }
+                    const diffTime = end.getTime() - start.getTime();
+                    const totalHours = Math.floor(diffTime / (1000 * 60 * 60));
+                    const days = Math.floor(totalHours / 24);
+                    const hours = totalHours % 24;
 
-                  {isEditing && (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.sectionTitle}>Message (Optional)</Text>
-                      <TextInput
-                        style={styles.messageInput}
-                        placeholder="Add a message..."
-                        placeholderTextColor="rgba(255,255,255,0.3)"
-                        value={editMessage}
-                        onChangeText={setEditMessage}
-                        multiline
-                        numberOfLines={3}
-                        textAlignVertical="top"
-                      />
-                    </View>
-                  )}
+                    const addOnsPrice =
+                      selectedReservation.addOns?.reduce((sum, addon) => {
+                        if (addon.addOn?.pricingType === "flat")
+                          return (
+                            sum + (addon.addOn?.flatPrice || 0) * addon.quantity
+                          );
+                        if (
+                          addon.addOn?.pricingType === "tiered" &&
+                          addon.addOn?.tiers
+                        ) {
+                          const rentalDays = Math.ceil(days + hours / 24);
+                          const tier = addon.addOn.tiers.find(
+                            (t: any) =>
+                              rentalDays >= t.minDays && rentalDays <= t.maxDays
+                          );
+                          return sum + (tier?.price || 0) * addon.quantity;
+                        }
+                        return sum;
+                      }, 0) || 0;
 
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoBox}>
-                      <Text style={styles.sectionTitle}>Status</Text>
-                      {renderStatus(selectedReservation.status)}
-                    </View>
+                    const totalPrice = isEditing
+                      ? dynamicPrice
+                      : selectedReservation.totalPrice;
+                    const vanPrice = totalPrice - addOnsPrice;
 
-                    {selectedReservation.addOns &&
-                      selectedReservation.addOns.length > 0 && (
-                        <View style={[styles.infoBox, { flex: 1 }]}>
-                          <Text style={styles.sectionTitle}>
-                            Add-ons ({selectedReservation.addOns.length})
+                    return (
+                      <>
+                        <View style={styles.priceBreakdownRow}>
+                          <Text style={styles.breakdownLabel}>
+                            Rental Duration
                           </Text>
-                          {selectedReservation.addOns.map((addon, index) => (
-                            <View key={index} style={styles.addonRow}>
-                              <Ionicons
-                                name="checkmark-circle"
-                                size={16}
-                                color={ACCENT}
-                              />
-                              <Text style={styles.addonText}>
-                                {addon.addOn?.name || "Add-on"} x
-                                {addon.quantity}
+                          <Text style={styles.breakdownValue}>
+                            {days}d {hours}h
+                          </Text>
+                        </View>
+                        <View style={styles.priceBreakdownRow}>
+                          <Text style={styles.breakdownLabel}>Van Rental</Text>
+                          <Text style={styles.breakdownValue}>
+                            £{vanPrice.toFixed(0)}
+                          </Text>
+                        </View>
+                        {selectedReservation.addOns &&
+                          selectedReservation.addOns.length > 0 && (
+                            <View style={styles.priceBreakdownRow}>
+                              <Text style={styles.breakdownLabel}>Add-ons</Text>
+                              <Text style={styles.breakdownValue}>
+                                £{addOnsPrice}
                               </Text>
                             </View>
-                          ))}
-                        </View>
-                      )}
-                  </View>
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.sectionTitle}>Price Breakdown</Text>
-                    {(() => {
-                      const start =
-                        isEditing && editPickupDate
-                          ? new Date(editPickupDate)
-                          : new Date(selectedReservation.startDate);
-                      const end =
-                        isEditing && editReturnDate
-                          ? new Date(editReturnDate)
-                          : new Date(selectedReservation.endDate);
-                      if (isEditing && editPickupTime && editReturnTime) {
-                        const [pH, pM] = editPickupTime.split(":").map(Number);
-                        const [rH, rM] = editReturnTime.split(":").map(Number);
-                        start.setHours(pH, pM, 0, 0);
-                        end.setHours(rH, rM, 0, 0);
-                      }
-                      const diffTime = end.getTime() - start.getTime();
-                      const totalHours = Math.floor(
-                        diffTime / (1000 * 60 * 60)
-                      );
-                      const days = Math.floor(totalHours / 24);
-                      const hours = totalHours % 24;
-
-                      const addOnsPrice =
-                        selectedReservation.addOns?.reduce((sum, addon) => {
-                          if (addon.addOn?.pricingType === "flat")
-                            return (
-                              sum +
-                              (addon.addOn?.flatPrice || 0) * addon.quantity
-                            );
-                          if (
-                            addon.addOn?.pricingType === "tiered" &&
-                            addon.addOn?.tiers
-                          ) {
-                            const rentalDays = Math.ceil(days + hours / 24);
-                            const tier = addon.addOn.tiers.find(
-                              (t: any) =>
-                                rentalDays >= t.minDays &&
-                                rentalDays <= t.maxDays
-                            );
-                            return sum + (tier?.price || 0) * addon.quantity;
-                          }
-                          return sum;
-                        }, 0) || 0;
-
-                      const totalPrice = isEditing
-                        ? dynamicPrice
-                        : selectedReservation.totalPrice;
-                      const vanPrice = totalPrice - addOnsPrice;
-
-                      return (
-                        <>
-                          <View style={styles.priceBreakdownRow}>
-                            <Text style={styles.breakdownLabel}>
-                              Rental Duration
-                            </Text>
-                            <Text style={styles.breakdownValue}>
-                              {days}d {hours}h
-                            </Text>
-                          </View>
-                          <View style={styles.priceBreakdownRow}>
-                            <Text style={styles.breakdownLabel}>
-                              Van Rental
-                            </Text>
-                            <Text style={styles.breakdownValue}>
-                              £{vanPrice.toFixed(0)}
-                            </Text>
-                          </View>
-                          {selectedReservation.addOns &&
-                            selectedReservation.addOns.length > 0 && (
-                              <View style={styles.priceBreakdownRow}>
-                                <Text style={styles.breakdownLabel}>
-                                  Add-ons
-                                </Text>
-                                <Text style={styles.breakdownValue}>
-                                  £{addOnsPrice}
-                                </Text>
-                              </View>
-                            )}
-                          <View
-                            style={[styles.priceBreakdownRow, styles.totalRow]}
-                          >
-                            <Text style={styles.totalLabel}>Total</Text>
-                            <Text style={styles.totalValue}>
-                              £{totalPrice.toFixed(0)}
-                            </Text>
-                          </View>
-                        </>
-                      );
-                    })()}
-                  </View>
-
-                  {isEditing && (
-                    <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
-                      <Pressable
-                        onPress={saveChanges}
-                        disabled={isUpdating}
-                        style={({ pressed }) => [
-                          styles.saveBtn,
-                          pressed && { opacity: 0.8 },
-                          isUpdating && { opacity: 0.5 },
-                        ]}
-                      >
-                        <LinearGradient
-                          colors={[ACCENT, "#ff8c00"]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={styles.saveBtnGradient}
-                        >
-                          {isUpdating ? (
-                            <ActivityIndicator color="#0f172a" />
-                          ) : (
-                            <>
-                              <Ionicons
-                                name="checkmark-circle"
-                                size={20}
-                                color="#0f172a"
-                              />
-                              <Text style={styles.saveBtnText}>
-                                Save Changes
-                              </Text>
-                            </>
                           )}
-                        </LinearGradient>
-                      </Pressable>
-                    </View>
-                  )}
-                </ScrollView>
-              </BlurView>
-            </Animated.View>
-          )}
-        </Modal>
-      )}
+                        <View
+                          style={[styles.priceBreakdownRow, styles.totalRow]}
+                        >
+                          <Text style={styles.totalLabel}>Total</Text>
+                          <Text style={styles.totalValue}>
+                            £{totalPrice.toFixed(0)}
+                          </Text>
+                        </View>
+                      </>
+                    );
+                  })()}
+                </View>
+
+                {isEditing && (
+                  <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+                    {!isValidRental && (
+                      <View
+                        style={{
+                          backgroundColor: "rgba(239, 68, 68, 0.15)",
+                          padding: 12,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: "rgba(239, 68, 68, 0.3)",
+                          marginBottom: 12,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <Ionicons name="warning" size={18} color="#ef4444" />
+                        <Text
+                          style={{
+                            color: "#fca5a5",
+                            fontSize: 13,
+                            fontWeight: "600",
+                            flex: 1,
+                          }}
+                        >
+                          Minimum 6 hours required ({rentalHours.toFixed(1)}h)
+                        </Text>
+                      </View>
+                    )}
+                    <Pressable
+                      onPress={saveChanges}
+                      disabled={isUpdating || !isValidRental}
+                      style={({ pressed }) => [
+                        styles.saveBtn,
+                        pressed &&
+                          !isUpdating &&
+                          !isValidRental && { opacity: 0.8 },
+                        (isUpdating || !isValidRental) && { opacity: 0.5 },
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={[ACCENT, "#ff8c00"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.saveBtnGradient}
+                      >
+                        {isUpdating ? (
+                          <ActivityIndicator color="#0f172a" />
+                        ) : (
+                          <>
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={20}
+                              color="#0f172a"
+                            />
+                            <Text style={styles.saveBtnText}>Save Changes</Text>
+                          </>
+                        )}
+                      </LinearGradient>
+                    </Pressable>
+                  </View>
+                )}
+              </ScrollView>
+            </BlurView>
+          </Animated.View>
+        )}
+      </Modal>
 
       {dateModalVisible && (
         <Modal
-          visible={true}
+          visible={dateModalVisible}
           transparent
           animationType="fade"
           statusBarTranslucent
@@ -982,7 +1035,7 @@ export default function UserReservations({
 
       {timeModalVisible && (
         <Modal
-          visible={true}
+          visible={timeModalVisible}
           transparent
           animationType="fade"
           statusBarTranslucent
@@ -1066,9 +1119,14 @@ export default function UserReservations({
                     const is24Hours = slots.normalStart === slots.normalEnd;
 
                     return times.map((time) => {
-                      const isReserved = reservedSlots.some(
-                        (slot) => time >= slot.startTime && time < slot.endTime
-                      );
+                      const isPickup = timeModalField === "pickup";
+                      const isReserved = reservedSlots.some((slot) => {
+                        if (isPickup) {
+                          return time === slot.startTime;
+                        } else {
+                          return time === slot.endTime;
+                        }
+                      });
                       const isAvailable = !isReserved;
                       const isExtension =
                         !is24Hours &&
