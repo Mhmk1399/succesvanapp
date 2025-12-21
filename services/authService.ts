@@ -6,18 +6,32 @@ export const authService = {
   async sendCode(phoneNumber: string) {
     console.log("API_URL:", API_URL);
     console.log("Sending to:", phoneNumber);
+    
+    if (!API_URL || API_URL.trim() === "") {
+      throw new Error("API URL not configured");
+    }
+
     const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "send-code", phoneNumber }),
     });
+    
     console.log("Response status:", response.status);
     const text = await response.text();
     console.log("Response text:", text);
+    
     try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(text || "Invalid response from server");
+      const data = JSON.parse(text);
+      if (!response.ok) {
+        throw new Error(data.message || `Server error: ${response.status}`);
+      }
+      return data;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error(text || "Invalid response from server");
+      }
+      throw error;
     }
   },
 

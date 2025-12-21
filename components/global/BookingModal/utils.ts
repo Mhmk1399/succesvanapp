@@ -27,50 +27,110 @@ export const isDateDisabled = (date: Date, office: Office | undefined) => {
 
   const month = date.getMonth() + 1;
   const day = date.getDate();
-  const dayName = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][date.getDay()];
+  const dayName = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ][date.getDay()];
 
-  const specialDay = office.specialDays?.find((sd: SpecialDay) => sd.month === month && sd.day === day);
+  const specialDay = office.specialDays?.find(
+    (sd: SpecialDay) => sd.month === month && sd.day === day
+  );
   if (specialDay && !specialDay.isOpen) return true;
 
-  const workingDay = office.workingTime?.find((w: WorkingTime) => w.day === dayName);
+  const workingDay = office.workingTime?.find(
+    (w: WorkingTime) => w.day === dayName
+  );
   if (workingDay && !workingDay.isOpen) return true;
 
   return false;
 };
 
-export const getAvailableTimeSlots = (date: Date | null, office: Office | undefined, isPickup: boolean = true) => {
-  if (!office || !date) return { start: "00:00", end: "23:59", normalStart: "00:00", normalEnd: "23:59" };
+export const getAvailableTimeSlots = (
+  date: Date | null,
+  office: Office | undefined,
+  isPickup: boolean = true
+) => {
+  if (!office || !date)
+    return {
+      start: "00:00",
+      end: "23:59",
+      normalStart: "00:00",
+      normalEnd: "23:59",
+    };
 
   const month = date.getMonth() + 1;
   const day = date.getDate();
-  const dayName = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][date.getDay()];
+  const dayName = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ][date.getDay()];
 
-  const specialDay = office.specialDays?.find((sd: SpecialDay) => sd.month === month && sd.day === day);
+  const specialDay = office.specialDays?.find(
+    (sd: SpecialDay) => sd.month === month && sd.day === day
+  );
   if (specialDay && specialDay.isOpen) {
-    return { start: specialDay.startTime, end: specialDay.endTime, normalStart: specialDay.startTime, normalEnd: specialDay.endTime };
+    return {
+      start: specialDay.startTime,
+      end: specialDay.endTime,
+      normalStart: specialDay.startTime,
+      normalEnd: specialDay.endTime,
+    };
   }
 
-  const workingDay = office.workingTime?.find((w: WorkingTime) => w.day === dayName);
-  if (workingDay && workingDay.isOpen) {
+  const workingDay = office.workingTime?.find(
+    (w: WorkingTime) => w.day === dayName
+  );
+  if (workingDay && workingDay.isOpen && workingDay.startTime && workingDay.endTime) {
     let start = workingDay.startTime;
     let end = workingDay.endTime;
     const normalStart = start;
     const normalEnd = end;
 
-    const extension = isPickup ? workingDay.pickupExtension : workingDay.returnExtension;
+    const extension = isPickup
+      ? workingDay.pickupExtension
+      : workingDay.returnExtension;
     if (extension) {
       const [startH, startM] = start.split(":").map(Number);
       const [endH, endM] = end.split(":").map(Number);
-      const extendedStartMin = Math.max(0, startH * 60 + startM - extension.hoursBefore * 60);
-      const extendedEndMin = Math.min(1439, endH * 60 + endM + extension.hoursAfter * 60);
-      start = `${Math.floor(extendedStartMin / 60).toString().padStart(2, "0")}:${(extendedStartMin % 60).toString().padStart(2, "0")}`;
-      end = `${Math.floor(extendedEndMin / 60).toString().padStart(2, "0")}:${(extendedEndMin % 60).toString().padStart(2, "0")}`;
+      const extendedStartMin = Math.max(
+        0,
+        startH * 60 + startM - extension.hoursBefore * 60
+      );
+      const extendedEndMin = Math.min(
+        1439,
+        endH * 60 + endM + extension.hoursAfter * 60
+      );
+      start = `${Math.floor(extendedStartMin / 60)
+        .toString()
+        .padStart(2, "0")}:${(extendedStartMin % 60)
+        .toString()
+        .padStart(2, "0")}`;
+      end = `${Math.floor(extendedEndMin / 60)
+        .toString()
+        .padStart(2, "0")}:${(extendedEndMin % 60)
+        .toString()
+        .padStart(2, "0")}`;
     }
 
     return { start, end, normalStart, normalEnd };
   }
 
-  return { start: "00:00", end: "23:59", normalStart: "00:00", normalEnd: "23:59" };
+  return {
+    start: "00:00",
+    end: "23:59",
+    normalStart: "00:00",
+    normalEnd: "23:59",
+  };
 };
 
 export const playSuccessSound = async () => {

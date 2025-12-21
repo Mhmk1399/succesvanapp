@@ -326,7 +326,20 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [vansModalVisible, setVansModalVisible] = useState(false);
-  const [availableVans, setAvailableVans] = useState<any[]>([]);
+  const [availableVans, setAvailableVans] = useState<{
+    id: string;
+    name: string;
+    image: string;
+    seats: number;
+    fuel: string;
+    expert: string;
+    doors: number;
+    gear?: { availableTypes: ("manual" | "automatic")[]; automaticExtraCost: number } | string;
+    showPrice?: number;
+    pricingTiers?: { minDays: number; maxDays: number; pricePerDay: number }[];
+    extraHoursRate?: number;
+    cargo?: string;
+  }[]>([]);
   const [loadingVans, setLoadingVans] = useState(false);
 
   // Sync dateRange with pickupDate and returnDate
@@ -414,11 +427,16 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       )
         .then((res) => res.json())
         .then((data) => {
-          console.log("[Start Date Reserved Slots Response]", data);
-          if (data.data?.reservedSlots) {
+           if (data.data?.reservedSlots) {
             // Only keep slots that START on this pickup date
             const filteredSlots = data.data.reservedSlots.filter(
-              (slot: any) => {
+              (slot: {
+                startDate: string;
+                endDate: string;
+                startTime: string;
+                endTime: string;
+                isSameDay: boolean;
+              }) => {
                 return slot.startDate === startDateStr;
               }
             );
@@ -458,7 +476,13 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
           if (data.data?.reservedSlots) {
             // Only keep slots that END on this return date
             const filteredSlots = data.data.reservedSlots.filter(
-              (slot: any) => {
+              (slot: {
+                startDate: string;
+                endDate: string;
+                startTime: string;
+                endTime: string;
+                isSameDay: boolean;
+              }) => {
                 return slot.endDate === endDateStr;
               }
             );
@@ -859,7 +883,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         "saturday",
       ][pickupDate.getDay()];
       const workingDay = officeObj?.workingTime?.find(
-        (w: any) => w.day === dayName
+        (w: WorkingTime) => w.day === dayName
       );
       if (workingDay?.pickupExtension) {
         const slots = getAvailableTimeSlots(pickupDate, true);
@@ -882,7 +906,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         "saturday",
       ][returnDate.getDay()];
       const workingDay = officeObj?.workingTime?.find(
-        (w: any) => w.day === dayName
+        (w: WorkingTime) => w.day === dayName
       );
       if (workingDay?.returnExtension) {
         const slots = getAvailableTimeSlots(returnDate, false);
@@ -1413,7 +1437,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
                     ][dateToCheck.getDay()]
                   : "";
                 const workingDay = office?.workingTime?.find(
-                  (w: any) => w.day === dayName
+                  (w: WorkingTime) => w.day === dayName
                 );
                 const extension = isPickup
                   ? workingDay?.pickupExtension
@@ -1851,7 +1875,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
               "saturday",
             ][pickupDate.getDay()];
             const workingDay = officeObj.workingTime?.find(
-              (w: any) => w.day === dayName
+              (w: WorkingTime) => w.day === dayName
             );
             if (workingDay?.pickupExtension) {
               const slots = getAvailableTimeSlots(pickupDate, true);
@@ -1874,7 +1898,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
               "saturday",
             ][returnDate.getDay()];
             const workingDay = officeObj.workingTime?.find(
-              (w: any) => w.day === dayName
+              (w: WorkingTime) => w.day === dayName
             );
             if (workingDay?.returnExtension) {
               const slots = getAvailableTimeSlots(returnDate, false);

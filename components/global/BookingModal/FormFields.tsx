@@ -17,6 +17,26 @@ import {
   calculateAddonPrice,
 } from "@/utils/addonCalculator";
 
+type Van = {
+  id?: string;
+  _id?: string;
+  name: string;
+  image?: string;
+  seats?: number;
+  fuel?: string;
+  expert?: string;
+  doors?: number;
+  gear?: {
+    availableTypes: ("manual" | "automatic")[];
+    automaticExtraCost: number;
+  };
+  showPrice?: number;
+  pricingTiers?: { minDays: number; maxDays: number; pricePerDay: number }[];
+  extraHoursRate?: number;
+  extrahoursRate?: number;
+  cargo?: string;
+};
+
 type FormFieldsProps = {
   name: string;
   setName: (v: string) => void;
@@ -50,7 +70,7 @@ type FormFieldsProps = {
   setMessage: (v: string) => void;
   selectedGear: "manual" | "automatic";
   setSelectedGear: (v: "manual" | "automatic") => void;
-  van: any;
+  van: Van | null;
 };
 
 export const FormFields = ({
@@ -393,7 +413,8 @@ export const FormFields = ({
             >
               Automatic
             </Text>
-            {van.gear.automaticExtraCost > 0 ? (
+            {van?.gear?.automaticExtraCost &&
+            van.gear.automaticExtraCost > 0 ? (
               <View
                 style={{
                   backgroundColor:

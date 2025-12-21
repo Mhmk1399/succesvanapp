@@ -2,7 +2,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { addonService } from "@/services/addonService";
 import { officeService } from "@/services/officeService";
 import { reservationService } from "@/services/reservationService";
-import { AddOn, Office } from "@/types/type";
+import { AddOn, Category, Office, WorkingTime } from "@/types/type";
 import { calculateAddonPrice } from "@/utils/addonCalculator";
 import { calculatePrice } from "@/utils/priceCalculator";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -151,7 +151,7 @@ export const useBookingModal = (
         "saturday",
       ][pickupDate.getDay()];
       const workingDay = office.workingTime?.find(
-        (w: any) => w.day === dayName
+        (w: WorkingTime) => w.day === dayName
       );
       if (workingDay?.pickupExtension) {
         const slots = getAvailableTimeSlots(pickupDate, office, true);
@@ -176,7 +176,7 @@ export const useBookingModal = (
         "saturday",
       ][returnDate.getDay()];
       const workingDay = office.workingTime?.find(
-        (w: any) => w.day === dayName
+        (w: WorkingTime) => w.day === dayName
       );
       if (workingDay?.returnExtension) {
         const slots = getAvailableTimeSlots(returnDate, office, false);
@@ -301,12 +301,15 @@ export const useBookingModal = (
         setAddons(addonsResult.data || []);
         const allOffices = officesResult.data || [];
         setOffices(allOffices);
-        
+
         // Filter offices based on van category
         if (!hasPrefilledData && van?.id) {
-          const filtered = allOffices.filter((office: Office) => 
-            office.categories?.includes(van.id)
-          );
+          const filtered = allOffices.filter((office: Office) => {
+            const categoryIds = Array.isArray(office.categories)
+              ? office.categories.map((c: Category) => c._id || c)
+              : [];
+            return categoryIds.includes(van.id);
+          });
           setFilteredOffices(filtered);
         } else {
           setFilteredOffices(allOffices);
@@ -345,17 +348,24 @@ export const useBookingModal = (
           }=${dateStr}&type=${type}`
         );
         const data = await response.json();
-        console.log("[BookingModal.fetchReservedSlots] Response:", data);
-
+ 
         if (data.success && data.data?.reservedSlots) {
           // Filter slots to only those that match the exact date
-          const filteredSlots = data.data.reservedSlots.filter((slot: any) => {
-            if (type === "start") {
-              return slot.startDate === dateStr;
-            } else {
-              return slot.endDate === dateStr;
+          const filteredSlots = data.data.reservedSlots.filter(
+            (slot: {
+              startDate: string;
+              endDate: string;
+              startTime: string;
+              endTime: string;
+              isSameDay: boolean;
+            }) => {
+              if (type === "start") {
+                return slot.startDate === dateStr;
+              } else {
+                return slot.endDate === dateStr;
+              }
             }
-          });
+          );
           console.log(
             "[BookingModal.fetchReservedSlots] Filtered slots:",
             filteredSlots

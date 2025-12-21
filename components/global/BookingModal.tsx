@@ -23,7 +23,8 @@ import { styles } from "./BookingModal/styles";
 import { BookingModalProps } from "./BookingModal/types";
 import { useBookingModal } from "./BookingModal/useBookingModal";
 import { getAvailableTimeSlots, getSelectedOffice } from "./BookingModal/utils";
- 
+import { WorkingTime } from "@/types/type";
+
 export default function BookingModal({
   visible,
   van,
@@ -119,7 +120,9 @@ export default function BookingModal({
                     <Ionicons name="car-sport" size={24} color={ACCENT} />
                   </View>
                   <View style={styles.headerTextContainer}>
-                    <Text style={styles.headerSubtitle}>Complete Your Booking</Text>
+                    <Text style={styles.headerSubtitle}>
+                      Complete Your Booking
+                    </Text>
                     <Text style={styles.title}>
                       <Text style={styles.titleVan}>{van.name}</Text>
                     </Text>
@@ -367,7 +370,7 @@ export default function BookingModal({
                     "saturday",
                   ][pickupDate.getDay()];
                   const workingDay = office.workingTime?.find(
-                    (w: any) => w.day === dayName
+                    (w: WorkingTime) => w.day === dayName
                   );
                   if (workingDay?.pickupExtension) {
                     const slots = getAvailableTimeSlots(
@@ -396,7 +399,7 @@ export default function BookingModal({
                     "saturday",
                   ][returnDate.getDay()];
                   const workingDay = office.workingTime?.find(
-                    (w: any) => w.day === dayName
+                    (w: WorkingTime) => w.day === dayName
                   );
                   if (workingDay?.returnExtension) {
                     const slots = getAvailableTimeSlots(
@@ -836,7 +839,7 @@ export default function BookingModal({
             <Calendar
               onDayPress={(day) => handleDateSelect(day.dateString)}
               markedDates={(() => {
-                const marked: any = {};
+                const marked: Record<string, any> = {};
                 const currentPickup = tempPickupDate || pickupDate;
                 if (currentPickup && returnDate && selectingDate === "pickup") {
                   const start = new Date(currentPickup);
@@ -980,7 +983,7 @@ export default function BookingModal({
                     "saturday",
                   ][dateToCheck?.getDay() || 0];
                   const workingDay = office?.workingTime?.find(
-                    (w: any) => w.day === dayName
+                    (w: WorkingTime) => w.day === dayName
                   );
                   const extension = isPickup
                     ? workingDay?.pickupExtension

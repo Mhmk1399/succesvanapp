@@ -37,8 +37,8 @@ export default function UserProfileCard() {
   const [editEmail, setEditEmail] = useState(user.emaildata.emailAddress);
   const [editPhone, setEditPhone] = useState(user.phoneData.phoneNumber);
   const [editAddress, setEditAddress] = useState(user.address || "");
-  const [licenseFront, setLicenseFront] = useState<any>(null);
-  const [licenseBack, setLicenseBack] = useState<any>(null);
+  const [licenseFront, setLicenseFront] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [licenseBack, setLicenseBack] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [licensePreviewFront, setLicensePreviewFront] = useState(
     user?.licenceAttached?.front || null
   );
@@ -91,7 +91,7 @@ export default function UserProfileCard() {
       const token = await AsyncStorage.getItem("authToken");
       const API_URL = process.env.EXPO_PUBLIC_USERS_API || "";
 
-      const requestBody: any = {
+      const requestBody: Record<string, string> = {
         name: editName.trim(),
         lastName: editLastName.trim(),
         address: editAddress.trim(),
@@ -302,7 +302,7 @@ export default function UserProfileCard() {
                     source={{ uri: licensePreviewFront }}
                     style={styles.licenseImage}
                   />
-                  <Pressable
+                  <Pressable 
                     onPress={() => pickLicenseImage("front")}
                     style={styles.changeButton}
                   >
@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 8,
     right: 8,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: ACCENT,
     width: 36,
     height: 36,
     borderRadius: 18,

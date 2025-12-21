@@ -69,7 +69,7 @@ export default function HorizontalVanList({
   const flatListRef = useRef<Animated.FlatList<Van>>(null);
 
   const onMomentumScrollEnd = useCallback(
-    (e: any) => {
+    (e: { nativeEvent: { contentOffset: { x: number } } }) => {
       const newIndex = Math.round(
         e.nativeEvent.contentOffset.x / (CARD_WIDTH + CARD_SPACING)
       );
@@ -387,7 +387,7 @@ function VanCard({
                   <View style={styles.priceRow}>
                     <Text style={styles.currency}>£</Text>
                     <Text style={styles.price}>{van.pricePerHour}</Text>
-                    <Text style={styles.priceUnit}>/hour</Text>
+                    <Text style={styles.priceUnit}>/day</Text>
                   </View>
                 </View>
 
@@ -404,7 +404,7 @@ function VanCard({
                     end={{ x: 1, y: 1 }}
                     style={styles.bookButtonGradient}
                   >
-                    <Text style={styles.bookButtonText}>Book</Text>
+                    <Text style={styles.bookButtonText}>View</Text>
                     <Ionicons
                       name="arrow-forward"
                       size={16}
@@ -549,9 +549,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   imageContainer: {
-    width: "120%",
+    width: "100%",
     height: "100%",
-    marginLeft: "-10%",
   },
   image: {
     width: "100%",
@@ -714,8 +713,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   bookButtonText: {
     color: COLORS.dark,

@@ -7,6 +7,7 @@ type ReservationCreate = {
   endDate: string;
   dirverAge: string | number;
   totalPrice: number;
+  messege?: string;
   addOns?: Array<{
     addOn: string;
     quantity: number;

@@ -234,13 +234,20 @@ export default function UserReservations({
         const data = await response.json();
 
         if (data.success && data.data?.reservedSlots) {
-          const filteredSlots = data.data.reservedSlots.filter((slot: any) => {
-            if (type === "start") {
-              return slot.startDate === dateStr;
-            } else {
-              return slot.endDate === dateStr;
+          const filteredSlots = data.data.reservedSlots.filter(
+            (slot: {
+              startDate: string;
+              endDate: string;
+              startTime: string;
+              endTime: string;
+            }) => {
+              if (type === "start") {
+                return slot.startDate === dateStr;
+              } else {
+                return slot.endDate === dateStr;
+              }
             }
-          });
+          );
           console.log("[reserve.tsx] Filtered slots:", filteredSlots);
           setReservedSlots(filteredSlots);
         }
@@ -327,7 +334,7 @@ export default function UserReservations({
 
   const getAvailableTimeSlots = (
     date: Date | null,
-    office: any,
+    office: { _id: string; name: string; workingTime?: WorkingTime[] },
     isPickup: boolean
   ) => {
     if (!office || !date)
@@ -451,7 +458,7 @@ export default function UserReservations({
           totalPrice: dynamicPrice,
           messege: editMessage,
           addOns: updatedAddOns,
-        } as any
+        }
       );
 
       if (result.success) {
@@ -782,8 +789,6 @@ export default function UserReservations({
                   </View>
                 )}
 
-
-
                 <View style={styles.infoRow}>
                   <View style={styles.infoBox}>
                     <Text style={styles.sectionTitle}>Status</Text>
@@ -881,7 +886,9 @@ export default function UserReservations({
                         returnTime,
                         quantity
                       );
-                      console.log(`[reserve.tsx] Addon: ${addon.name}, Type: ${addon.pricingType}, Quantity: ${quantity}, Price: ${price}`);
+                      console.log(
+                        `[reserve.tsx] Addon: ${addon.name}, Type: ${addon.pricingType}, Quantity: ${quantity}, Price: ${price}`
+                      );
                       addOnsPrice += price;
 
                       addonItems.push(
@@ -1151,7 +1158,7 @@ export default function UserReservations({
               <Calendar
                 onDayPress={(day) => handleDateSelect(day.dateString)}
                 markedDates={(() => {
-                  const marked: any = {};
+                  const marked: Record<string, any> = {};
                   const currentPickup = tempPickupDate || editPickupDate;
                   if (
                     currentPickup &&

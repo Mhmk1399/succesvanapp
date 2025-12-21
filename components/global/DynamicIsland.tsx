@@ -243,66 +243,24 @@ export default function DynamicIsland() {
     if (prevIndex !== activeIndex && prevIndex >= 0 && activeIndex >= 0) {
       const direction = activeIndex > prevIndex ? 1 : -1;
 
-      // Enhanced haptic pattern
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      // Indicator slide with overshoot
-      Animated.sequence([
-        // Move to position with slight overshoot
-        Animated.timing(indicatorX, {
-          toValue: getIndicatorPosition(activeIndex) + direction * 8,
-          duration: 150,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        // Settle to final position
-        Animated.spring(indicatorX, {
-          toValue: getIndicatorPosition(activeIndex),
-          tension: 200,
-          friction: 15,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Indicator squeeze effect
-      Animated.sequence([
-        Animated.timing(indicatorScale, {
-          toValue: 1.12,
-          duration: 120,
-          useNativeDriver: true,
-        }),
-        Animated.spring(indicatorScale, {
-          toValue: 1,
-          tension: 200,
-          friction: 12,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Brief opacity flash
-      Animated.sequence([
-        Animated.timing(indicatorOpacity, {
-          toValue: 0.7,
-          duration: 80,
-          useNativeDriver: true,
-        }),
-        Animated.timing(indicatorOpacity, {
-          toValue: 1,
-          duration: 120,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // Indicator slide
+      Animated.spring(indicatorX, {
+        toValue: getIndicatorPosition(activeIndex),
+        tension: 200,
+        friction: 15,
+        useNativeDriver: true,
+      }).start();
 
       // Deactivate previous item
       Animated.parallel([
-        // Scale down icon
         Animated.spring(itemAnims[prevIndex].iconScale, {
           toValue: 1,
           tension: 200,
           friction: 12,
           useNativeDriver: true,
         }),
-        // Fade out glow
         Animated.timing(itemAnims[prevIndex].glowOpacity, {
           toValue: 0,
           duration: 200,
@@ -312,50 +270,12 @@ export default function DynamicIsland() {
 
       // Activate current item
       Animated.parallel([
-        // Icon bounce up
-        Animated.sequence([
-          Animated.timing(itemAnims[activeIndex].iconTranslateY, {
-            toValue: -8,
-            duration: 150,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.spring(itemAnims[activeIndex].iconTranslateY, {
-            toValue: 0,
-            tension: 400,
-            friction: 8,
-            useNativeDriver: true,
-          }),
-        ]),
-        // Icon scale pop
-        Animated.sequence([
-          Animated.timing(itemAnims[activeIndex].iconScale, {
-            toValue: 1.35,
-            duration: 150,
-            useNativeDriver: true,
-          }),
-          Animated.spring(itemAnims[activeIndex].iconScale, {
-            toValue: 1.15,
-            tension: 200,
-            friction: 8,
-            useNativeDriver: true,
-          }),
-        ]),
-        // Icon wiggle
-        Animated.sequence([
-          Animated.timing(itemAnims[activeIndex].iconRotate, {
-            toValue: direction * 10,
-            duration: 100,
-            useNativeDriver: true,
-          }),
-          Animated.spring(itemAnims[activeIndex].iconRotate, {
-            toValue: 0,
-            tension: 400,
-            friction: 8,
-            useNativeDriver: true,
-          }),
-        ]),
-        // Fade in glow
+        Animated.spring(itemAnims[activeIndex].iconScale, {
+          toValue: 1.15,
+          tension: 200,
+          friction: 8,
+          useNativeDriver: true,
+        }),
         Animated.timing(itemAnims[activeIndex].glowOpacity, {
           toValue: 1,
           duration: 300,
@@ -366,38 +286,21 @@ export default function DynamicIsland() {
   }, [activeIndex]);
 
   const handlePressIn = useCallback((index: number) => {
-    Haptics.selectionAsync();
-    Animated.parallel([
-      Animated.spring(itemAnims[index].pressScale, {
-        toValue: 0.85,
-        tension: 400,
-        friction: 10,
-        useNativeDriver: true,
-      }),
-      Animated.spring(itemAnims[index].scale, {
-        toValue: 0.9,
-        tension: 400,
-        friction: 10,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Animated.spring(itemAnims[index].scale, {
+      toValue: 0.9,
+      tension: 400,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   const handlePressOut = useCallback((index: number) => {
-    Animated.parallel([
-      Animated.spring(itemAnims[index].pressScale, {
-        toValue: 1,
-        tension: 200,
-        friction: 10,
-        useNativeDriver: true,
-      }),
-      Animated.spring(itemAnims[index].scale, {
-        toValue: 1,
-        tension: 200,
-        friction: 10,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Animated.spring(itemAnims[index].scale, {
+      toValue: 1,
+      tension: 200,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   const handlePress = useCallback(
@@ -405,23 +308,6 @@ export default function DynamicIsland() {
       route: "/" | "/vans" | "/dashboard" | "/register",
       index: number
     ) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
-
-      // Quick tap animation
-      Animated.sequence([
-        Animated.timing(itemAnims[index].scale, {
-          toValue: 0.8,
-          duration: 60,
-          useNativeDriver: true,
-        }),
-        Animated.spring(itemAnims[index].scale, {
-          toValue: 1,
-          tension: 400,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
       // Check auth for dashboard route
       if (route === "/dashboard") {
         const token = await AsyncStorage.getItem("authToken");
@@ -479,16 +365,7 @@ export default function DynamicIsland() {
             style={[
               styles.iconContainer,
               {
-                transform: [
-                  {
-                    scale: Animated.multiply(
-                      itemAnims[index].iconScale,
-                      itemAnims[index].pressScale
-                    ),
-                  },
-                  { translateY: itemAnims[index].iconTranslateY },
-                  { rotate: iconRotation },
-                ],
+                transform: [{ scale: itemAnims[index].iconScale }],
               },
             ]}
           >
@@ -520,7 +397,11 @@ export default function DynamicIsland() {
               />
             ) : (
               <Ionicons
-                name={(finalIsActive ? displayActiveIcon : displayIcon) as any}
+                name={
+                  finalIsActive
+                    ? (displayActiveIcon as keyof typeof Ionicons.glyphMap)
+                    : (displayIcon as keyof typeof Ionicons.glyphMap)
+                }
                 size={finalIsActive ? 22 : 24}
                 color={finalIsActive ? ACCENT : "rgba(255,255,255,0.3)"}
               />

@@ -37,6 +37,7 @@ export default function AuthScreen() {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const codeInputRef = React.useRef<TextInput>(null);
 
   const handleSendCode = async () => {
     if (!phone.trim()) {
@@ -46,15 +47,21 @@ export default function AuthScreen() {
     }
 
     setIsSubmitting(true);
+    setErrors({});
+    
     try {
       const fullPhone = `+44${phone}`;
       const result = await authService.sendCode(fullPhone);
+      
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // if (result.data?.code) {
-        //   Alert.alert("Dev Code", `Your code: ${result.data.code}`);
-        // }
         setStep("code");
+        setTimeout(() => codeInputRef.current?.focus(), 100);
+        Alert.alert(
+          "Code Sent",
+          `Verification code sent to ${fullPhone}`,
+          [{ text: "OK" }]
+        );
       } else {
         Alert.alert("Error", result.message || "Failed to send code");
       }
@@ -286,8 +293,10 @@ export default function AuthScreen() {
                       color={focusedInput === "code" ? ACCENT : "#9ca3af"}
                     />
                     <TextInput
-                      placeholder="123456"
-                      placeholderTextColor="#6b7280"
+                      ref={codeInputRef}
+                      autoFocus
+                      placeholder="xxxxxx"
+                      placeholderTextColor="#9a9a9bff"
                       value={code}
                       onChangeText={(text) => {
                         setCode(text);
@@ -331,6 +340,17 @@ export default function AuthScreen() {
                       </>
                     )}
                   </LinearGradient>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setStep("phone");
+                    setCode("");
+                    setErrors({});
+                  }}
+                  style={styles.changePhoneBtn}
+                >
+                  <Text style={styles.changePhoneText}>Change Phone Number</Text>
                 </Pressable>
               </>
             )}
@@ -558,6 +578,16 @@ const styles = StyleSheet.create({
   prefix: {
     color: "#f9fafb",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  changePhoneBtn: {
+    marginTop: 16,
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  changePhoneText: {
+    color: ACCENT,
+    fontSize: 14,
     fontWeight: "600",
   },
 });

@@ -26,12 +26,31 @@ type Van = {
   image: string | number;
   seats: number;
   fuel: string;
+  expert: string;
   doors: number;
-  gear: string;
+  gear?: 
+    | {
+        availableTypes: ("manual" | "automatic")[];
+        automaticExtraCost: number;
+      }
+    | string;
   showPrice?: number;
   pricingTiers?: { minDays: number; maxDays: number; pricePerDay: number }[];
   extraHoursRate?: number;
   cargo?: string;
+};
+
+type PrefilledData = {
+  office: string;
+  category: string;
+  pickupDate: string;
+  returnDate: string;
+  pickupTime: string;
+  returnTime: string;
+  driverAge: string;
+  pickupExtensionFee: number;
+  returnExtensionFee: number;
+  calculatedPrice?: number;
 };
 
 type VansModalProps = {
@@ -40,7 +59,7 @@ type VansModalProps = {
   loading: boolean;
   onClose: () => void;
   onEditForm: () => void;
-  prefilledData?: any;
+  prefilledData?: PrefilledData;
   onReservationComplete?: () => void;
 };
 
@@ -129,7 +148,7 @@ export default function VansModal({
 
       <BookingModal
         visible={bookingModalVisible}
-        van={selectedVan}
+        van={selectedVan || null}
         onClose={() => {
           setBookingModalVisible(false);
           setSelectedVan(null);
@@ -146,7 +165,7 @@ type VanCardProps = {
   van: Van;
   index: number;
   onBook: (price: number) => void;
-  prefilledData?: any;
+  prefilledData?: PrefilledData;
 };
 
 function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {

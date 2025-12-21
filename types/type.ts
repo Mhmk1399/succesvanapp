@@ -46,6 +46,7 @@ export interface Office {
   vehicles: Vehicle[];
   createdAt?: Date;
   updatedAt?: Date;
+  categories:Category
 }
 
 // Vehicle --------------------------------------------------------------------------------
