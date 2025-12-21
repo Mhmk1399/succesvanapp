@@ -86,6 +86,7 @@ export const useBookingModal = (
     Record<string, { quantity: number; tierId?: string }>
   >({});
   const [offices, setOffices] = useState<Office[]>([]);
+  const [filteredOffices, setFilteredOffices] = useState<Office[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [selectedOffice, setSelectedOffice] = useState<string>(
     prefilledData?.office || ""
@@ -298,7 +299,18 @@ export const useBookingModal = (
           officeService.getAll(),
         ]);
         setAddons(addonsResult.data || []);
-        setOffices(officesResult.data || []);
+        const allOffices = officesResult.data || [];
+        setOffices(allOffices);
+        
+        // Filter offices based on van category
+        if (!hasPrefilledData && van?.id) {
+          const filtered = allOffices.filter((office: Office) => 
+            office.categories?.includes(van.id)
+          );
+          setFilteredOffices(filtered);
+        } else {
+          setFilteredOffices(allOffices);
+        }
       } catch (error) {
         console.log("Failed to fetch data", error);
       } finally {
@@ -306,7 +318,7 @@ export const useBookingModal = (
       }
     };
     if (visible) fetchData();
-  }, [visible]);
+  }, [visible, van?.id, hasPrefilledData]);
 
   useEffect(() => {
     const fetchReservedSlots = async () => {
@@ -651,7 +663,7 @@ export const useBookingModal = (
     addons,
     addonSelections,
     setAddonSelections,
-    offices,
+    offices: hasPrefilledData ? offices : filteredOffices,
     selectedOffice,
     setSelectedOffice,
     officeModalVisible,

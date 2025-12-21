@@ -91,7 +91,7 @@ export default function VanList({
         Haptics.selectionAsync();
         onSelectVan?.(item);
       }}
-      onBook={() => {
+      onBook={async () => {
         Haptics.selectionAsync();
         onBookVan?.(item);
       }}
@@ -198,6 +198,9 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
   const translateY = useRef(new Animated.Value(50)).current;
   const imageScale = useRef(new Animated.Value(1.2)).current;
   const highlightAnim = useRef(new Animated.Value(0)).current;
+  const modalScale = useRef(new Animated.Value(0.8)).current;
+  const modalOpacity = useRef(new Animated.Value(0)).current;
+  const arrowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -242,6 +245,44 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
       ).start();
     }
   }, [isHighlighted]);
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(arrowAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(arrowAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  useEffect(() => {
+    if (showDimensionsModal) {
+      Animated.parallel([
+        Animated.spring(modalScale, {
+          toValue: 1,
+          tension: 50,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(modalOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      modalScale.setValue(0.8);
+      modalOpacity.setValue(0);
+    }
+  }, [showDimensionsModal]);
 
   const handlePressIn = () => {
     Animated.parallel([
@@ -296,7 +337,13 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
     >
       <Animated.View style={[styles.card, { borderColor }]}>
         <Pressable
-          onPress={onPress}
+          onPress={(e) => {
+            if (van.properties && van.properties.length > 0) {
+              setShowDimensionsModal(true);
+            } else {
+              onPress?.();
+            }
+          }}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.95 }]}
@@ -334,6 +381,23 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                 <Chip icon="car-outline" label={`${van.doors} doors`} />
                 <Chip icon="flame-outline" label={van.fuel} />
               </View>
+              <View style={styles.gearRow}>
+                <Ionicons
+                  name="settings-outline"
+                  size={14}
+                  color={"#07bc1fff"}
+                />
+                <Text style={styles.gearText}>
+                  {typeof van.gear === "string"
+                    ? van.gear === "manual,automatic"
+                      ? "Manual & Automatic"
+                      : van.gear.charAt(0).toUpperCase() + van.gear.slice(1)
+                    : van.gear?.availableTypes
+                        ?.join(" & ")
+                        .replace(/manual/g, "Manual")
+                        .replace(/automatic/g, "Automatic") || "Manual"}
+                </Text>
+              </View>
             </View>
 
             <View style={styles.bottomRow}>
@@ -345,35 +409,32 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setShowDimensionsModal(true);
                     }}
-                    style={styles.dimensionsChip}
+                    style={({ pressed }) => [
+                      styles.dimensionsChip,
+                      pressed && { opacity: 0.7 },
+                    ]}
                   >
-                    <Text style={styles.dimensionsText}>
-                      Vehicle Dimensions
-                    </Text>
-                    <Ionicons
-                      name="arrow-forward"
-                      size={14}
-                      color="#fafdffff"
-                    />
+                    <Text style={styles.dimensionsText}>Van Dimensions</Text>
+                    <Animated.View
+                      style={{
+                        transform: [
+                          {
+                            translateX: arrowAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, 4],
+                            }),
+                          },
+                        ],
+                      }}
+                    >
+                      <Ionicons
+                        name="chevron-forward"
+                        size={14}
+                        color={ACCENT}
+                      />
+                    </Animated.View>
                   </Pressable>
                 )}
-                <View style={styles.gearRow}>
-                  <Ionicons
-                    name="settings-outline"
-                    size={14}
-                    color={"#07bc1fff"}
-                  />
-                  <Text style={styles.gearText}>
-                    {typeof van.gear === "string"
-                      ? van.gear === "manual,automatic"
-                        ? "Manual & Automatic"
-                        : van.gear.charAt(0).toUpperCase() + van.gear.slice(1)
-                      : van.gear?.availableTypes
-                          ?.join(" & ")
-                          .replace(/manual/g, "Manual")
-                          .replace(/automatic/g, "Automatic") || "Manual"}
-                  </Text>
-                </View>
                 <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>from </Text>
                   <Text style={styles.priceValue}>£{van.showPrice || 0}</Text>
@@ -381,41 +442,47 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                 </View>
               </View>
 
-              <Pressable
-                onPress={async (e) => {
-                  e.stopPropagation();
-                  if (!user) {
-                    await AsyncStorage.setItem(
-                      "pendingBookingVan",
-                      JSON.stringify(van)
-                    );
-                    Alert.alert(
-                      "Login Required",
-                      "Please login or register to book this van.",
-                      [
-                        {
-                          text: "Login",
-                          onPress: () => router.push("/register"),
-                        },
-                        {
-                          text: "Register",
-                          onPress: () => router.push("/register"),
-                        },
-                        { text: "Cancel", style: "cancel" },
-                      ]
-                    );
-                    return;
-                  }
-                  onBook?.();
-                }}
-                style={({ pressed }) => [
-                  styles.bookButton,
-                  pressed && styles.bookButtonPressed,
-                ]}
-              >
-                <Text style={styles.bookButtonText}>Book Now</Text>
-                <Ionicons name="chevron-forward" size={16} color="#444444ff" />
-              </Pressable>
+              <View style={styles.rightSection}>
+                <Pressable
+                  onPress={async (e) => {
+                    e.stopPropagation();
+                    if (!user) {
+                      await AsyncStorage.setItem(
+                        "pendingBookingVan",
+                        JSON.stringify(van)
+                      );
+                      Alert.alert(
+                        "Login Required",
+                        "Please login or register to book this van.",
+                        [
+                          {
+                            text: "Login",
+                            onPress: () => router.push("/register"),
+                          },
+                          {
+                            text: "Register",
+                            onPress: () => router.push("/register"),
+                          },
+                          { text: "Cancel", style: "cancel" },
+                        ]
+                      );
+                      return;
+                    }
+                    await onBook?.();
+                  }}
+                  style={({ pressed }) => [
+                    styles.bookButton,
+                    pressed && styles.bookButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.bookButtonText}>Book Now</Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color="#444444ff"
+                  />
+                </Pressable>
+              </View>
             </View>
           </View>
         </Pressable>
@@ -423,51 +490,57 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
         <Modal
           visible={showDimensionsModal}
           transparent
-          animationType="fade"
+          animationType="none"
           onRequestClose={() => setShowDimensionsModal(false)}
         >
-          <BlurView intensity={80} tint="dark" style={styles.modalOverlay}>
-            <Pressable
-              style={styles.modalContent}
-              onPress={(e) => e.stopPropagation()}
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setShowDimensionsModal(false)}
+          >
+            <Animated.View
+              style={[
+                styles.modalContent,
+                {
+                  opacity: modalOpacity,
+                  transform: [{ scale: modalScale }],
+                },
+              ]}
             >
-              <View style={styles.modalBlur}>
-                <View style={styles.modalHeader}>
-                  <View>
-                    <Text style={styles.modalTitle}>Vehicle Dimensions</Text>
-                    <Text style={styles.modalSubtitle}>{van.name}</Text>
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalInner}>
+                  <View style={styles.modalHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.modalTitle}>Dimensions</Text>
+                      <Text style={styles.modalSubtitle}>{van.name}</Text>
+                    </View>
+                    <Pressable
+                      onPress={() => setShowDimensionsModal(false)}
+                      style={styles.closeButton}
+                    >
+                      <Ionicons name="close" size={20} color="#9ca3af" />
+                    </Pressable>
                   </View>
-                  <Pressable
-                    onPress={() => setShowDimensionsModal(false)}
-                    style={styles.closeButton}
-                  >
-                    <Ionicons name="close" size={24} color="#f9fafb" />
-                  </Pressable>
-                </View>
 
-                <ScrollView
-                  style={styles.dimensionsList}
-                  contentContainerStyle={styles.dimensionsContent}
-                  showsVerticalScrollIndicator={true}
-                >
-                  <View style={styles.dimensionsGrid}>
-                    {van.properties?.map((prop) => (
-                      <View key={prop._id} style={styles.dimensionItem}>
-                        <View style={styles.dimensionTextBox}>
-                          <Text style={styles.dimensionKey} numberOfLines={2}>
-                            {prop.key}
-                          </Text>
+                  <ScrollView
+                    style={styles.dimensionsList}
+                    showsVerticalScrollIndicator={false}
+                    nestedScrollEnabled={true}
+                  >
+                    <View style={styles.dimensionsGrid}>
+                      {van.properties?.map((prop) => (
+                        <View key={prop._id} style={styles.dimensionItem}>
+                          <Text style={styles.dimensionKey}>{prop.key}</Text>
                           <Text style={styles.dimensionValue}>
                             {prop.value}
                           </Text>
                         </View>
-                      </View>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
-            </Pressable>
-          </BlurView>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
+              </Pressable>
+            </Animated.View>
+          </Pressable>
         </Modal>
       </Animated.View>
     </Animated.View>
@@ -617,12 +690,17 @@ const styles = StyleSheet.create({
   leftSection: {
     flex: 1,
     marginRight: 12,
-    gap: 10,
+    gap: 6,
+  },
+  rightSection: {
+    gap: 8,
+    alignItems: "center",
   },
   gearRow: {
     flexDirection: "row",
     alignItems: "center",
     columnGap: 4,
+    marginTop: 10,
   },
   gearText: {
     color: "#e5e7eb",
@@ -661,7 +739,7 @@ const styles = StyleSheet.create({
   bookButtonText: {
     color: DARK,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   emptyContainer: {
     alignItems: "center",
@@ -697,97 +775,84 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    paddingVertical: 6,
+    paddingVertical: 3,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.79)",
-    gap: 6,
+    borderColor: ACCENT,
+    backgroundColor: "rgba(222, 215, 205, 0)",
+    gap: 4,
   },
   dimensionsText: {
-    color: "#f9fafb",
-    fontSize: 12,
+    color: ACCENT,
+    fontSize: 10,
     fontWeight: "900",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: 24,
   },
   modalContent: {
     width: "100%",
-    maxWidth: 400,
-    maxHeight: "80%",
-    borderRadius: 24,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.3)",
-    backgroundColor: ACCENT,
+    maxWidth: 360,
+    backgroundColor: "#1e293b",
+    borderRadius: 20,
+    overflow: "scroll",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
   },
-  modalBlur: {
-    padding: 24,
+  modalInner: {
+    padding: 20,
   },
   modalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 20,
+    alignItems: "center",
+    marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 22,
-    fontWeight: "900",
+    fontSize: 18,
+    fontWeight: "800",
     color: "#f9fafb",
   },
   modalSubtitle: {
-    fontSize: 13,
-    color: "#000000ff",
+    fontSize: 11,
+    color: "#94a3b8",
     marginTop: 2,
   },
   closeButton: {
     padding: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.05)",
   },
   dimensionsList: {
-    maxHeight: 600,
-  },
-  dimensionsContent: {
-    paddingBottom: 10,
+    maxHeight: 400,
   },
   dimensionsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 8,
   },
   dimensionItem: {
-    flexDirection: "column",
     width: "48%",
-    backgroundColor: "rgba(15,23,42,0.2)",
-    borderRadius: 12,
+    backgroundColor: "rgba(15,23,42,0.5)",
+    borderRadius: 10,
     padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.2)",
-    
-  },
-  dimensionIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "rgba(233, 231, 229, 0.75)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  dimensionTextBox: {
-    flex: 1,
+    borderColor: "rgba(148,163,184,0.1)",
   },
   dimensionKey: {
     fontSize: 10,
-    color: "#ffffffff",
+    color: "#94a3b8",
     fontWeight: "600",
     marginBottom: 4,
+    textTransform: "uppercase",
   },
   dimensionValue: {
     fontSize: 14,
-    color: "#000000ff",
+    color: ACCENT,
     fontWeight: "700",
   },
 });
