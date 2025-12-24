@@ -1928,10 +1928,13 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   );
 }
 
-/* ===================== VOICE + AI BUTTON (same idea) ===================== */
+/* ===================== VOICE + AI BUTTON (AI Integration) ===================== */
+
+import AIBookingFlow from "./AIBookingFlow";
 
 function VoiceAIButton() {
   const [recording, setRecording] = useState(false);
+  const [showAIFlow, setShowAIFlow] = useState(false);
   const bars = [0, 1, 2, 3, 4, 5];
   const barAnims = useRef(bars.map(() => new Animated.Value(0))).current;
 
@@ -1962,62 +1965,71 @@ function VoiceAIButton() {
     }
   }, [recording]);
 
-  const toggleRecording = async () => {
-    await Haptics.impactAsync(
-      recording
-        ? Haptics.ImpactFeedbackStyle.Light
-        : Haptics.ImpactFeedbackStyle.Medium
-    );
-    setRecording((prev) => !prev);
+  const handlePress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Open AI Booking Flow instead of just recording
+    setShowAIFlow(true);
   };
 
   return (
-    <Pressable
-      onPress={toggleRecording}
-      style={({ pressed }) => [
-        sheetStyles.voiceButton,
-        pressed && { transform: [{ scale: 0.97 }] },
-        recording && sheetStyles.voiceButtonActive,
-      ]}
-    >
-      <View style={sheetStyles.voiceLeft}>
-        <View style={sheetStyles.voiceIconWrapper}>
-          <Ionicons
-            name={recording ? "stop-circle" : "mic-circle-outline"}
-            size={26}
-            color={DARK}
-          />
-        </View>
-        <View>
-          <Text style={sheetStyles.voiceTitle}>
-            {recording ? "Listening..." : "Fill with Voice + AI"}
-          </Text>
-          <Text style={sheetStyles.voiceSubtitle}>
-            Just tell us pickup, return & vehicle
-          </Text>
-        </View>
-      </View>
-
-      <View style={sheetStyles.waveWrapper}>
-        {bars.map((_, index) => {
-          const h = barAnims[index].interpolate({
-            inputRange: [0, 1],
-            outputRange: [4, 18],
-          });
-          return (
-            <Animated.View
-              key={index}
-              style={[
-                sheetStyles.waveBar,
-                {
-                  height: h,
-                  opacity: recording ? 1 : 0.4,
-                },
-              ]}
+    <>
+      <Pressable
+        onPress={handlePress}
+        style={({ pressed }) => [
+          sheetStyles.voiceButton,
+          pressed && { transform: [{ scale: 0.97 }] },
+          recording && sheetStyles.voiceButtonActive,
+        ]}
+      >
+        <View style={sheetStyles.voiceLeft}>
+          <View style={sheetStyles.voiceIconWrapper}>
+            <Ionicons
+              name="sparkles"
+              size={26}
+              color={DARK}
             />
-          );
-        })}
-      </View>
-    </Pressable>
+          </View>
+          <View>
+            <Text style={sheetStyles.voiceTitle}>
+              Book with AI Assistant
+            </Text>
+            <Text style={sheetStyles.voiceSubtitle}>
+              Voice or text - complete in ~1 minute
+            </Text>
+          </View>
+        </View>
+
+        <View style={sheetStyles.waveWrapper}>
+          {bars.map((_, index) => {
+            const h = barAnims[index].interpolate({
+              inputRange: [0, 1],
+              outputRange: [4, 18],
+            });
+            return (
+              <Animated.View
+                key={index}
+                style={[
+                  sheetStyles.waveBar,
+                  {
+                    height: h,
+                    opacity: recording ? 1 : 0.4,
+                  },
+                ]}
+              />
+            );
+          })}
+        </View>
+      </Pressable>
+
+      {/* AI Booking Flow Modal */}
+      <AIBookingFlow
+        visible={showAIFlow}
+        onClose={() => setShowAIFlow(false)}
+        onComplete={() => {
+          setShowAIFlow(false);
+          Alert.alert("Success", "Booking completed successfully!");
+        }}
+      />
+    </>
   );
 }
