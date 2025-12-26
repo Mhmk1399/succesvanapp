@@ -1,41 +1,22 @@
-import React from "react";
+import { AddOn, Office, User } from "@/types/type";
 import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
-} from "react-native";
+    calculateAddonPrice,
+    getAddonDisplayPrice,
+} from "@/utils/addonCalculator";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { AddOn, Office, User } from "@/types/type";
-import { styles } from "./styles";
-import { ACCENT, DARK } from "./constants";
-import { formatDate, formatTime } from "./utils";
+import React from "react";
 import {
-  getAddonDisplayPrice,
-  calculateAddonPrice,
-} from "@/utils/addonCalculator";
-
-type Van = {
-  id?: string;
-  _id?: string;
-  name: string;
-  image?: string;
-  seats?: number;
-  fuel?: string;
-  expert?: string;
-  doors?: number;
-  gear?: {
-    availableTypes: ("manual" | "automatic")[];
-    automaticExtraCost: number;
-  };
-  showPrice?: number;
-  pricingTiers?: { minDays: number; maxDays: number; pricePerDay: number }[];
-  extraHoursRate?: number;
-  extrahoursRate?: number;
-  cargo?: string;
-};
+    ActivityIndicator,
+    Pressable,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import { Van } from "../vanlist";
+import { ACCENT, DARK } from "./constants";
+import { styles } from "./styles";
+import { formatDate, formatTime } from "./utils";
 
 type FormFieldsProps = {
   name: string;
@@ -305,7 +286,7 @@ export const FormFields = ({
     )}
 
     {(() => {
-      return van?.gear?.availableTypes && van.gear.availableTypes.length > 1;
+      return van?.gear && typeof van.gear === 'object' && van.gear.availableTypes && van.gear.availableTypes.length > 1;
     })() && (
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Gear Type</Text>
@@ -413,7 +394,7 @@ export const FormFields = ({
             >
               Automatic
             </Text>
-            {van?.gear?.automaticExtraCost &&
+            {van?.gear && typeof van.gear === 'object' && van.gear.automaticExtraCost &&
             van.gear.automaticExtraCost > 0 ? (
               <View
                 style={{
@@ -433,7 +414,7 @@ export const FormFields = ({
                     fontWeight: "600",
                   }}
                 >
-                  +£{van.gear.automaticExtraCost}/day
+                  +£{van?.gear && typeof van.gear === 'object' ? van.gear.automaticExtraCost : 0}/day
                 </Text>
               </View>
             ) : (

@@ -177,7 +177,7 @@ export function useFastAgent() {
     try {
       const apiUrl =
         process.env.EXPO_PUBLIC_FAST_AGENT_API ||
-        "http://192.168.100.3:3000/api/fast-agent";
+        "https://succesvan.vercel.app/api/fast-agent";
       
       console.log("📍 Fetching offices from:", apiUrl);
       
@@ -314,7 +314,7 @@ export function useFastAgent() {
       try {
         const apiUrl =
           process.env.EXPO_PUBLIC_FAST_AGENT_API ||
-          "http://192.168.100.3:3000/api/fast-agent";
+          "https://succesvan.vercel.app/api/fast-agent";
 
         console.log("📤 Sending to API:", apiUrl);
         console.log("📝 Payload:", { message, action, hasAudio: !!audioBase64 });
@@ -371,7 +371,7 @@ export function useFastAgent() {
           console.log("📝 Transcribed text:", response.transcribedText);
           setMessages((prev) => [
             ...prev,
-            { role: "user", content: response.transcribedText },
+            { role: "user", content: response.transcribedText || "" },
           ]);
         }
 

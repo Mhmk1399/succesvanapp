@@ -1,20 +1,20 @@
-import { CategorySuggestion, useFastAgent, SelectedAddOn, AddOnOption } from "@/hooks/useFastAgent";
+import { AddOnOption, CategorySuggestion, SelectedAddOn, useFastAgent } from "@/hooks/useFastAgent";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Dimensions,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import VanList, { Van } from "./vanlist";
 
@@ -248,7 +248,11 @@ export default function AIBookingFlow({
     }
     await verifyCode(codeInput);
     if (agentState.phase === "complete") {
-      onComplete?.();
+      onComplete?.(
+        agentState.reservationId || "",
+        agentState.userToken || "",
+        agentState.isNewUser || false
+      );
       handleClose();
     }
   };
@@ -293,18 +297,35 @@ export default function AIBookingFlow({
   const today = new Date().toISOString().split("T")[0];
 
   // Convert CategorySuggestion to Van type
-  const convertToVan = (suggestion: CategorySuggestion): Van => ({
-    id: suggestion._id,
-    name: suggestion.name,
-    image: suggestion.image || require("@/assets/images/van.png"),
-    seats: suggestion.seats,
-    fuel: suggestion.fuel,
-    expert: suggestion.matchReason || "",
-    doors: suggestion.doors,
-    gear: suggestion.gear,
-    pricingTiers: suggestion.pricingTiers,
-    extraHoursRate: suggestion.extrahoursRate,
-  });
+  const convertToVan = (suggestion: CategorySuggestion): Van => {
+    // Handle gear type conversion
+    let gearValue: Van['gear'];
+    if (typeof suggestion.gear === 'string') {
+      gearValue = suggestion.gear;
+    } else if (suggestion.gear && typeof suggestion.gear === 'object') {
+      gearValue = {
+        availableTypes: suggestion.gear.availableTypes.filter(
+          (type): type is 'manual' | 'automatic' => type === 'manual' || type === 'automatic'
+        ),
+        automaticExtraCost: suggestion.gear.automaticExtraCost || 0,
+      };
+    } else {
+      gearValue = undefined;
+    }
+
+    return {
+      id: suggestion._id,
+      name: suggestion.name,
+      image: suggestion.image || require("@/assets/images/van.png"),
+      seats: suggestion.seats,
+      fuel: suggestion.fuel,
+      expert: suggestion.matchReason || "",
+      doors: suggestion.doors,
+      gear: gearValue,
+      pricingTiers: suggestion.pricingTiers,
+      extraHoursRate: suggestion.extrahoursRate,
+    };
+  };
 
   const renderPhaseContent = () => {
     switch (agentState.phase) {
