@@ -37,6 +37,7 @@ export default function HomeScreen() {
             doors: cat.doors || 2,
             gear: cat.gear || "manual",
             pricePerHour: cat.showPrice,
+            expert: cat.expert,
           }));
         setVans(mappedVans);
       }

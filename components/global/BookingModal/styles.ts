@@ -1,5 +1,5 @@
 import { StyleSheet, Platform } from "react-native";
-import { height, ACCENT, DARK } from "./constants";
+import { height, ACCENT } from "./constants";
 
 export const styles = StyleSheet.create({
   backdrop: {
@@ -126,7 +126,7 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: "rgba(254,154,0,0.3)",
+    borderColor: "rgba(197, 216, 199, 0.71)",
   },
   headerTextContainer: {
     flex: 1,
@@ -151,7 +151,7 @@ export const styles = StyleSheet.create({
   },
   form: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: 80,
   },
   inputGroup: {
     marginBottom: 2,
@@ -525,5 +525,46 @@ export const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "900",
     color: "#22c55e",
+  },
+  termsContainer: {
+    marginTop: 20,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  checkbox2: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 13,
+    color: "rgba(255, 255, 255, 0.8)",
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: ACCENT,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  termsHint: {
+    fontSize: 11,
+    color: "#ef4444",
+    marginTop: 8,
+    marginLeft: 36,
   },
 });

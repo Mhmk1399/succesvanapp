@@ -69,6 +69,8 @@ export default function VansScreen() {
           id: cat._id,
           name: cat.name,
           image: cat.image || require("@/assets/images/van.png"),
+          video: cat.video,
+          purpose: cat.purpose,
           seats: cat.seats || 2,
           fuel: cat.fuel || "Diesel",
           doors: cat.doors || 2,
@@ -80,8 +82,7 @@ export default function VansScreen() {
           pricingTiers: cat.pricingTiers || [],
           extraHoursRate: cat.extrahoursRate || cat.extraHoursRate || 0,
           expert:cat.expert || "No",
-           properties: cat.properties || [],
-       
+          properties: cat.properties || [],
         }));
 
         // Filter by category if provided

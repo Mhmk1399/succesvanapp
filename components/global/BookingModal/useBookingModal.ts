@@ -42,7 +42,7 @@ export const useBookingModal = (
   const router = useRouter();
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -203,6 +203,13 @@ export const useBookingModal = (
     selectedGear,
   ]);
 
+  // Reset when modal opens/closes if desired
+  useEffect(() => {
+    if (visible) {
+      setTermsAccepted(false);
+    }
+  }, [visible]);
+
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Animated.parallel([
@@ -251,29 +258,16 @@ export const useBookingModal = (
   }, [user]);
 
   useEffect(() => {
-    console.log("[useBookingModal] Syncing prefilledData:", {
-      pickupDate: prefilledData?.pickupDate,
-      returnDate: prefilledData?.returnDate,
-      pickupTime: prefilledData?.pickupTime,
-      returnTime: prefilledData?.returnTime,
-    });
-
     if (prefilledData?.pickupDate) {
       const d = new Date(prefilledData.pickupDate);
       const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      console.log(
-        "[useBookingModal] Setting pickupDate to:",
-        localDate.toISOString().split("T")[0]
-      );
+
       setPickupDate(localDate);
     }
     if (prefilledData?.returnDate) {
       const d = new Date(prefilledData.returnDate);
       const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      console.log(
-        "[useBookingModal] Setting returnDate to:",
-        localDate.toISOString().split("T")[0]
-      );
+
       setReturnDate(localDate);
     }
     if (prefilledData?.driverAge) {
@@ -295,10 +289,10 @@ export const useBookingModal = (
       setIsLoadingData(true);
       try {
         const [addonsResult, officesResult] = await Promise.all([
-          addonService.getAll(),
-          officeService.getAll(),
+          addonService.getAll("?status=active"),
+          officeService.getAll("?status=active"),
         ]);
-        setAddons(addonsResult.data || []);
+        setAddons(addonsResult.data.data || []);
         const allOffices = officesResult.data || [];
         setOffices(allOffices);
 
@@ -348,7 +342,7 @@ export const useBookingModal = (
           }=${dateStr}&type=${type}`
         );
         const data = await response.json();
- 
+
         if (data.success && data.data?.reservedSlots) {
           // Filter slots to only those that match the exact date
           const filteredSlots = data.data.reservedSlots.filter(
@@ -525,8 +519,8 @@ export const useBookingModal = (
     }
 
     const age = Number(driverAge);
-    if (!driverAge || age < 25 || age > 70)
-      newErrors.driverAge = "Driver age must be between 25 and 70";
+    if (!driverAge || age < 23 || age > 80)
+      newErrors.driverAge = "Driver age must be between 23 and 80";
 
     // Check minimum 6 hours rental
     if (pickupDate && returnDate && pickupTime && returnTime) {
@@ -703,5 +697,7 @@ export const useBookingModal = (
     dynamicVanPrice,
     selectedGear,
     setSelectedGear,
+    termsAccepted,
+    setTermsAccepted,
   };
 };

@@ -291,11 +291,11 @@ export default function UserProfileCard() {
 
           {/* License Upload */}
           <View style={styles.licenseSection}>
-            <Text style={styles.licenseTitle}>📄 License Documents</Text>
+            <Text style={styles.licenseTitle}>📄 Licenses Documents</Text>
 
             {/* Front Side */}
             <View style={styles.licenseUploadArea}>
-              <Text style={styles.licenseLabel}>License Front</Text>
+              <Text style={styles.licenseLabel}>Licenses Front</Text>
               {licensePreviewFront ? (
                 <View style={styles.licensePreview}>
                   <Image
@@ -322,7 +322,7 @@ export default function UserProfileCard() {
 
             {/* Back Side */}
             <View style={styles.licenseUploadArea}>
-              <Text style={styles.licenseLabel}>License Back</Text>
+              <Text style={styles.licenseLabel}>Licenses Back</Text>
               {licensePreviewBack ? (
                 <View style={styles.licensePreview}>
                   <Image
@@ -366,7 +366,7 @@ export default function UserProfileCard() {
           )}
           {(user?.licenceAttached?.front || user?.licenceAttached?.back) && (
             <View style={styles.licenseViewSection}>
-              <Text style={styles.licenseViewTitle}>📄 License Documents</Text>
+              <Text style={styles.licenseViewTitle}>📄 Licenses Documents</Text>
               {user.licenceAttached.front && (
                 <View style={styles.licenseViewItem}>
                   <Ionicons name="checkmark-circle" size={16} color="#22c55e" />

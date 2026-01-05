@@ -1,4 +1,6 @@
-const API_URL = process.env.EXPO_PUBLIC_RESERVATIONS_API || " ";
+import { buildUrl, safeFetch } from "./apiClient";
+
+const API_URL = (process.env.EXPO_PUBLIC_RESERVATIONS_API || "").trim();
 
 type ReservationCreate = {
   category?: string;
@@ -22,7 +24,7 @@ export const reservationService = {
   ) {
     console.log("Posting to:", API_URL);
     console.log("Body:", JSON.stringify({ userData, reservationData }));
-    const response = await fetch(API_URL, {
+    const response = await safeFetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userData, reservationData }),
@@ -38,8 +40,8 @@ export const reservationService = {
   },
 
   async getAll(userId?: string) {
-    const url = userId ? `${API_URL}?userId=${userId}` : API_URL;
-    const response = await fetch(url);
+    const url = buildUrl(API_URL, userId ? { userId } : undefined);
+    const response = await safeFetch(url);
     const data = await response.json();
     return data;
   },

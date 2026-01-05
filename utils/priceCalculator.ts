@@ -46,16 +46,5 @@ export function calculatePrice(
   const pricePerDay = tier.pricePerDay;
   const daysPrice = totalDays * pricePerDay;
 
-  console.log('[priceCalculator]', {
-    billableHours,
-    totalDays,
-    extraHours,
-    extraHoursRate,
-    extraHoursPrice,
-    pricePerDay,
-    daysPrice,
-    total: daysPrice + extraHoursPrice
-  });
-
   return daysPrice + extraHoursPrice;
 }

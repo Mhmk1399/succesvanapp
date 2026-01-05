@@ -494,6 +494,9 @@ export default function UserReservations({
       case "canceled":
         label = "Cancelled";
         color = "#f97373";
+      case "delivered":
+        label = "Collected";
+        color = "#e406d9ff";
         break;
       default:
         label = status;

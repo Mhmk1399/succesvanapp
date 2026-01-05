@@ -46,7 +46,7 @@ export interface Office {
   vehicles: Vehicle[];
   createdAt?: Date;
   updatedAt?: Date;
-  categories:Category
+  categories: Category;
 }
 
 // Vehicle --------------------------------------------------------------------------------
@@ -103,7 +103,8 @@ export interface Category {
   expert: string;
   description?: string;
   image?: string;
-  type:   Type;
+  video?: string;
+  type: Type;
   showPrice: number;
   servicesPeriod: ServicesPeriod;
   pricingTiers: PricingTier[];
@@ -114,6 +115,7 @@ export interface Category {
     availableTypes: ("manual" | "automatic")[];
     automaticExtraCost: number;
   };
+  purpose: string;
   seats: number;
   doors: number;
   createdAt?: Date;

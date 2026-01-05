@@ -2,12 +2,15 @@ import { calculateAddonPrice } from "@/utils/addonCalculator";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
   ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -82,6 +85,8 @@ export default function BookingModal({
     dynamicVanPrice,
     selectedGear,
     setSelectedGear,
+    termsAccepted,
+    setTermsAccepted,
   } = useBookingModal(
     visible,
     van,
@@ -117,7 +122,15 @@ export default function BookingModal({
               <View style={styles.header}>
                 <View style={styles.headerContent}>
                   <View style={styles.headerIconBox}>
-                    <Ionicons name="car-sport" size={24} color={ACCENT} />
+                    <Image
+                      source={van.image}
+                      contentFit="cover"
+                      style={{
+                        width: 50,
+                        height: 50,
+                        borderRadius: 12,
+                      }}
+                    />
                   </View>
                   <View style={styles.headerTextContainer}>
                     <Text style={styles.headerSubtitle}>
@@ -267,6 +280,66 @@ export default function BookingModal({
                   setSelectedGear={setSelectedGear}
                   van={van}
                 />
+                {/* ← NEW: Terms & Conditions checkbox */}
+                <View style={{ marginTop: 20, marginHorizontal: 20 }}>
+                  <Pressable
+                    onPress={() => setTermsAccepted(!termsAccepted)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: 12,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        borderWidth: 2,
+                        borderColor: termsAccepted ? ACCENT : "#6b7280",
+                        backgroundColor: termsAccepted ? ACCENT : "transparent",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {termsAccepted && (
+                        <Ionicons name="checkmark" size={18} color={DARK} />
+                      )}
+                    </View>
+
+                    <Text
+                      style={{
+                        color: "#0acc21ff",
+                        fontSize: 14,
+                        flex: 1,
+                        fontWeight: "500",
+                      }}
+                    >
+                      I accept the{" "}
+                      <Text
+                        style={{
+                          color: ACCENT,
+                          textDecorationLine: "underline",
+                        }}
+                        onPress={() =>
+                          Linking.openURL(
+                            "https://successvanhire.co.uk/terms-and-conditions"
+                          )
+                        }
+                      >
+                        Terms and Conditions
+                      </Text>{" "}
+                      and Privacy Policy
+                    </Text>
+                  </Pressable>
+
+                  {/* Optional error message if needed */}
+                  {/* {!termsAccepted && errors.terms && (
+                    <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
+                      You must accept the terms to proceed
+                    </Text>
+                  )} */}
+                </View>
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
@@ -442,6 +515,15 @@ export default function BookingModal({
                 vanPrice +
                 addonsPrice +
                 (hasPrefilledData ? automaticGearCost : 0);
+
+              const isSubmitDisabled =
+                isSubmitting ||
+                !termsAccepted ||
+                !pickupDate ||
+                !returnDate ||
+                !pickupTime ||
+                !returnTime ||
+                !van;
 
               return (
                 <>
@@ -753,11 +835,11 @@ export default function BookingModal({
 
                   <Pressable
                     onPress={handleSubmit}
-                    disabled={isSubmitting}
+                    disabled={isSubmitDisabled}
                     style={({ pressed }) => [
                       styles.submitBtn,
                       pressed && styles.submitBtnPressed,
-                      isSubmitting && styles.submitBtnDisabled,
+                      isSubmitDisabled && styles.submitBtnDisabled,
                     ]}
                   >
                     <LinearGradient
@@ -864,12 +946,29 @@ export default function BookingModal({
                     selectedTextColor: "#ffffff",
                   };
                 }
+                // Mark disabled dates (48-hour restriction)
+                const today = new Date();
+                for (let i = 0; i < 2; i++) {
+                  const checkDate = new Date(today);
+                  checkDate.setDate(today.getDate() + i);
+                  const dateStr = checkDate.toISOString().split("T")[0];
+                  if (selectingDate === "pickup") {
+                    marked[dateStr] = {
+                      disabled: true,
+                      disableTouchEvent: true,
+                    };
+                  }
+                }
                 return marked;
               })()}
               markingType="period"
               minDate={
                 selectingDate === "pickup"
-                  ? new Date().toISOString().split("T")[0]
+                  ? (() => {
+                      const minDate = new Date();
+                      minDate.setDate(minDate.getDate() + 2);
+                      return minDate.toISOString().split("T")[0];
+                    })()
                   : tempPickupDate?.toISOString().split("T")[0]
               }
               maxDate={

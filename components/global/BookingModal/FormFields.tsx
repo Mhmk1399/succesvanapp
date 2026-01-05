@@ -193,7 +193,7 @@ export const FormFields = ({
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Driver Age (25-70)</Text>
+          <Text style={styles.label}>Driver Age (23-80)</Text>
           <View
             style={[
               styles.inputWrapper,
@@ -206,7 +206,7 @@ export const FormFields = ({
               color={focusedInput === "driverAge" ? ACCENT : "#9ca3af"}
             />
             <TextInput
-              placeholder="Enter driver age"
+              placeholder="23-80"
               placeholderTextColor="#6b7280"
               value={driverAge}
               onChangeText={(text) => {
@@ -289,7 +289,7 @@ export const FormFields = ({
       return van?.gear && typeof van.gear === 'object' && van.gear.availableTypes && van.gear.availableTypes.length > 1;
     })() && (
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>Gear Type</Text>
+        <Text style={styles.label}>Gearbox</Text>
         <View style={{ flexDirection: "row", gap: 12 }}>
           <Pressable
             onPress={() => {

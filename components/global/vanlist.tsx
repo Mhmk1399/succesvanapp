@@ -20,6 +20,8 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/contexts/AuthContext";
+import Svg, { Path } from "react-native-svg";
+import { Video } from "expo-av";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 40;
@@ -30,6 +32,8 @@ export type Van = {
   id: string;
   name: string;
   image: string | number;
+  video?: string;
+  purpose?: string;
   seats: number;
   fuel: string;
   expert: string;
@@ -193,6 +197,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
   const { user } = useAuth();
   const router = useRouter();
   const [showDimensionsModal, setShowDimensionsModal] = useState(false);
+  const [showVideoModal, setShowVideoModal] = useState(false);
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(50)).current;
@@ -201,6 +206,23 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
   const modalScale = useRef(new Animated.Value(0.8)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
   const arrowAnim = useRef(new Animated.Value(0)).current;
+  const [activeTab, setActiveTab] = useState<"features" | "purpose">(
+    "features"
+  );
+
+  useEffect(() => {
+    if (showDimensionsModal) {
+      setActiveTab("features");
+    }
+  }, [showDimensionsModal]);
+  const handleCardPress = () => {
+    if (van.video) {
+      Haptics.selectionAsync();
+      setShowVideoModal(true); // پخش ویدیو
+    } else {
+      onPress?.(); // رفتار قبلی: رفتن به جزئیات
+    }
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -337,25 +359,28 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
     >
       <Animated.View style={[styles.card, { borderColor }]}>
         <Pressable
-          onPress={(e) => {
-            if (van.properties && van.properties.length > 0) {
-              setShowDimensionsModal(true);
-            } else {
-              onPress?.();
-            }
-          }}
+          onPress={handleCardPress} // ← اینجا تغییر کرد
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.95 }]}
         >
           <View style={styles.imageContainer}>
-            <Animated.View style={{ transform: [{ scale: imageScale }] }}>
-              <Image
-                source={imageSource}
-                style={styles.image}
-                contentFit="cover"
-              />
-            </Animated.View>
+            <Pressable onPress={() => van.video && setShowVideoModal(true)}>
+              <Animated.View style={{ transform: [{ scale: imageScale }] }}>
+                <Image
+                  source={imageSource}
+                  style={styles.image}
+                  contentFit="cover"
+                />
+                {van.video && (
+                  <View style={styles.playIconOverlay}>
+                    <View style={styles.playIconCircle}>
+                      <Ionicons name="play" size={20} color="#fff" />
+                    </View>
+                  </View>
+                )}
+              </Animated.View>
+            </Pressable>
             <LinearGradient
               colors={[
                 "rgba(0,0,0,0.9)",
@@ -378,7 +403,19 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
 
               <View style={styles.chipsRow}>
                 <Chip icon="people-outline" label={`${van.seats} seats`} />
-                <Chip icon="car-outline" label={`${van.doors} doors`} />
+                <View style={styles.chip}>
+                  <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M12.29 3.29L20 11v4.13a1 1 0 01-.86 1l-2.06.3A6.11 6.11 0 0012 21H5a1 1 0 01-1-1V4a1 1 0 011-1h6.59a1 1 0 01.7.29zM20 11H4M8 15h2"
+                      stroke={ACCENT}
+                      strokeWidth={1.6}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="none"
+                    />
+                  </Svg>
+                  <Text style={styles.chipText}>{`${van.doors} doors`}</Text>
+                </View>
                 <Chip icon="flame-outline" label={van.fuel} />
               </View>
               <View style={styles.gearRow}>
@@ -435,11 +472,11 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                     </Animated.View>
                   </Pressable>
                 )}
-                <View style={styles.priceRow}>
+                {/* <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>from </Text>
                   <Text style={styles.priceValue}>£{van.showPrice || 0}</Text>
                   <Text style={styles.priceLabel}> / day</Text>
-                </View>
+                </View> */}
               </View>
 
               <View style={styles.rightSection}>
@@ -488,6 +525,45 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
         </Pressable>
 
         <Modal
+          visible={showVideoModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowVideoModal(false)}
+        >
+          <View style={styles.videoModalContainer}>
+            <View style={styles.videoModalHeader}>
+              <Pressable
+                onPress={() => setShowVideoModal(false)}
+                style={styles.videoCloseButton}
+              >
+                <Ionicons name="close" size={28} color="#fff" />
+              </Pressable>
+            </View>
+
+            {/* پخش واقعی ویدیو با expo-av */}
+            {van.video ? (
+              <Video
+                source={{ uri: van.video }}
+                rate={1.0}
+                volume={1.0}
+                isMuted={false}
+                shouldPlay
+                isLooping={false}
+                useNativeControls
+                style={styles.videoPlayer}
+              />
+            ) : (
+              <View style={styles.videoFallback}>
+                <Ionicons name="videocam-off" size={60} color="#666" />
+                <Text style={styles.videoFallbackText}>
+                  Video not available
+                </Text>
+              </View>
+            )}
+          </View>
+        </Modal>
+
+        <Modal
           visible={showDimensionsModal}
           transparent
           animationType="none"
@@ -510,7 +586,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                 <View style={styles.modalInner}>
                   <View style={styles.modalHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.modalTitle}>Dimensions</Text>
+                      <Text style={styles.modalTitle}>Van Details</Text>
                       <Text style={styles.modalSubtitle}>{van.name}</Text>
                     </View>
                     <Pressable
@@ -521,21 +597,110 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                     </Pressable>
                   </View>
 
+                  {/* تب‌ها */}
+                  <View style={styles.tabContainer}>
+                    <Pressable
+                      onPress={() => setActiveTab("features")}
+                      style={[
+                        styles.tabButton,
+                        activeTab === "features" && styles.tabButtonActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.tabText,
+                          activeTab === "features" && styles.tabTextActive,
+                        ]}
+                      >
+                        Features
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setActiveTab("purpose")}
+                      style={[
+                        styles.tabButton,
+                        activeTab === "purpose" && styles.tabButtonActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.tabText,
+                          activeTab === "purpose" && styles.tabTextActive,
+                        ]}
+                      >
+                        Ideal For
+                      </Text>
+                    </Pressable>
+                  </View>
+
                   <ScrollView
-                    style={styles.dimensionsList}
+                    style={styles.tabContent}
                     showsVerticalScrollIndicator={false}
-                    nestedScrollEnabled={true}
                   >
-                    <View style={styles.dimensionsGrid}>
-                      {van.properties?.map((prop) => (
-                        <View key={prop._id} style={styles.dimensionItem}>
-                          <Text style={styles.dimensionKey}>{prop.key}</Text>
-                          <Text style={styles.dimensionValue}>
-                            {prop.value}
-                          </Text>
+                    {activeTab === "features" ? (
+                      // تب ویژگی‌ها (همون قبلی)
+                      van.properties && van.properties.length > 0 ? (
+                        <View style={styles.dimensionsGrid}>
+                          {van.properties.map((prop) => (
+                            <View key={prop._id} style={styles.dimensionItem}>
+                              <Text style={styles.dimensionKey}>
+                                {prop.key}
+                              </Text>
+                              <Text style={styles.dimensionValue}>
+                                {prop.value}
+                              </Text>
+                            </View>
+                          ))}
                         </View>
-                      ))}
-                    </View>
+                      ) : (
+                        <Text style={styles.noDataText}>
+                          No features available
+                        </Text>
+                      )
+                    ) : // تب Purpose
+                    van.purpose ? (
+                      <View style={styles.purposeContainer}>
+                        {van.purpose
+                          .split("\n")
+                          .map((line: string, index: number) => {
+                            const trimmed = line.trim();
+                            if (!trimmed)
+                              return <View key={index} style={{ height: 8 }} />;
+
+                            const isIdeal = trimmed
+                              .toLowerCase()
+                              .includes("ideal for");
+                            const hasTick = trimmed.startsWith("✅");
+
+                            return (
+                              <View key={index} style={styles.purposeLine}>
+                                {hasTick && (
+                                  <Ionicons
+                                    name="checkmark-circle"
+                                    size={18}
+                                    color={ACCENT}
+                                    style={{ marginTop: 8 }}
+                                  />
+                                )}
+                                <Text
+                                  style={[
+                                    styles.purposeText,
+                                    isIdeal && styles.purposeIdeal,
+                                    hasTick && styles.purposeItem,
+                                  ]}
+                                >
+                                  {hasTick ? trimmed.substring(2) : trimmed}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                      </View>
+                    ) : (
+                      <Text style={styles.noDataText}>
+                        No purpose information
+                      </Text>
+                    )}
                   </ScrollView>
                 </View>
               </Pressable>
@@ -854,5 +1019,109 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: ACCENT,
     fontWeight: "700",
+  },
+  playIconOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  playIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 35,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  videoModalContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center",
+  },
+  videoModalHeader: {
+    position: "absolute",
+    top: 40,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    alignItems: "center",
+  },
+  videoCloseButton: {
+    padding: 10,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 30,
+  },
+  videoPlayer: {
+    width: "100%",
+    height: "100%",
+  },
+  videoFallback: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000",
+  },
+  videoFallbackText: {
+    color: "#999",
+    fontSize: 16,
+    marginTop: 16,
+  },
+  tabContainer: {
+    flexDirection: "row",
+    backgroundColor: "rgba(15,23,42,0.6)",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  tabButtonActive: {
+    backgroundColor: ACCENT,
+  },
+  tabText: {
+    color: "#94a3b8",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  tabTextActive: {
+    color: DARK,
+    fontWeight: "800",
+  },
+  tabContent: {
+    maxHeight: 420,
+  },
+  purposeContainer: {
+    paddingHorizontal: 4,
+  },
+  purposeLine: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 10,
+  },
+  purposeText: {
+    color: "#e5e7eb",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  purposeIdeal: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#f9fafb",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  purposeItem: {
+    marginLeft: 4,
+  },
+  noDataText: {
+    color: "#94a3b8",
+    fontSize: 14,
+    textAlign: "center",
+    padding: 20,
   },
 });

@@ -483,11 +483,12 @@ export default function AIBookingFlow({
               <Text style={styles.formLabel}>Driver Age *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="25"
+                placeholder="23-80"
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 value={bookingForm.driverAge.toString()}
                 onChangeText={(text) => setBookingForm(p => ({ ...p, driverAge: parseInt(text) || 25 }))}
                 keyboardType="number-pad"
+                
               />
             </View>
             

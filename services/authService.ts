@@ -4,9 +4,7 @@ const API_URL = process.env.EXPO_PUBLIC_AUTH_API || " ";
 
 export const authService = {
   async sendCode(phoneNumber: string) {
-    console.log("API_URL:", API_URL);
-    console.log("Sending to:", phoneNumber);
-    
+      
     if (!API_URL || API_URL.trim() === "") {
       throw new Error("API URL not configured");
     }

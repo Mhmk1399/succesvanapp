@@ -1,4 +1,5 @@
 // components/ReservationForm.tsx
+import { useAlert } from "@/components/global/CustomAlert";
 import { useAuth } from "@/contexts/AuthContext";
 import { officeService } from "@/services/officeService";
 import { typeService } from "@/services/typeService";
@@ -12,7 +13,6 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   KeyboardAvoidingView,
@@ -248,6 +248,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
             <ReservationSheetContent
               onClose={closeSheet}
               onCompleted={onCompleted}
+              isSheetOpen={sheetVisible}
             />
           </BlurView>
         </Animated.View>
@@ -261,12 +262,36 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
 type SheetContentProps = {
   onClose: () => void;
   onCompleted?: () => void;
+  isSheetOpen?: boolean;
 };
 
-function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
+function ReservationSheetContent({
+  onClose,
+  onCompleted,
+  isSheetOpen = false,
+}: SheetContentProps) {
   const colorScheme = useColorScheme();
   const { user } = useAuth();
   const router = useRouter();
+  const { showAlert } = useAlert();
+
+  // Inline alert shown inside the sheet to avoid being occluded by the sheet's Modal
+  const [inlineAlertVisible, setInlineAlertVisible] = useState(false);
+  const [inlinePayload, setInlinePayload] = useState<{
+    title?: string;
+    message?: string;
+  }>({});
+
+  const showEitherAlert = (title?: string, message?: string) => {
+    if (isSheetOpen) {
+      setInlinePayload({ title: title || "", message: message || "" });
+      setInlineAlertVisible(true);
+    } else {
+      showAlert(title, message);
+    }
+  };
+
+  const hideInlineAlert = () => setInlineAlertVisible(false);
 
   // ---- WEB LOGIC PORTED HERE ----
   const [offices, setOffices] = useState<Office[]>([]);
@@ -305,6 +330,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
   );
   const [tempPickupDate, setTempPickupDate] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loginModalVisible, setLoginModalVisible] = useState(false);
   const [startDateReservedSlots, setStartDateReservedSlots] = useState<
     {
       startDate: string;
@@ -326,20 +352,31 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [vansModalVisible, setVansModalVisible] = useState(false);
-  const [availableVans, setAvailableVans] = useState<{
-    id: string;
-    name: string;
-    image: string;
-    seats: number;
-    fuel: string;
-    expert: string;
-    doors: number;
-    gear?: { availableTypes: ("manual" | "automatic")[]; automaticExtraCost: number } | string;
-    showPrice?: number;
-    pricingTiers?: { minDays: number; maxDays: number; pricePerDay: number }[];
-    extraHoursRate?: number;
-    cargo?: string;
-  }[]>([]);
+  const [availableVans, setAvailableVans] = useState<
+    {
+      id: string;
+      name: string;
+      image: string;
+      seats: number;
+      fuel: string;
+      expert: string;
+      doors: number;
+      gear?:
+        | {
+            availableTypes: ("manual" | "automatic")[];
+            automaticExtraCost: number;
+          }
+        | string;
+      showPrice?: number;
+      pricingTiers?: {
+        minDays: number;
+        maxDays: number;
+        pricePerDay: number;
+      }[];
+      extraHoursRate?: number;
+      cargo?: string;
+    }[]
+  >([]);
   const [loadingVans, setLoadingVans] = useState(false);
 
   // Sync dateRange with pickupDate and returnDate
@@ -370,9 +407,10 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     const fetchData = async () => {
       setIsLoading(true);
       try {
+        // Examples: pass a query string or an object
         const [offData, typeData] = await Promise.all([
-          officeService.getAll(),
-          typeService.getAll(),
+          officeService.getAll("?status=active"), // string query
+          typeService.getAll("?status=active"), // object params
         ]);
         setOffices(offData.data || []);
         setTypes(typeData || []);
@@ -427,7 +465,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       )
         .then((res) => res.json())
         .then((data) => {
-           if (data.data?.reservedSlots) {
+          if (data.data?.reservedSlots) {
             // Only keep slots that START on this pickup date
             const filteredSlots = data.data.reservedSlots.filter(
               (slot: {
@@ -644,7 +682,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
 
   const openDateRangePicker = () => {
     if (!selectedOffice) {
-      Alert.alert("Select Office", "Please select an office first.");
+      showEitherAlert("Select Office", "Please select an office first.");
       return;
     }
     setSelectingDate("pickup");
@@ -661,7 +699,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     });
 
     if (isDateDisabled(date)) {
-      Alert.alert("Office Closed", "This date is not available.");
+      showEitherAlert("Office Closed", "This date is not available.");
       return;
     }
 
@@ -675,7 +713,10 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     } else {
       const baseDate = tempPickupDate || pickupDate;
       if (baseDate && date < baseDate) {
-        Alert.alert("Invalid Date", "Return date must be after pickup date.");
+        showEitherAlert(
+          "Invalid Date",
+          "Return date must be after pickup date."
+        );
         return;
       }
       console.log("[selectDate] Setting as return date");
@@ -688,7 +729,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
 
   const openTimeModal = (field: "pickupTime" | "returnTime") => {
     if (!selectedOffice) {
-      Alert.alert("Select Office", "Please select an office first.");
+      showEitherAlert("Select Office", "Please select an office first.");
       return;
     }
     Haptics.selectionAsync();
@@ -722,7 +763,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         const diffHours = diffMs / (1000 * 60 * 60);
 
         if (diffHours < 6) {
-          Alert.alert(
+          showEitherAlert(
             "Minimum Rental Period",
             "Minimum rental period is 6 hours. Please select a later return time or date."
           );
@@ -741,7 +782,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
 
   const handleConfirm = (date: Date) => {
     if (pickerMode === "date" && isDateDisabled(date)) {
-      Alert.alert(
+      showEitherAlert(
         "Office Closed",
         "The selected date is not available for this office."
       );
@@ -780,20 +821,26 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     });
 
     if (!selectedOffice || !selectedType) {
-      Alert.alert("Missing details", "Please select office and category.");
+      showEitherAlert("Missing details", "Please select office and category.");
       return;
     }
     if (!pickupDate || !returnDate) {
-      Alert.alert("Missing dates", "Please choose pickup and return dates.");
+      showEitherAlert(
+        "Missing dates",
+        "Please choose pickup and return dates."
+      );
       return;
     }
     if (!pickupTime || !returnTime) {
-      Alert.alert("Missing times", "Please choose pickup and return times.");
+      showEitherAlert(
+        "Missing times",
+        "Please choose pickup and return times."
+      );
       return;
     }
     const age = Number(driverAge);
-    if (!driverAge || age < 25 || age > 70) {
-      Alert.alert("Driver age", "Driver age must be between 25 and 70.");
+    if (!driverAge || age < 23 || age > 80) {
+      showEitherAlert("Driver age", "Driver age must be between 23 and 80.");
       return;
     }
 
@@ -807,7 +854,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       end.setHours(rH, rM, 0, 0);
       const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
       if (diffHours < 6) {
-        Alert.alert(
+        showAlert(
           "Minimum Rental Period",
           "Minimum rental period is 6 hours. Please adjust your dates and times."
         );
@@ -829,28 +876,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
           driverAge,
         })
       );
-
-      Alert.alert(
-        "Login Required",
-        "Please login or register to continue with your reservation.",
-        [
-          {
-            text: "Login",
-            onPress: () => {
-              onClose();
-              router.push("/register");
-            },
-          },
-          {
-            text: "Register",
-            onPress: () => {
-              onClose();
-              router.push("/register");
-            },
-          },
-          { text: "Cancel", style: "cancel" },
-        ]
-      );
+      setLoginModalVisible(true);
       return;
     }
 
@@ -930,18 +956,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       pickupExtensionFee,
       returnExtensionFee,
     };
-
-    console.log("Reservation payload (mobile):", reservationPayload);
-
-    // try {
-    //   const { sound } = await Audio.Sound.createAsync(
-    //     require("@/assets/sounds/Iphone.mp3")
-    //   );
-    //   await sound.playAsync();
-    //   setTimeout(() => sound.unloadAsync(), 3000);
-    // } catch (error) {
-    //   console.log("Sound error:", error);
-    // }
+    console.log("[Reservation Payload]", reservationPayload);
 
     setIsSubmitting(false);
     setLoadingVans(true);
@@ -949,7 +964,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
     try {
       const [officeResponse, categoriesResponse] = await Promise.all([
         fetch(`${process.env.EXPO_PUBLIC_OFFICES_API}/${selectedOffice}`),
-        fetch(process.env.EXPO_PUBLIC_CATEGORIES_API || ""),
+        fetch(`${process.env.EXPO_PUBLIC_CATEGORIES_API}?status=active` || ""),
       ]);
 
       const [officeData, categoriesData] = await Promise.all([
@@ -965,11 +980,22 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       ) {
         const officeCategoryIds = officeData.data.categories;
 
-        const filteredVans = categoriesData.data
+        // Defensive: officeCategoryIds may contain id strings or objects like { _id }
+        const officeIdsStr = (officeCategoryIds || []).map((id: any) =>
+          String(id && (id._id ?? id))
+        );
+
+        const filteredVans = (
+          Array.isArray(categoriesData.data) ? categoriesData.data : []
+        )
           .filter((cat: Category) => {
-            const matchesOffice = officeCategoryIds.includes(cat._id);
+            const catId = String(cat._id ?? "");
+            const matchesOffice = officeIdsStr.includes(catId);
+
+            // cat.type may be either an object { _id } or a plain id string
+            const catTypeId = cat.type ? cat.type._id ?? cat.type : undefined;
             const matchesType =
-              cat.type._id === selectedType || cat.type?._id === selectedType;
+              String(catTypeId ?? "") === String(selectedType ?? "");
 
             return matchesOffice && matchesType;
           })
@@ -984,10 +1010,13 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
             showPrice: cat.showPrice || 0,
             pricingTiers: cat.pricingTiers || [],
             extraHoursRate: cat.extrahoursRate || 0,
-            cargo: cat.expert || "",
+            expert: cat.expert || "",
           }));
 
+        console.log("[filteredVans count]", filteredVans.length);
+
         setAvailableVans(filteredVans);
+        console.log(filteredVans, "//////");
       }
     } catch (error) {
       console.log("Failed to load vans:", error);
@@ -996,6 +1025,15 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
       setVansModalVisible(true);
     }
   };
+
+  // Custom Login Modal handlers
+  const handleLoginPress = () => {
+    setLoginModalVisible(false);
+    onClose();
+    router.push("/register");
+  };
+
+  const handleCancelLogin = () => setLoginModalVisible(false);
 
   const renderInput = (
     placeholder: string,
@@ -1061,6 +1099,52 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
 
   return (
     <>
+      {/* Inline alert rendered inside the sheet when it's open */}
+      {inlineAlertVisible && (
+        <View
+          style={{
+            position: "absolute",
+            top: 200,
+            left: 0,
+            right: 0,
+            bottom: 300,
+            zIndex: 999,
+          }}
+          pointerEvents="box-none"
+        >
+          <Pressable style={{ flex: 1 }} onPress={hideInlineAlert} />
+          <View
+            style={{
+              backgroundColor: "#1e293b",
+              padding: 16,
+              borderRadius: 12,
+              margin: 16,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.1)",
+            }}
+          >
+            <Text
+              style={{
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: "700",
+                marginBottom: 8,
+              }}
+            >
+              {inlinePayload.title}
+            </Text>
+            <Text style={{ color: "#cbd5e1", marginBottom: 14 }}>
+              {inlinePayload.message}
+            </Text>
+            <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+              <Pressable onPress={hideInlineAlert} style={{ padding: 10 }}>
+                <Text style={{ color: "#cbd5e1", fontWeight: "600" }}>OK</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* DATE / TIME PICKER MODAL */}
       <DateTimePickerModal
         isVisible={isPickerVisible}
@@ -1274,7 +1358,11 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
             <Calendar
               minDate={
                 selectingDate === "pickup"
-                  ? new Date().toISOString().split("T")[0]
+                  ? (() => {
+                      const minDate = new Date();
+                      minDate.setDate(minDate.getDate() + 2);
+                      return minDate.toISOString().split("T")[0];
+                    })()
                   : pickupDate?.toISOString().split("T")[0]
               }
               maxDate={
@@ -1321,20 +1409,23 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
                   };
                 }
 
-                // Mark disabled dates
-                if (office) {
-                  const today = new Date();
-                  for (let i = 0; i < 60; i++) {
-                    const checkDate = new Date(today);
-                    checkDate.setDate(today.getDate() + i);
+                // Mark disabled dates (48-hour restriction + office closed days)
+                const today = new Date();
+                for (let i = 0; i < 60; i++) {
+                  const checkDate = new Date(today);
+                  checkDate.setDate(today.getDate() + i);
+                  const dateStr = checkDate.toISOString().split("T")[0];
 
-                    if (isDateDisabled(checkDate)) {
-                      const dateStr = checkDate.toISOString().split("T")[0];
-                      marked[dateStr] = {
-                        disabled: true,
-                        disableTouchEvent: true,
-                      };
-                    }
+                  if (selectingDate === "pickup" && i < 2) {
+                    marked[dateStr] = {
+                      disabled: true,
+                      disableTouchEvent: true,
+                    };
+                  } else if (office && isDateDisabled(checkDate)) {
+                    marked[dateStr] = {
+                      disabled: true,
+                      disableTouchEvent: true,
+                    };
                   }
                 }
 
@@ -1806,7 +1897,7 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
           <View style={sheetStyles.row}>
             <View style={sheetStyles.half}>
               {renderInput(
-                "Driver age (25-70)",
+                "Driver age (23-80)",
                 driverAge,
                 setDriverAge,
                 "person-outline",
@@ -1924,6 +2015,91 @@ function ReservationSheetContent({ onClose, onCompleted }: SheetContentProps) {
         })()}
         onReservationComplete={onClose}
       />
+
+      {/* Custom Login Required Modal (replaces Alert.alert) */}
+      <Modal
+        visible={loginModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLoginModalVisible(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onPress={() => setLoginModalVisible(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              width: "86%",
+              backgroundColor: "#0b1220",
+              padding: 18,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.06)",
+            }}
+          >
+            <Text
+              style={{
+                color: "#fff",
+                fontSize: 18,
+                fontWeight: "700",
+                marginBottom: 8,
+              }}
+            >
+              Login Required
+            </Text>
+            <Text style={{ color: "#cbd5e1", marginBottom: 14 }}>
+              Please login or register to continue with your reservation.
+            </Text>
+
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                gap: 8,
+              }}
+            >
+              <Pressable
+                onPress={handleCancelLogin}
+                style={({ pressed }) => [
+                  {
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 8,
+                    backgroundColor: pressed
+                      ? "rgba(255,255,255,0.04)"
+                      : "transparent",
+                  },
+                ]}
+              >
+                <Text style={{ color: "#cbd5e1", fontWeight: "600" }}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleLoginPress}
+                style={({ pressed }) => [
+                  {
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 8,
+                    backgroundColor: pressed ? "rgba(254,154,0,0.9)" : ACCENT,
+                  },
+                ]}
+              >
+                <Text style={{ color: "#0b1220", fontWeight: "800" }}>
+                  Login / Register
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 }
@@ -1971,6 +2147,8 @@ function VoiceAIButton() {
     setShowAIFlow(true);
   };
 
+  const { showAlert } = useAlert();
+
   return (
     <>
       <Pressable
@@ -1983,16 +2161,10 @@ function VoiceAIButton() {
       >
         <View style={sheetStyles.voiceLeft}>
           <View style={sheetStyles.voiceIconWrapper}>
-            <Ionicons
-              name="sparkles"
-              size={26}
-              color={DARK}
-            />
+            <Ionicons name="sparkles" size={26} color={DARK} />
           </View>
           <View>
-            <Text style={sheetStyles.voiceTitle}>
-              Book with AI Assistant
-            </Text>
+            <Text style={sheetStyles.voiceTitle}>Book with AI Assistant</Text>
             <Text style={sheetStyles.voiceSubtitle}>
               Voice or text - complete in ~1 minute
             </Text>
@@ -2027,7 +2199,7 @@ function VoiceAIButton() {
         onClose={() => setShowAIFlow(false)}
         onComplete={() => {
           setShowAIFlow(false);
-          Alert.alert("Success", "Booking completed successfully!");
+          showAlert("Success", "Booking completed successfully!");
         }}
       />
     </>

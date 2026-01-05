@@ -1,21 +1,21 @@
+import { calculatePrice } from "@/utils/priceCalculator";
+import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import React, { useRef } from "react";
 import {
-  Modal,
-  View,
-  Text,
-  Pressable,
-  FlatList,
-  Animated,
-  StyleSheet,
   ActivityIndicator,
+  Animated,
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
-import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
-import * as Haptics from "expo-haptics";
+import Svg, { Circle, Path, Rect } from "react-native-svg";
 import BookingModal from "./BookingModal";
-import { calculatePrice } from "@/utils/priceCalculator";
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
@@ -28,7 +28,7 @@ type Van = {
   fuel: string;
   expert: string;
   doors: number;
-  gear?: 
+  gear?:
     | {
         availableTypes: ("manual" | "automatic")[];
         automaticExtraCost: number;
@@ -77,11 +77,6 @@ export default function VansModal({
   const [bookingModalVisible, setBookingModalVisible] = React.useState(false);
 
   const handleBookVan = (van: Van, price: number) => {
-    console.log("[VansModal] Opening BookingModal with:", {
-      van,
-      prefilledData,
-      calculatedPrice: price,
-    });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onClose();
     setSelectedVan(van);
@@ -91,7 +86,11 @@ export default function VansModal({
 
   return (
     <>
-      <Modal visible={visible && !bookingModalVisible} transparent animationType="slide">
+      <Modal
+        visible={visible && !bookingModalVisible}
+        transparent
+        animationType="slide"
+      >
         <View style={styles.container}>
           <BlurView intensity={90} tint="dark" style={styles.blurContainer}>
             <View style={styles.header}>
@@ -154,7 +153,9 @@ export default function VansModal({
           setSelectedVan(null);
           setCalculatedPrice(0);
         }}
-        prefilledData={prefilledData ? { ...prefilledData, calculatedPrice } : undefined}
+        prefilledData={
+          prefilledData ? { ...prefilledData, calculatedPrice } : undefined
+        }
         onReservationComplete={onReservationComplete}
       />
     </>
@@ -198,26 +199,26 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
     }
     const startDate = new Date(prefilledData.pickupDate);
     const endDate = new Date(prefilledData.returnDate);
-    
+
     if (prefilledData.pickupTime) {
-      const [h, m] = prefilledData.pickupTime.split(':').map(Number);
+      const [h, m] = prefilledData.pickupTime.split(":").map(Number);
       startDate.setHours(h, m, 0, 0);
     }
     if (prefilledData.returnTime) {
-      const [h, m] = prefilledData.returnTime.split(':').map(Number);
+      const [h, m] = prefilledData.returnTime.split(":").map(Number);
       endDate.setHours(h, m, 0, 0);
     }
-    
+
     const basePrice = calculatePrice(
       startDate,
       endDate,
       van.pricingTiers || [],
       van.extraHoursRate || 0
     );
-    
+
     const pickupExtension = prefilledData.pickupExtensionFee || 0;
     const returnExtension = prefilledData.returnExtensionFee || 0;
-    
+
     return basePrice + pickupExtension + returnExtension;
   }, [prefilledData, van]);
 
@@ -235,17 +236,13 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
               style={styles.vanImage}
               contentFit="cover"
             />
-            <LinearGradient
-              colors={["rgba(0,0,0,0.6)", "transparent"]}
-              style={styles.imageGradient}
-            />
           </View>
 
           <View style={styles.cardInfo}>
             <Text style={styles.vanName} numberOfLines={1}>
               {van.name}
             </Text>
-            <Text style={styles.vanCargo}>{van.cargo || "Modern van"}</Text>
+            <Text style={styles.vanCargo}>{van.expert || "Modern van"}</Text>
 
             <View style={styles.specs}>
               <View style={styles.spec}>
@@ -253,7 +250,16 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
                 <Text style={styles.specText}>{van.seats}</Text>
               </View>
               <View style={styles.spec}>
-                <Ionicons name="car-outline" size={14} color={ACCENT} />
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M12.29 3.29L20 11v4.13a1 1 0 01-.86 1l-2.06.3A6.11 6.11 0 0012 21H5a1 1 0 01-1-1V4a1 1 0 011-1h6.59a1 1 0 01.7.29zM20 11H4M8 15h2"
+                    stroke={"#fe9a00"}
+                    strokeWidth={1}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                </Svg>
                 <Text style={styles.specText}>{van.doors}</Text>
               </View>
               <View style={styles.spec}>
@@ -388,9 +394,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  imageGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
+
   cardInfo: {
     flex: 1,
     justifyContent: "space-between",
@@ -429,7 +433,7 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 20,
     fontWeight: "900",
-    color: "#f9fafb",
+    color: "#1dca06ff",
   },
   priceUnit: {
     fontSize: 11,

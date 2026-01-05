@@ -13,6 +13,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import Svg, { Path } from "react-native-svg";
+import { ACCENT } from "../global/BookingModal/constants";
 
 const { width, height } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.85;
@@ -341,11 +343,6 @@ function VanCard({
             </Animated.View>
 
             {/* Gradient Overlays */}
-            <LinearGradient
-              colors={["transparent", "rgba(0,0,0,0.3)", "rgba(10,10,10,0.95)"]}
-              locations={[0, 0.5, 1]}
-              style={styles.gradient}
-            />
           </View>
 
           {/* Content Section with Glass Effect */}
@@ -367,8 +364,18 @@ function VanCard({
                 </View>
 
                 <View style={styles.specPill}>
-                  <Ionicons name="cog" size={14} color={COLORS.accent} />
-                  <Text style={styles.specValue}>{gearText}</Text>
+                  <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M12.29 3.29L20 11v4.13a1 1 0 01-.86 1l-2.06.3A6.11 6.11 0 0012 21H5a1 1 0 01-1-1V4a1 1 0 011-1h6.59a1 1 0 01.7.29zM20 11H4M8 15h2"
+                      stroke={ACCENT}
+                      strokeWidth={1.6}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="none"
+                    />
+                  </Svg>
+                  <Text style={styles.specValue}>{van.doors}</Text>
+                  <Text style={styles.specLabel}>Doors</Text>
                 </View>
 
                 <View style={styles.specPill}>
@@ -382,15 +389,6 @@ function VanCard({
 
               {/* Footer */}
               <View style={styles.footer}>
-                <View style={styles.priceContainer}>
-                  <Text style={styles.priceLabel}>Starting from</Text>
-                  <View style={styles.priceRow}>
-                    <Text style={styles.currency}>£</Text>
-                    <Text style={styles.price}>{van.pricePerHour}</Text>
-                    <Text style={styles.priceUnit}>/day</Text>
-                  </View>
-                </View>
-
                 <Pressable
                   onPress={onPress}
                   style={({ pressed }) => [
@@ -502,7 +500,6 @@ const styles = StyleSheet.create({
   cardContainer: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    marginHorizontal: CARD_SPACING / 2,
   },
   cardPressable: {
     flex: 1,
@@ -658,7 +655,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   specLabel: {
-    color: COLORS.textTertiary,
+    color: COLORS.text,
     fontSize: 12,
     fontWeight: "500",
   },

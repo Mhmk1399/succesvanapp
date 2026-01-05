@@ -4,7 +4,7 @@
     "slug": "succesvanapp",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "icon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/new-c.png",
     "scheme": "succesvanapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -20,17 +20,14 @@
       "package": "com.succesvanhire.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "RECEIVE_BOOT_COMPLETED",
-        "RECORD_AUDIO"
-      ]
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "RECORD_AUDIO"]
     },
     "web": {
       "output": "static",
@@ -44,10 +41,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
+          "backgroundColor": "#ffffff"
         }
       ],
       [
