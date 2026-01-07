@@ -83,6 +83,7 @@ export default function VansScreen() {
           extraHoursRate: cat.extrahoursRate || cat.extraHoursRate || 0,
           expert:cat.expert || "No",
           properties: cat.properties || [],
+          selloffer: cat.selloffer || 0,
         }));
 
         // Filter by category if provided

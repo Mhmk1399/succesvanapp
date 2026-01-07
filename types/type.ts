@@ -118,6 +118,7 @@ export interface Category {
   purpose: string;
   seats: number;
   doors: number;
+  selloffer?: number;
   createdAt?: Date;
   updatedAt?: Date;
   properties: Property[];

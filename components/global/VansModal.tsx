@@ -14,7 +14,7 @@ import {
   Text,
   View,
 } from "react-native";
-import Svg, { Circle, Path, Rect } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 import BookingModal from "./BookingModal";
 
 const ACCENT = "#fe9a00";
@@ -38,6 +38,7 @@ type Van = {
   pricingTiers?: { minDays: number; maxDays: number; pricePerDay: number }[];
   extraHoursRate?: number;
   cargo?: string;
+  selloffer?: number;
 };
 
 type PrefilledData = {
@@ -193,9 +194,13 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
   const imageSource =
     typeof van.image === "string" ? { uri: van.image } : van.image;
 
-  const calculatedPrice = React.useMemo(() => {
+  const { calculatedPrice, originalPrice, hasDiscount } = React.useMemo(() => {
     if (!prefilledData?.pickupDate || !prefilledData?.returnDate) {
-      return van.showPrice || 0;
+      return {
+        calculatedPrice: van.showPrice || 0,
+        originalPrice: 0,
+        hasDiscount: false,
+      };
     }
     const startDate = new Date(prefilledData.pickupDate);
     const endDate = new Date(prefilledData.returnDate);
@@ -209,17 +214,39 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
       endDate.setHours(h, m, 0, 0);
     }
 
+    const sellOffer = van.selloffer;
+    console.log(sellOffer, "sellOffer");
+    const hasDiscount = sellOffer && sellOffer > 0;
+
+    // Calculate original price without discount
+    const originalPrice = hasDiscount
+      ? calculatePrice(
+          startDate,
+          endDate,
+          van.pricingTiers || [],
+          van.extraHoursRate || 0
+        )
+      : 0;
+
+    // Calculate discounted price
     const basePrice = calculatePrice(
       startDate,
       endDate,
       van.pricingTiers || [],
-      van.extraHoursRate || 0
+      van.extraHoursRate || 0,
+      sellOffer
     );
 
     const pickupExtension = prefilledData.pickupExtensionFee || 0;
     const returnExtension = prefilledData.returnExtensionFee || 0;
 
-    return basePrice + pickupExtension + returnExtension;
+    return {
+      calculatedPrice: basePrice + pickupExtension + returnExtension,
+      originalPrice: hasDiscount
+        ? originalPrice + pickupExtension + returnExtension
+        : 0,
+      hasDiscount,
+    };
   }, [prefilledData, van]);
 
   return (
@@ -270,6 +297,17 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
 
             <View style={styles.cardFooter}>
               <View>
+                {hasDiscount && (
+                  <View style={styles.discountBadge}>
+                    <Ionicons name="pricetag" size={10} color="#fff" />
+                    <Text style={styles.discountText}>
+                      {van.selloffer || 0}% OFF
+                    </Text>
+                  </View>
+                )}
+                {hasDiscount && (
+                  <Text style={styles.originalPrice}>£{originalPrice}</Text>
+                )}
                 <Text style={styles.price}>£{calculatedPrice}</Text>
                 <Text style={styles.priceUnit}>total</Text>
               </View>
@@ -434,6 +472,29 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "900",
     color: "#1dca06ff",
+  },
+  originalPrice: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#9ca3af",
+    textDecorationLine: "line-through",
+    marginBottom: 2,
+  },
+  discountBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#ef4444",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginBottom: 4,
+  },
+  discountText: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#fff",
   },
   priceUnit: {
     fontSize: 11,

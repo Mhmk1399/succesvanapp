@@ -35,23 +35,28 @@ const COLORS = {
 const SOCIAL_LINKS = [
   {
     icon: "logo-instagram",
-    url: "https://instagram.com/successvanhire",
+    url: "https://www.instagram.com/success.van.hire/#",
     color: "#E4405F",
   },
   {
     icon: "logo-facebook",
-    url: "https://facebook.com/successvanhire",
+    url: "https://www.facebook.com/topvanhire",
     color: "#1877F2",
   },
   {
     icon: "logo-twitter",
-    url: "https://twitter.com/successvanhire",
+    url: "https://twitter.com/MatinDiba?t=GKR1BWNSQK6yB2Rj4W5Jhg&s=09",
     color: "#1DA1F2",
   },
   {
     icon: "logo-whatsapp",
-    url: "https://wa.me/442012345678",
+    url: "https://wa.me/447915193000?text=Hello%2C%20I%20need%20help!",
     color: "#25D366",
+  },
+  {
+    icon: "logo-youtube",
+    url: "https://youtube.com/channel/UCTSPTUFbkBJSHu5oLiXTJAQ",
+    color: "#FF0000",
   },
 ];
 
@@ -175,7 +180,9 @@ export default function Footer() {
               <View style={styles.logoWrapper}>
                 <View style={styles.logoGlow} />
                 <Image
-                  source={require("@/assets/images/logo.png")}
+                  source={{
+                    uri: "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
+                  }}
                   style={styles.logo}
                   resizeMode="contain"
                 />
@@ -238,28 +245,6 @@ export default function Footer() {
         <View style={styles.bottomBar}>
           <BlurView intensity={20} tint="dark" style={styles.bottomBlur}>
             <View style={styles.bottomContent}>
-              <View style={styles.legalLinks}>
-                <Pressable
-                  onPress={() => Haptics.selectionAsync()}
-                  style={({ pressed }) => [
-                    styles.legalLink,
-                    pressed && styles.legalLinkPressed,
-                  ]}
-                >
-                  <Text style={styles.legalLinkText}>Privacy Policy</Text>
-                </Pressable>
-                <View style={styles.legalDot} />
-                <Pressable
-                  onPress={() => Haptics.selectionAsync()}
-                  style={({ pressed }) => [
-                    styles.legalLink,
-                    pressed && styles.legalLinkPressed,
-                  ]}
-                >
-                  <Text style={styles.legalLinkText}>Terms of Service</Text>
-                </Pressable>
-              </View>
-
               <View style={styles.copyrightRow}>
                 <Ionicons name="heart" size={12} color={COLORS.accent} />
                 <Text style={styles.copyright}>
@@ -516,17 +501,17 @@ const styles = StyleSheet.create({
   },
   logoGlow: {
     position: "absolute",
-    top: -20,
-    left: -30,
-    right: -30,
-    bottom: -20,
+    top: -10,
+    left: -20,
+    right: -20,
+    bottom: -10,
     backgroundColor: COLORS.accentGlow,
     borderRadius: 100,
     opacity: 0.3,
   },
   logo: {
     width: 140,
-    height: 80,
+    height: 100,
   },
   tagline: {
     color: COLORS.textSecondary,

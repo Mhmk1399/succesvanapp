@@ -20,6 +20,7 @@ import {
   playSuccessSound,
   scheduleNotification,
 } from "./utils";
+import { discountService } from "@/services/discountService";
 
 export const useBookingModal = (
   visible: boolean,
@@ -35,7 +36,8 @@ export const useBookingModal = (
     driverAge?: string | number;
     calculatedPrice?: number;
   },
-  onReservationComplete?: () => void
+  onReservationComplete?: () => void,
+  discountData?: any
 ) => {
   const hasPrefilledData = !!prefilledData;
   const { user } = useAuth();
@@ -121,7 +123,8 @@ export const useBookingModal = (
       start,
       end,
       van.pricingTiers || [],
-      van.extraHoursRate || 0
+      van.extraHoursRate || 0,
+      (van as any).selloffer
     );
 
     // Add automatic gear cost
@@ -611,6 +614,7 @@ export const useBookingModal = (
         office: hasPrefilledData ? prefilledData.office : selectedOffice,
         startDate: startDateTime.toISOString(),
         endDate: endDateTime.toISOString(),
+        driverAge: driverAge,
         dirverAge: driverAge,
         totalPrice,
         addOns: addonsForPayload,
@@ -621,6 +625,18 @@ export const useBookingModal = (
       const result = await reservationService.create(userData, reservationData);
 
       if (result.success) {
+        console.log("Reservation successful, checking discount:", {
+          discountData,
+          userId: user._id,
+        });
+        if (discountData?._id && user._id) {
+          console.log("Applying discount:", discountData._id, user._id);
+          const discountResult = await discountService.applyDiscount(
+            discountData._id,
+            user._id
+          );
+          console.log("Discount apply result:", discountResult);
+        }
         await playSuccessSound();
         await scheduleNotification(van);
         handleClose();

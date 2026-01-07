@@ -375,6 +375,7 @@ function ReservationSheetContent({
       }[];
       extraHoursRate?: number;
       cargo?: string;
+      selloffer?: number;
     }[]
   >([]);
   const [loadingVans, setLoadingVans] = useState(false);
@@ -1011,13 +1012,13 @@ function ReservationSheetContent({
             pricingTiers: cat.pricingTiers || [],
             extraHoursRate: cat.extrahoursRate || 0,
             expert: cat.expert || "",
+            selloffer: cat.selloffer || 0,
           }));
 
         console.log("[filteredVans count]", filteredVans.length);
 
         setAvailableVans(filteredVans);
-        console.log(filteredVans, "//////");
-      }
+       }
     } catch (error) {
       console.log("Failed to load vans:", error);
     } finally {

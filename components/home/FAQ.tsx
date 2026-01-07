@@ -177,24 +177,6 @@ export default function FAQ() {
         <Text style={styles.subtitle}>
           Find answers to common questions about our van rental service
         </Text>
-
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{FAQ_DATA.length}</Text>
-            <Text style={styles.statLabel}>Questions</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>24/7</Text>
-            <Text style={styles.statLabel}>Support</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>2min</Text>
-            <Text style={styles.statLabel}>Response</Text>
-          </View>
-        </View>
       </Animated.View>
 
       {/* FAQ List */}
@@ -570,7 +552,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 24,
     maxWidth: 300,
-    marginBottom: 24,
+    marginBottom: 2,
   },
   statsRow: {
     flexDirection: "row",

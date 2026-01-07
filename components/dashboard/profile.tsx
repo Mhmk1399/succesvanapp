@@ -110,7 +110,7 @@ export default function UserProfileCard() {
       );
 
       const response = await fetch(`${API_URL}/${user._id}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,

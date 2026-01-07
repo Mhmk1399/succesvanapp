@@ -17,6 +17,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
@@ -27,6 +28,8 @@ import { BookingModalProps } from "./BookingModal/types";
 import { useBookingModal } from "./BookingModal/useBookingModal";
 import { getAvailableTimeSlots, getSelectedOffice } from "./BookingModal/utils";
 import { WorkingTime } from "@/types/type";
+import { discountService } from "@/services/discountService";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function BookingModal({
   visible,
@@ -35,6 +38,42 @@ export default function BookingModal({
   prefilledData,
   onReservationComplete,
 }: BookingModalProps) {
+  const { user } = useAuth();
+  const [discountCode, setDiscountCode] = React.useState("");
+  const [discountData, setDiscountData] = React.useState<any>(null);
+  const [discountLoading, setDiscountLoading] = React.useState(false);
+  const [discountError, setDiscountError] = React.useState("");
+
+  const handleApplyDiscount = async () => {
+    if (!discountCode.trim()) return;
+    if (!user?._id) {
+      setDiscountError("Please login to use discount codes");
+      return;
+    }
+    if (!van?.id) return;
+
+    setDiscountLoading(true);
+    setDiscountError("");
+
+    const result = await discountService.validateCode(
+      discountCode.trim(),
+      user._id,
+      van.id
+    );
+
+    setDiscountLoading(false);
+
+    if (result.success) {
+      setDiscountData(result.data);
+      setDiscountError("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      setDiscountError(result.message || "Invalid code");
+      setDiscountData(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+  
   const {
     translateY,
     opacity,
@@ -92,7 +131,8 @@ export default function BookingModal({
     van,
     onClose,
     prefilledData,
-    onReservationComplete
+    onReservationComplete,
+    discountData
   );
 
   if (!van) return null;
@@ -280,8 +320,152 @@ export default function BookingModal({
                   setSelectedGear={setSelectedGear}
                   van={van}
                 />
+                {/* Discount Code Section */}
+                <View style={{ marginTop: 20, marginHorizontal: 0 }}>
+                  <Text
+                    style={{
+                      color: "#9ca3af",
+                      fontSize: 12,
+                      marginBottom: 6,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Discount Code (Optional)
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: "rgba(15,23,42,0.6)",
+                          borderRadius: 12,
+                          borderWidth: 1.5,
+                          borderColor: discountData
+                            ? "#22c55e"
+                            : discountError
+                            ? "#ef4444"
+                            : "rgba(148,163,184,0.3)",
+                          paddingHorizontal: 12,
+                        }}
+                      >
+                        <Ionicons
+                          name="pricetag-outline"
+                          size={18}
+                          color={discountData ? "#22c55e" : "#9ca3af"}
+                        />
+                        <TextInput
+                          value={discountCode}
+                          onChangeText={(text) => {
+                            setDiscountCode(text.toUpperCase());
+                            setDiscountError("");
+                          }}
+                          placeholder="Enter code"
+                          placeholderTextColor="#6b7280"
+                          editable={!discountData}
+                          style={{
+                            flex: 1,
+                            color: "#f9fafb",
+                            fontSize: 14,
+                            paddingVertical: 12,
+                            paddingHorizontal: 8,
+                          }}
+                        />
+                        {discountData && (
+                          <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+                        )}
+                      </View>
+                    </View>
+                    {!discountData ? (
+                      <Pressable
+                        onPress={handleApplyDiscount}
+                        disabled={discountLoading || !discountCode.trim()}
+                        style={({ pressed }) => [{
+                          backgroundColor: ACCENT,
+                          paddingHorizontal: 16,
+                          paddingVertical: 12,
+                          borderRadius: 12,
+                          opacity: discountLoading || !discountCode.trim() ? 0.5 : pressed ? 0.8 : 1,
+                        }]}
+                      >
+                        {discountLoading ? (
+                          <ActivityIndicator size="small" color={DARK} />
+                        ) : (
+                          <Text
+                            style={{
+                              color: DARK,
+                              fontSize: 13,
+                              fontWeight: "700",
+                            }}
+                          >
+                            Apply
+                          </Text>
+                        )}
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        onPress={() => {
+                          setDiscountCode("");
+                          setDiscountData(null);
+                          setDiscountError("");
+                        }}
+                        style={{
+                          backgroundColor: "rgba(239,68,68,0.2)",
+                          paddingHorizontal: 12,
+                          paddingVertical: 12,
+                          borderRadius: 12,
+                        }}
+                      >
+                        <Ionicons name="close" size={16} color="#ef4444" />
+                      </Pressable>
+                    )}
+                  </View>
+                  {discountError && (
+                    <Text
+                      style={{
+                        color: "#ef4444",
+                        fontSize: 11,
+                        marginTop: 6,
+                        fontWeight: "500",
+                      }}
+                    >
+                      {discountError}
+                    </Text>
+                  )}
+                  {discountData && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                        marginTop: 6,
+                        backgroundColor: "rgba(34,197,94,0.1)",
+                        padding: 8,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Ionicons name="checkmark-circle" size={16} color="#22c55e" />
+                      <Text
+                        style={{
+                          color: "#22c55e",
+                          fontSize: 11,
+                          fontWeight: "600",
+                          flex: 1,
+                        }}
+                      >
+                        {discountData.percentage}% discount applied!
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 {/* ← NEW: Terms & Conditions checkbox */}
-                <View style={{ marginTop: 20, marginHorizontal: 20 }}>
+                <View style={{ marginTop: 20, marginHorizontal: 0 }}>
                   <Pressable
                     onPress={() => setTermsAccepted(!termsAccepted)}
                     style={{
@@ -309,10 +493,11 @@ export default function BookingModal({
 
                     <Text
                       style={{
-                        color: "#0acc21ff",
+                        color: "#ffffffff",
                         fontSize: 14,
                         flex: 1,
                         fontWeight: "500",
+                        marginTop: 6,
                       }}
                     >
                       I accept the{" "}
@@ -511,10 +696,10 @@ export default function BookingModal({
                 },
                 0
               );
-              const total =
-                vanPrice +
-                addonsPrice +
-                (hasPrefilledData ? automaticGearCost : 0);
+              
+              let subtotal = vanPrice + addonsPrice + (hasPrefilledData ? automaticGearCost : 0);
+              const discountAmount = discountData ? (subtotal * discountData.percentage) / 100 : 0;
+              const total = subtotal - discountAmount;
 
               const isSubmitDisabled =
                 isSubmitting ||
@@ -524,6 +709,14 @@ export default function BookingModal({
                 !pickupTime ||
                 !returnTime ||
                 !van;
+
+              const hasSellOffer = van.selloffer && van.selloffer > 0;
+              const discountedPricePerDay = hasSellOffer
+                ? pricePerDay * (1 - (van.selloffer || 0) / 100)
+                : pricePerDay;
+              const totalSavings = hasSellOffer
+                ? (pricePerDay - discountedPricePerDay) * totalDays
+                : 0;
 
               return (
                 <>
@@ -547,16 +740,33 @@ export default function BookingModal({
                           size={13}
                           color="#f79515ff"
                         />
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            color: "#d1d5db",
-                            fontWeight: "500",
-                          }}
-                        >
-                          ({actualDays}d {actualExtraHours}h) {totalDays} day
-                          {totalDays > 1 ? "s" : ""} × £{pricePerDay}
-                        </Text>
+                        <View>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: "#d1d5db",
+                              fontWeight: "500",
+                            }}
+                          >
+                            ({actualDays}d {actualExtraHours}h) {totalDays} day
+                            {totalDays > 1 ? "s" : ""} × £
+                            {hasSellOffer
+                              ? discountedPricePerDay.toFixed(0)
+                              : pricePerDay.toFixed(0)}
+                          </Text>
+                          {hasSellOffer && (
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                color: "#22c55e",
+                                fontWeight: "600",
+                              }}
+                            >
+                              Saved £{totalSavings.toFixed(1)} (-{van.selloffer}
+                              %)
+                            </Text>
+                          )}
+                        </View>
                       </View>
                       <Text
                         style={{
@@ -565,7 +775,11 @@ export default function BookingModal({
                           fontWeight: "700",
                         }}
                       >
-                        £{(totalDays * pricePerDay).toFixed(0)}
+                        £
+                        {(
+                          totalDays *
+                          (hasSellOffer ? discountedPricePerDay : pricePerDay)
+                        ).toFixed(0)}
                       </Text>
                     </View>
 
@@ -805,6 +1019,48 @@ export default function BookingModal({
                       }}
                     />
 
+                    {discountData && (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <Ionicons
+                            name="pricetag"
+                            size={13}
+                            color="#22c55e"
+                          />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: "#d1d5db",
+                              fontWeight: "500",
+                            }}
+                          >
+                            Discount ({discountData.percentage}%)
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: "#22c55e",
+                            fontWeight: "700",
+                          }}
+                        >
+                          -£{discountAmount.toFixed(0)}
+                        </Text>
+                      </View>
+                    )}
+
                     <View
                       style={{
                         flexDirection: "row",
@@ -985,11 +1241,17 @@ export default function BookingModal({
                 textSectionTitleColor: "#9ca3af",
                 selectedDayBackgroundColor: ACCENT,
                 selectedDayTextColor: "#ffffff",
-                todayTextColor: "#06cb48ff",
+                todayTextColor: ACCENT,
                 dayTextColor: "#f9fafb",
                 textDisabledColor: "#4b5563",
                 monthTextColor: "#f9fafb",
                 arrowColor: ACCENT,
+                textDayFontWeight: "500",
+                textMonthFontWeight: "700",
+                textDayHeaderFontWeight: "600",
+                textDayFontSize: 14,
+                textMonthFontSize: 16,
+                textDayHeaderFontSize: 12,
               }}
             />
           </Pressable>

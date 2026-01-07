@@ -8,7 +8,8 @@ export function calculatePrice(
   startDate: Date,
   endDate: Date,
   pricingTiers: PricingTier[],
-  extraHoursRate: number
+  extraHoursRate: number,
+  sellOffer?: number
 ): number {
   if (!pricingTiers || pricingTiers.length === 0) return 0;
 
@@ -43,7 +44,13 @@ export function calculatePrice(
       (t) => totalDays >= t.minDays && totalDays <= t.maxDays
     ) || pricingTiers[pricingTiers.length - 1];
 
-  const pricePerDay = tier.pricePerDay;
+  let pricePerDay = tier.pricePerDay;
+  
+  // Apply discount if selloffer exists
+  if (sellOffer && sellOffer > 0) {
+    pricePerDay = pricePerDay * (1 - sellOffer / 100);
+  }
+  
   const daysPrice = totalDays * pricePerDay;
 
   return daysPrice + extraHoursPrice;

@@ -2,40 +2,40 @@ import AlertProvider from "@/components/global/CustomAlert";
 import DynamicIsland from "@/components/global/DynamicIsland";
 import FloatingContactButton from "@/components/global/FloatingContactButton";
 import ScreenEdgeBlur from "@/components/global/ScreenEdgeBlur";
-import { AuthProvider } from "@/contexts/AuthContext";
-import * as Notifications from "expo-notifications";
+import AppSplash from "@/components/global/AppSplash";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
-import { useEffect } from "react";
+import { useFirstLaunch } from "@/utils/useFirstLaunch";
+import { useState } from "react";
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+function AppContent() {
+  const { user } = useAuth();
+  const { isFirstLaunch, isLoading } = useFirstLaunch();
+  const [showSplash, setShowSplash] = useState(true);
+
+  if (isLoading || showSplash) {
+    return <AppSplash onFinish={() => setShowSplash(false)} />;
+  }
+
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="vans/index" />
+        <Stack.Screen name="dashboard/index" />
+      </Stack>
+      <ScreenEdgeBlur />
+      <DynamicIsland />
+      <FloatingContactButton />
+    </>
+  );
+}
 
 export default function RootLayout() {
-  useEffect(() => {
-    // Request notification permissions on app start
-    (async () => {
-      await Notifications.requestPermissionsAsync();
-    })();
-  }, []);
-
   return (
     <AlertProvider>
       <AuthProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="vans/index" />
-          <Stack.Screen name="dashboard/index" />
-        </Stack>
-        <ScreenEdgeBlur />
-        <DynamicIsland />
-        <FloatingContactButton />
+        <AppContent />
       </AuthProvider>
     </AlertProvider>
   );

@@ -47,6 +47,7 @@ export type Van = {
   showPrice?: number;
   pricingTiers?: { minDays: number; maxDays: number; pricePerDay: number }[];
   extraHoursRate?: number;
+  selloffer?: number;
   cargo?: string;
   properties?: { key: string; value: string; _id: string }[];
 };
@@ -472,11 +473,12 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                     </Animated.View>
                   </Pressable>
                 )}
-                {/* <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>from </Text>
-                  <Text style={styles.priceValue}>£{van.showPrice || 0}</Text>
-                  <Text style={styles.priceLabel}> / day</Text>
-                </View> */}
+                {van.selloffer && van.selloffer > 0 && (
+                  <View style={styles.discountBadge}>
+                    <Ionicons name="pricetag" size={12} color="#fff" />
+                    <Text style={styles.discountText}>{van.selloffer}% OFF</Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.rightSection}>
@@ -1123,5 +1125,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     padding: 20,
+  },
+  discountBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#ef4444",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  discountText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "800",
   },
 });
