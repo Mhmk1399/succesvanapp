@@ -3,14 +3,13 @@ import DynamicIsland from "@/components/global/DynamicIsland";
 import FloatingContactButton from "@/components/global/FloatingContactButton";
 import ScreenEdgeBlur from "@/components/global/ScreenEdgeBlur";
 import AppSplash from "@/components/global/AppSplash";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
 import { useFirstLaunch } from "@/utils/useFirstLaunch";
 import { useState } from "react";
 
 function AppContent() {
-  const { user } = useAuth();
-  const { isFirstLaunch, isLoading } = useFirstLaunch();
+  const { isLoading } = useFirstLaunch();
   const [showSplash, setShowSplash] = useState(true);
 
   if (isLoading || showSplash) {

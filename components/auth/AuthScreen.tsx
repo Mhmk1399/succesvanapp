@@ -8,16 +8,16 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 const ACCENT = "#fe9a00";
@@ -34,6 +34,9 @@ export default function AuthScreen() {
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,20 +51,18 @@ export default function AuthScreen() {
 
     setIsSubmitting(true);
     setErrors({});
-    
+
     try {
       const fullPhone = `+44${phone}`;
       const result = await authService.sendCode(fullPhone);
-      
+
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setStep("code");
         setTimeout(() => codeInputRef.current?.focus(), 100);
-        Alert.alert(
-          "Code Sent",
-          `Verification code sent to ${fullPhone}`,
-          [{ text: "OK" }]
-        );
+        Alert.alert("Code Sent", `Verification code sent to ${fullPhone}`, [
+          { text: "OK" },
+        ]);
       } else {
         Alert.alert("Error", result.message || "Failed to send code");
       }
@@ -133,6 +134,7 @@ export default function AuthScreen() {
     if (!lastName.trim()) newErrors.lastName = "Last name required";
     if (!email.trim()) newErrors.email = "Email required";
     else if (!email.includes("@")) newErrors.email = "Invalid email";
+    if (!city.trim()) newErrors.city = "City required";
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -143,7 +145,15 @@ export default function AuthScreen() {
     setIsSubmitting(true);
     try {
       const fullPhone = `+44${phone}`;
-      const result = await authService.register(fullPhone, name, lastName, email);
+      const result = await authService.register(
+        fullPhone,
+        name,
+        lastName,
+        email,
+        city,
+        postalCode,
+        address
+      );
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await refreshUser();
@@ -350,7 +360,9 @@ export default function AuthScreen() {
                   }}
                   style={styles.changePhoneBtn}
                 >
-                  <Text style={styles.changePhoneText}>Change Phone Number</Text>
+                  <Text style={styles.changePhoneText}>
+                    Change Phone Number
+                  </Text>
                 </Pressable>
               </>
             )}
@@ -358,6 +370,8 @@ export default function AuthScreen() {
             {step === "register" && (
               <>
                 <Text style={styles.stepTitle}>Complete Registration</Text>
+
+                {/* Name Row */}
                 <View style={styles.row}>
                   <View style={styles.half}>
                     <Text style={styles.label}>First Name</Text>
@@ -431,6 +445,7 @@ export default function AuthScreen() {
                   </View>
                 </View>
 
+                {/* Email Input */}
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Email</Text>
                   <View
@@ -466,6 +481,120 @@ export default function AuthScreen() {
                   {errors.email && (
                     <Text style={styles.errorText}>{errors.email}</Text>
                   )}
+                </View>
+
+                {/* Address Section */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Address Information</Text>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Address</Text>
+                    <View
+                      style={[
+                        styles.inputWrapper,
+                        focusedInput === "address" && styles.inputFocused,
+                        errors.address && styles.inputError,
+                      ]}
+                    >
+                      <Ionicons
+                        name="location-outline"
+                        size={18}
+                        color={focusedInput === "address" ? ACCENT : "#9ca3af"}
+                      />
+                      <TextInput
+                        placeholder="London"
+                        placeholderTextColor="#6b7280"
+                        value={address}
+                        onChangeText={(text) => {
+                          setAddress(text);
+                          if (errors.address)
+                            setErrors({ ...errors, address: "" });
+                        }}
+                        onFocus={() => {
+                          Haptics.selectionAsync();
+                          setFocusedInput("address");
+                        }}
+                        onBlur={() => setFocusedInput(null)}
+                        style={styles.input}
+                      />
+                    </View>
+                    {errors.address && (
+                      <Text style={styles.errorText}>{errors.address}</Text>
+                    )}
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>City</Text>
+                    <View
+                      style={[
+                        styles.inputWrapper,
+                        focusedInput === "city" && styles.inputFocused,
+                        errors.city && styles.inputError,
+                      ]}
+                    >
+                      <Ionicons
+                        name="location-outline"
+                        size={18}
+                        color={focusedInput === "city" ? ACCENT : "#9ca3af"}
+                      />
+                      <TextInput
+                        placeholder="London"
+                        placeholderTextColor="#6b7280"
+                        value={city}
+                        onChangeText={(text) => {
+                          setCity(text);
+                          if (errors.city) setErrors({ ...errors, city: "" });
+                        }}
+                        onFocus={() => {
+                          Haptics.selectionAsync();
+                          setFocusedInput("city");
+                        }}
+                        onBlur={() => setFocusedInput(null)}
+                        style={styles.input}
+                      />
+                    </View>
+                    {errors.city && (
+                      <Text style={styles.errorText}>{errors.city}</Text>
+                    )}
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Postal Code</Text>
+                    <View
+                      style={[
+                        styles.inputWrapper,
+                        focusedInput === "postalCode" && styles.inputFocused,
+                        errors.postalCode && styles.inputError,
+                      ]}
+                    >
+                      <Ionicons
+                        name="map-outline"
+                        size={18}
+                        color={
+                          focusedInput === "postalCode" ? ACCENT : "#9ca3af"
+                        }
+                      />
+                      <TextInput
+                        placeholder="SW1A 1AA"
+                        placeholderTextColor="#6b7280"
+                        value={postalCode}
+                        onChangeText={(text) => {
+                          setPostalCode(text);
+                          if (errors.postalCode)
+                            setErrors({ ...errors, postalCode: "" });
+                        }}
+                        onFocus={() => {
+                          Haptics.selectionAsync();
+                          setFocusedInput("postalCode");
+                        }}
+                        onBlur={() => setFocusedInput(null)}
+                        style={styles.input}
+                        keyboardType="default"
+                      />
+                    </View>
+                    {errors.postalCode && (
+                      <Text style={styles.errorText}>{errors.postalCode}</Text>
+                    )}
+                  </View>
                 </View>
 
                 <Pressable
@@ -532,6 +661,13 @@ const styles = StyleSheet.create({
   inputGroup: { marginBottom: 20 },
   row: { flexDirection: "row", gap: 12, marginBottom: 20 },
   half: { flex: 1 },
+  section: { marginBottom: 24 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#e5e7eb",
+    marginBottom: 16,
+  },
   label: { fontSize: 14, fontWeight: "600", color: "#e5e7eb", marginBottom: 8 },
   inputWrapper: {
     flexDirection: "row",

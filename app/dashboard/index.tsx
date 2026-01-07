@@ -5,7 +5,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { reservationService } from "@/services/reservationService";
 import { Reservation } from "@/types/type";
 import { registerBackgroundTask } from "@/utils/backgroundTask";
-import { checkStatusChanges, showStatusNotification } from "@/utils/reservationNotifier";
+import {
+  checkStatusChanges,
+  showStatusNotification,
+} from "@/utils/reservationNotifier";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
@@ -14,13 +17,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 
 const ACCENT = "#fe9a00";
@@ -28,6 +31,8 @@ const ACCENT = "#fe9a00";
 type TabKey = "profile" | "reservations";
 
 export default function ProfileScreen() {
+  const tabsRowRef = useRef<View>(null);
+  const [tabsRowWidth, setTabsRowWidth] = useState<number>(0);
   const { user, logout } = useAuth();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,12 +52,17 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
+  // Update the effect to use dynamic value
   useEffect(() => {
     const prevTab = prevTabRef.current;
     prevTabRef.current = activeTab;
 
-    if (prevTab !== activeTab) {
+    if (prevTab !== activeTab && tabsRowWidth > 0) {
+      const padding = 4 * 2; // padding: 4 on both sides
+      const tabWidth = (tabsRowWidth - padding) / 2;
+
       const targetX = activeTab === "profile" ? 0 : 1;
+
       Animated.spring(indicatorX, {
         toValue: targetX,
         tension: 200,
@@ -60,7 +70,7 @@ export default function ProfileScreen() {
         useNativeDriver: true,
       }).start();
     }
-  }, [activeTab]);
+  }, [activeTab, tabsRowWidth]);
 
   const fetchReservations = async () => {
     if (!user?._id) return;
@@ -68,16 +78,22 @@ export default function ProfileScreen() {
     try {
       const result = await reservationService.getAll(user._id);
       const newReservations = result.data || [];
-      
+
       const changed = await checkStatusChanges(newReservations);
       changed.forEach((res) => showStatusNotification(res));
-      
+
       setReservations(newReservations);
     } catch (error) {
       console.log("Error fetching reservations:", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // New: Measure the tabs row width on mount/layout change
+  const handleTabsRowLayout = (event: any) => {
+    const { width } = event.nativeEvent.layout;
+    setTabsRowWidth(width);
   };
 
   const handleTabChange = async (tab: TabKey) => {
@@ -128,22 +144,27 @@ export default function ProfileScreen() {
         </View>
 
         {/* Tabs */}
-        <View style={styles.tabsRow}>
+        <View
+          ref={tabsRowRef}
+          onLayout={handleTabsRowLayout}
+          style={styles.tabsRow}
+        >
           <Animated.View
             style={[
               styles.tabIndicator,
-              {
+              tabsRowWidth > 0 && {
                 transform: [
                   {
                     translateX: indicatorX.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [0, 170],
+                      outputRange: [0, (tabsRowWidth - 8) / 2], // 8 = padding 4*2
                     }),
                   },
                 ],
               },
             ]}
           />
+          {/* Your two Pressable tabs remain exactly the same */}
           <Pressable
             onPress={() => handleTabChange("profile")}
             style={({ pressed }) => [
@@ -186,7 +207,7 @@ export default function ProfileScreen() {
                 activeTab === "reservations" && styles.tabTextActive,
               ]}
             >
-              My Bookings
+              Reserves
             </Text>
           </Pressable>
         </View>
@@ -202,14 +223,7 @@ export default function ProfileScreen() {
             }}
             showsVerticalScrollIndicator={false}
           >
-            <UserProfileCard
-              // name={user ? `${user.name} ${user.lastName}` : "User"}
-              // email={user?.emaildata.emailAddress || ""}
-              // phone={user?.phoneData.phoneNumber || ""}
-              // address={user?.address || ""}
-            />
-
-            {/* میتونی اینجا کارتهای دیگه مثل Payment Method / Address اضافه کنی */}
+            <UserProfileCard />
           </ScrollView>
         ) : (
           <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}>
@@ -303,13 +317,15 @@ const styles = StyleSheet.create({
   logoutButton: {
     padding: 8,
     zIndex: 10,
+    backgroundColor: "rgba(15, 23, 42, 0.76)",
+    borderRadius: 20,
   },
   tabsRow: {
     flexDirection: "row",
     backgroundColor: "rgba(15,23,42,0.9)",
     marginHorizontal: 16,
     borderRadius: 999,
-    padding: 4,
+    padding: 8,
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.5)",
     position: "relative",
@@ -318,10 +334,11 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 4,
     left: 4,
-    right: "50%",
     bottom: 4,
+    width: "50%", // Each tab takes half the width
     backgroundColor: ACCENT,
     borderRadius: 999,
+    // Remove right: "50%" — it was causing issues
   },
   tabButton: {
     flex: 1,

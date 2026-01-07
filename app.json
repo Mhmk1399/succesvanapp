@@ -4,7 +4,7 @@
     "slug": "succesvanapp",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/new-c.png",
+    "icon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
     "scheme": "succesvanapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -31,14 +31,14 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -47,7 +47,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/logo.png",
+          "icon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
           "color": "#fe9a00"
         }
       ]

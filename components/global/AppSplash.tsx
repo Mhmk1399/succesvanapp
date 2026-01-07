@@ -1,4 +1,10 @@
-import { View, StyleSheet, Animated, Text, ActivityIndicator } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Animated,
+  Text,
+  ActivityIndicator,
+} from "react-native";
 import LottieView from "lottie-react-native";
 import { useEffect, useRef, useState } from "react";
 
@@ -27,7 +33,11 @@ export default function AppSplash({ onFinish }: Props) {
       {lottieError ? (
         <View style={styles.fallback}>
           <Text style={styles.text}>Success Van Hire</Text>
-          <ActivityIndicator size="large" color="#fe9a00" style={{ marginTop: 20 }} />
+          <ActivityIndicator
+            size="large"
+            color="#fe9a00"
+            style={{ marginTop: 20 }}
+          />
         </View>
       ) : (
         <LottieView

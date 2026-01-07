@@ -243,6 +243,8 @@ export interface User {
     isVerified: boolean;
   };
   address?: string;
+  city?: string;
+  postalCode?: string;
   licenceAttached?: {
     front?: string;
     back?: string;

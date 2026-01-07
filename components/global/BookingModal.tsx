@@ -157,7 +157,7 @@ export default function BookingModal({
           >
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 140 }}
+              contentContainerStyle={{ paddingBottom: 200 }}
             >
               <View style={styles.header}>
                 <View style={styles.headerContent}>
@@ -720,7 +720,12 @@ export default function BookingModal({
 
               return (
                 <>
-                  <View style={{ gap: 6 }}>
+                  <ScrollView
+                    style={{ maxHeight: 100 }}
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                  >
+                    <View style={{ gap: 6 }}>
                     <View
                       style={{
                         flexDirection: "row",
@@ -1072,10 +1077,10 @@ export default function BookingModal({
                         style={{
                           fontSize: 13,
                           color: "#f9fafb",
-                          fontWeight: "600",
+                          fontWeight: "800",
                         }}
                       >
-                        Total
+                        Total :
                       </Text>
                       <Text
                         style={{
@@ -1088,6 +1093,7 @@ export default function BookingModal({
                       </Text>
                     </View>
                   </View>
+                  </ScrollView>
 
                   <Pressable
                     onPress={handleSubmit}

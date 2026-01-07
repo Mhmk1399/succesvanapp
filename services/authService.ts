@@ -4,7 +4,6 @@ const API_URL = process.env.EXPO_PUBLIC_AUTH_API || " ";
 
 export const authService = {
   async sendCode(phoneNumber: string) {
-      
     if (!API_URL || API_URL.trim() === "") {
       throw new Error("API URL not configured");
     }
@@ -14,11 +13,11 @@ export const authService = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "send-code", phoneNumber }),
     });
-    
+
     console.log("Response status:", response.status);
     const text = await response.text();
     console.log("Response text:", text);
-    
+
     try {
       const data = JSON.parse(text);
       if (!response.ok) {
@@ -57,7 +56,10 @@ export const authService = {
     phoneNumber: string,
     name: string,
     lastName: string,
-    emailAddress: string
+    emailAddress: string,
+    address: string,
+    postalCode: string,
+    city: string
   ) {
     const response = await fetch(API_URL, {
       method: "POST",
@@ -68,6 +70,9 @@ export const authService = {
         name,
         lastName,
         emailAddress,
+        address,
+        postalCode,
+        city
       }),
     });
     const text = await response.text();

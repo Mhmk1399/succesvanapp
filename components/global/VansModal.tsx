@@ -308,7 +308,7 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
                 {hasDiscount && (
                   <Text style={styles.originalPrice}>£{originalPrice}</Text>
                 )}
-                <Text style={styles.price}>£{calculatedPrice}</Text>
+                <Text style={styles.price}>£{calculatedPrice.toFixed(0)}</Text>
                 <Text style={styles.priceUnit}>total</Text>
               </View>
 

@@ -468,11 +468,9 @@ export const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-
-    backgroundColor: "rgba(15,23,42,0.7)",
-    borderTopWidth: 1,
-    borderRadius: 30,
-    borderTopColor: "rgba(182, 184, 185, 0.8)",
+    backgroundColor: "rgba(255, 128, 0, 0.02)",
+    borderTopWidth: 2,
+    borderTopColor: "rgba(3, 254, 20, 0.8)",
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 20,
@@ -492,7 +490,7 @@ export const styles = StyleSheet.create({
     marginBottom: 8,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
+    borderBottomColor: "rgba(231, 9, 9, 0.1)",
   },
   breakdownRow: {
     flexDirection: "row",
