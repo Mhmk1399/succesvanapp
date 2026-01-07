@@ -26,7 +26,7 @@ export async function safeFetch(url: string, opts?: RequestInit) {
     const res = await fetch(finalUrl, opts);
     return res;
   } catch (err: any) {
-    console.error(`Fetch error for ${finalUrl} (Platform=${Platform.OS}):`, err.message || err);
+    console.log(`Fetch error for ${finalUrl} (Platform=${Platform.OS}):`, err.message || err);
     throw err;
   }
 }

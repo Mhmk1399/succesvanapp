@@ -1,6 +1,6 @@
+import { Reservation } from "@/types/type";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
-import { Reservation } from "@/types/type";
 
 const STORAGE_KEY = "reservation_statuses";
 
@@ -30,7 +30,7 @@ export const checkStatusChanges = async (
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newStatuses));
     return changedReservations;
   } catch (error) {
-    console.error("Error checking status changes:", error);
+    console.log("Error checking status changes:", error);
     return [];
   }
 };

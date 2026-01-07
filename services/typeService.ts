@@ -16,7 +16,7 @@ export const typeService = {
     try {
       data = await response.json();
     } catch (err) {
-      console.error(`[typeService] failed to parse JSON from ${url}:`, err);
+      console.log(`[typeService] failed to parse JSON from ${url}:`, err);
       throw err;
     }
     console.log(`[typeService] response success=${data?.success} items=${Array.isArray(data?.data)? data.data.length : 'unknown'}`);

@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authService } from "@/services/authService";
 import { User } from "@/types/type";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useContext, useEffect, useState } from "react";
 
  
 
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(JSON.parse(storedUser));
       }
     } catch (error) {
-      console.error("Load user error:", error);
+      console.log("Load user error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem("user", JSON.stringify(result.data));
       }
     } catch (error) {
-      console.error("Refresh user error:", error);
+      console.log("Refresh user error:", error);
     }
   };
 

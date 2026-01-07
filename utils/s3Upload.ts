@@ -48,7 +48,7 @@ export const uploadToS3 = async (
     const data = await response.json();
     return data.url || data.fileUrl;
   } catch (error) {
-    console.error("[s3Upload] Error:", error);
+    console.log("[s3Upload] Error:", error);
     throw error;
   }
 };

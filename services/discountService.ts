@@ -62,7 +62,7 @@ export const discountService = {
         message: `${discount.percentage}% discount applied!`,
       };
     } catch (error) {
-      console.error("Validate discount error:", error);
+      console.log("Validate discount error:", error);
       return { success: false, message: "Failed to validate discount code" };
     }
   },
@@ -77,7 +77,7 @@ export const discountService = {
       const result = await response.json();
       return result;
     } catch (error) {
-      console.error("Apply discount error:", error);
+      console.log("Apply discount error:", error);
       return { success: false, message: "Failed to apply discount" };
     }
   },

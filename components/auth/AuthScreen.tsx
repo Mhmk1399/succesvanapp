@@ -1,24 +1,24 @@
+import { useAuth } from "@/contexts/AuthContext";
+import { authService } from "@/services/authService";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Alert,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import { authService } from "@/services/authService";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "@/contexts/AuthContext";
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
@@ -66,7 +66,7 @@ export default function AuthScreen() {
         Alert.alert("Error", result.message || "Failed to send code");
       }
     } catch (error) {
-      console.error("Send code error:", error);
+      console.log("Send code error:", error);
       Alert.alert(
         "Error",
         error instanceof Error ? error.message : "Network error"

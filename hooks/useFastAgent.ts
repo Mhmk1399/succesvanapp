@@ -169,7 +169,7 @@ export function useFastAgent() {
         playsInSilentModeIOS: true,
       });
     } catch (error) {
-      console.error("Audio setup error:", error);
+      console.log("Audio setup error:", error);
     }
   };
 
@@ -202,7 +202,7 @@ export function useFastAgent() {
         console.log("✅ Loaded offices:", data.data.offices.length);
       }
     } catch (error) {
-      console.error("❌ Failed to fetch offices:", error);
+      console.log("❌ Failed to fetch offices:", error);
       // Set empty array as fallback
       setOffices([]);
     }
@@ -219,7 +219,7 @@ export function useFastAgent() {
       setIsRecording(true);
       console.log("Recording started");
     } catch (error) {
-      console.error("Failed to start recording:", error);
+      console.log("Failed to start recording:", error);
       Alert.alert("Recording Error", "Failed to start recording");
     }
   }, []);
@@ -252,7 +252,7 @@ export function useFastAgent() {
         reader.readAsDataURL(blob);
       });
     } catch (error) {
-      console.error("Failed to stop recording:", error);
+      console.log("Failed to stop recording:", error);
       setIsRecording(false);
       return null;
     }
@@ -282,7 +282,7 @@ export function useFastAgent() {
         }
       });
     } catch (error) {
-      console.error("Audio playback error:", error);
+      console.log("Audio playback error:", error);
       setIsPlaying(false);
     }
   }, []);
@@ -336,7 +336,7 @@ export function useFastAgent() {
         // Check if response is OK
         if (!res.ok) {
           const errorText = await res.text();
-          console.error("❌ API Error Response:", errorText);
+          console.log("❌ API Error Response:", errorText);
           throw new Error(`API Error: ${res.status} - ${errorText || "Unknown error"}`);
         }
 
@@ -353,8 +353,8 @@ export function useFastAgent() {
         try {
           data = JSON.parse(textResponse);
         } catch (parseError) {
-          console.error("❌ JSON Parse Error:", parseError);
-          console.error("📄 Response text:", textResponse);
+          console.log("❌ JSON Parse Error:", parseError);
+          console.log("📄 Response text:", textResponse);
           throw new Error("Invalid JSON response from server");
         }
 
@@ -396,7 +396,7 @@ export function useFastAgent() {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Unknown error";
-        console.error("Agent error:", error);
+        console.log("Agent error:", error);
         Alert.alert("Error", message || "Something went wrong");
         return null;
       } finally {

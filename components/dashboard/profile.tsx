@@ -7,15 +7,15 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 
 const ACCENT = "#fe9a00";
@@ -124,7 +124,7 @@ export default function UserProfileCard() {
       try {
         result = JSON.parse(text);
       } catch {
-        console.error("[profile.tsx] Failed to parse JSON:", text);
+        console.log("[profile.tsx] Failed to parse JSON:", text);
         throw new Error(text || "Invalid response");
       }
 
@@ -139,7 +139,7 @@ export default function UserProfileCard() {
         Alert.alert("Error", result.error || "Failed to update profile");
       }
     } catch (error) {
-      console.error("[profile.tsx] Save error:", error);
+      console.log("[profile.tsx] Save error:", error);
       Alert.alert(
         "Error",
         error instanceof Error ? error.message : "Network error"

@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, ActivityIndicator, FlatList } from "react-native";
-import VanList, { Van } from "@/components/global/vanlist";
 import BookingModal from "@/components/global/BookingModal";
-import { LinearGradient } from "expo-linear-gradient";
-import { categoryService } from "@/services/categoryService";
-import { useLocalSearchParams } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Category } from "@/types/type";
+import VanList, { Van } from "@/components/global/vanlist";
 import { useAuth } from "@/contexts/AuthContext";
+import { categoryService } from "@/services/categoryService";
+import { Category } from "@/types/type";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
 
 export default function VansScreen() {
   const { user } = useAuth();
@@ -94,7 +94,7 @@ export default function VansScreen() {
         setVans(mappedVans);
       }
     } catch (error) {
-      console.error("Load categories error:", error);
+      console.log("Load categories error:", error);
     } finally {
       setLoading(false);
     }

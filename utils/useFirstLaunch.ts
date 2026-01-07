@@ -19,7 +19,7 @@ export function useFirstLaunch() {
           setIsFirstLaunch(false);
         }
       } catch (error) {
-        console.error("Error checking first launch:", error);
+        console.log("Error checking first launch:", error);
         setIsFirstLaunch(false);
       } finally {
         setIsLoading(false);

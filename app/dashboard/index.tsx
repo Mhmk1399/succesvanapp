@@ -1,27 +1,27 @@
 // app/profile.tsx
-import React, { useState, useRef, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  Modal,
-  Animated,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import { BlurView } from "expo-blur";
-import UserReservations from "@/components/dashboard/reserve";
 import UserProfileCard from "@/components/dashboard/profile";
-import { LinearGradient } from "expo-linear-gradient";
+import UserReservations from "@/components/dashboard/reserve";
 import { useAuth } from "@/contexts/AuthContext";
 import { reservationService } from "@/services/reservationService";
 import { Reservation } from "@/types/type";
-import { checkStatusChanges, showStatusNotification } from "@/utils/reservationNotifier";
 import { registerBackgroundTask } from "@/utils/backgroundTask";
+import { checkStatusChanges, showStatusNotification } from "@/utils/reservationNotifier";
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import {
+    Animated,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 
 const ACCENT = "#fe9a00";
 
@@ -74,7 +74,7 @@ export default function ProfileScreen() {
       
       setReservations(newReservations);
     } catch (error) {
-      console.error("Error fetching reservations:", error);
+      console.log("Error fetching reservations:", error);
     } finally {
       setIsLoading(false);
     }
