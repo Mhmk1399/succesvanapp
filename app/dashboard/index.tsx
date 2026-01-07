@@ -1,6 +1,8 @@
 // app/profile.tsx
 import UserProfileCard from "@/components/dashboard/profile";
 import UserReservations from "@/components/dashboard/reserve";
+import LicenseUploadBanner from "@/components/dashboard/LicenseUploadBanner";
+import LicenseUploadModal from "@/components/dashboard/LicenseUploadModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { reservationService } from "@/services/reservationService";
 import { Reservation } from "@/types/type";
@@ -39,6 +41,7 @@ export default function ProfileScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("reservations");
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [licenseModalVisible, setLicenseModalVisible] = useState(false);
   const router = useRouter();
 
   const indicatorX = useRef(new Animated.Value(1)).current;
@@ -113,6 +116,8 @@ export default function ProfileScreen() {
     setLogoutModalVisible(false);
     router.replace("/");
   };
+
+  const hasLicense = user?.licenceAttached?.front && user?.licenceAttached?.back;
 
   return (
     <>
@@ -212,6 +217,8 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
+        {!hasLicense && <LicenseUploadBanner onPress={() => setLicenseModalVisible(true)} />}
+
         {/* محتوا */}
         {activeTab === "profile" ? (
           <ScrollView
@@ -279,6 +286,15 @@ export default function ProfileScreen() {
           </BlurView>
         </Pressable>
       </Modal>
+
+      <LicenseUploadModal
+        visible={licenseModalVisible}
+        onClose={() => setLicenseModalVisible(false)}
+        userId={user?._id || ""}
+        onSuccess={() => {
+          fetchReservations();
+        }}
+      />
     </>
   );
 }

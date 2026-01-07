@@ -453,6 +453,15 @@ export const FormFields = ({
             .map((addon) => {
               const selection = addonSelections[addon._id];
               const isSelected = !!selection;
+              
+              // Check if another addon with the same type is already selected
+              const addonType = (addon as any).type;
+              const isTypeDisabled = addonType && Object.entries(addonSelections).some(([id]) => {
+                if (id === addon._id) return false;
+                const selectedAddon = addons.find((a) => a._id === id);
+                return selectedAddon && (selectedAddon as any).type === addonType;
+              });
+              
               const displayPrice =
                 pickupDate && returnDate && pickupTime && returnTime
                   ? getAddonDisplayPrice(
@@ -475,7 +484,7 @@ export const FormFields = ({
                       returnDate,
                       pickupTime,
                       returnTime,
-                      selection.quantity
+                      1
                     )
                   : 0;
 
@@ -483,6 +492,7 @@ export const FormFields = ({
                 <Pressable
                   key={addon._id}
                   onPress={() => {
+                    if (isTypeDisabled) return;
                     Haptics.selectionAsync();
                     if (isSelected) {
                       const newSelections = { ...addonSelections };
@@ -495,6 +505,7 @@ export const FormFields = ({
                       });
                     }
                   }}
+                  disabled={!!isTypeDisabled}
                   style={{
                     width: "48%",
                     backgroundColor: isSelected
@@ -504,6 +515,7 @@ export const FormFields = ({
                     padding: 12,
                     borderWidth: 1.5,
                     borderColor: isSelected ? ACCENT : "rgba(255,255,255,0.1)",
+                    opacity: isTypeDisabled ? 0.4 : 1,
                   }}
                 >
                   <View
@@ -552,99 +564,25 @@ export const FormFields = ({
                   >
                     {displayPrice}
                   </Text>
-                  {isSelected && (
+                  {isSelected && calculatedPrice > 0 && (
                     <View
                       style={{
+                        backgroundColor: "rgba(254,154,0,0.1)",
+                        borderRadius: 6,
+                        padding: 6,
                         marginTop: 8,
-                        paddingTop: 8,
-                        borderTopWidth: 1,
-                        borderTopColor: "rgba(255,255,255,0.1)",
-                        gap: 6,
                       }}
                     >
-                      <View
+                      <Text
                         style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 8,
+                          color: "#f9fafb",
+                          fontSize: 11,
+                          fontWeight: "600",
+                          textAlign: "center",
                         }}
                       >
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            Haptics.selectionAsync();
-                            if (selection.quantity > 1) {
-                              setAddonSelections({
-                                ...addonSelections,
-                                [addon._id]: {
-                                  ...selection,
-                                  quantity: selection.quantity - 1,
-                                },
-                              });
-                            }
-                          }}
-                          style={{
-                            backgroundColor: "rgba(254,154,0,0.2)",
-                            borderRadius: 6,
-                            padding: 4,
-                          }}
-                        >
-                          <Ionicons name="remove" size={12} color={ACCENT} />
-                        </Pressable>
-                        <Text
-                          style={{
-                            color: "#f9fafb",
-                            fontSize: 13,
-                            fontWeight: "700",
-                            minWidth: 24,
-                            textAlign: "center",
-                          }}
-                        >
-                          {selection.quantity}
-                        </Text>
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            Haptics.selectionAsync();
-                            setAddonSelections({
-                              ...addonSelections,
-                              [addon._id]: {
-                                ...selection,
-                                quantity: selection.quantity + 1,
-                              },
-                            });
-                          }}
-                          style={{
-                            backgroundColor: "rgba(254,154,0,0.2)",
-                            borderRadius: 6,
-                            padding: 4,
-                          }}
-                        >
-                          <Ionicons name="add" size={12} color={ACCENT} />
-                        </Pressable>
-                      </View>
-                      {calculatedPrice > 0 && (
-                        <View
-                          style={{
-                            backgroundColor: "rgba(254,154,0,0.1)",
-                            borderRadius: 6,
-                            padding: 6,
-                            marginTop: 4,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: "#f9fafb",
-                              fontSize: 11,
-                              fontWeight: "600",
-                              textAlign: "center",
-                            }}
-                          >
-                            Total: £{calculatedPrice.toFixed(2)}
-                          </Text>
-                        </View>
-                      )}
+                        Total: £{calculatedPrice.toFixed(2)}
+                      </Text>
                     </View>
                   )}
                 </Pressable>

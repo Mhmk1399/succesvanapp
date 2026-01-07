@@ -21,9 +21,6 @@ export const uploadToS3 = async (
       throw new Error("Upload API not configure");
     }
 
-
-
-
     const formData = new FormData();
     const fileData: FormDataFile = {
       uri: file.uri,

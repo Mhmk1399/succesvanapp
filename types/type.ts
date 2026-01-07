@@ -132,6 +132,7 @@ export interface Type {
   description?: string;
   createdAt?: string;
   updatedAt?: string;
+  offices: Office[] ;
 }
 
 // dashboard

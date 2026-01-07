@@ -3,7 +3,7 @@ import { useAlert } from "@/components/global/CustomAlert";
 import { useAuth } from "@/contexts/AuthContext";
 import { officeService } from "@/services/officeService";
 import { typeService } from "@/services/typeService";
-import { Category, Type } from "@/types/type";
+import { Category, Type, Office, WorkingTime } from "@/types/type";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
@@ -46,43 +46,6 @@ type PickerField =
 type ReservationFormProps = {
   onCompleted?: () => void;
 };
-
-/* ========= Types to mirror your Next.js logic ========= */
-
-type SpecialDay = {
-  month: number;
-  day: number;
-  isOpen: boolean;
-  startTime: string;
-  endTime: string;
-  reason?: string;
-};
-
-type WorkingTime = {
-  day: string; // "monday" | "tuesday" | ...
-  isOpen: boolean;
-  startTime: string;
-  endTime: string;
-  pickupExtension?: {
-    hoursBefore: number;
-    hoursAfter: number;
-    flatPrice: number;
-  };
-  returnExtension?: {
-    hoursBefore: number;
-    hoursAfter: number;
-    flatPrice: number;
-  };
-};
-
-type Office = {
-  _id: string;
-  name: string;
-  specialDays?: SpecialDay[];
-  workingTime?: WorkingTime[];
-};
-
-/* ===================================================== */
 
 export default function ReservationForm({ onCompleted }: ReservationFormProps) {
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -296,6 +259,7 @@ function ReservationSheetContent({
   // ---- WEB LOGIC PORTED HERE ----
   const [offices, setOffices] = useState<Office[]>([]);
   const [type, setTypes] = useState<Type[]>([]);
+  const [filteredTypes, setFilteredTypes] = useState<Type[]>([]);
 
   const [selectedOffice, setSelectedOffice] = useState<string>("");
   const [selectedType, setSelectedType] = useState<string>("");
@@ -415,6 +379,7 @@ function ReservationSheetContent({
         ]);
         setOffices(offData.data || []);
         setTypes(typeData || []);
+        setFilteredTypes(typeData || []);
 
         // Restore saved form data if exists
         const savedForm = await AsyncStorage.getItem("pendingReservationForm");
@@ -443,6 +408,24 @@ function ReservationSheetContent({
     };
     fetchData();
   }, []);
+
+  // Filter types based on selected office
+  useEffect(() => {
+    if (selectedOffice) {
+      const filtered = type.filter((t: Type) => {
+        return (
+          t.offices &&
+          t.offices.some((office: Office) => {
+            const officeId = typeof office === "string" ? office : office._id;
+            return officeId === selectedOffice;
+          })
+        );
+      });
+      setFilteredTypes(filtered);
+    } else {
+      setFilteredTypes(type);
+    }
+  }, [selectedOffice, type]);
 
   // Fetch reserved slots when office and dates change
   useEffect(() => {
@@ -1279,7 +1262,7 @@ function ReservationSheetContent({
                   </Text>
                 </View>
               ) : (
-                type.map((c) => (
+                filteredTypes.map((c) => (
                   <Pressable
                     key={c._id}
                     onPress={() => {

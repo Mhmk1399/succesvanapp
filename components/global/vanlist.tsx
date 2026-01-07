@@ -660,8 +660,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                           No features available
                         </Text>
                       )
-                    ) : // تب Purpose
-                    van.purpose ? (
+                    ) : van.purpose ? (
                       <View style={styles.purposeContainer}>
                         {van.purpose
                           .split("\n")
@@ -674,6 +673,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                               .toLowerCase()
                               .includes("ideal for");
                             const hasTick = trimmed.startsWith("✅");
+                            const displayText = hasTick ? trimmed.substring(2) : trimmed;
 
                             return (
                               <View key={index} style={styles.purposeLine}>
@@ -692,7 +692,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                                     hasTick && styles.purposeItem,
                                   ]}
                                 >
-                                  {hasTick ? trimmed.substring(2) : trimmed}
+                                  {displayText}
                                 </Text>
                               </View>
                             );
