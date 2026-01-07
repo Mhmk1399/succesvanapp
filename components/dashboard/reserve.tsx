@@ -233,7 +233,7 @@ export default function UserReservations({
         const response = await fetch(url);
         const data = await response.json();
 
-        if (data.success && data.data?.reservedSlots) {
+        if (data.success && Array.isArray(data.data?.reservedSlots)) {
           const filteredSlots = data.data.reservedSlots.filter(
             (slot: {
               startDate: string;
@@ -250,6 +250,8 @@ export default function UserReservations({
           );
           console.log("[reserve.tsx] Filtered slots:", filteredSlots);
           setReservedSlots(filteredSlots);
+        } else {
+          setReservedSlots([]);
         }
       } catch (error) {
         console.log("[reserve.tsx] Failed to fetch reserved slots:", error);

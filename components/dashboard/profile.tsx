@@ -493,7 +493,7 @@ export default function UserProfileCard() {
 
           {(user?.licenceAttached?.front || user?.licenceAttached?.back) && (
             <View style={styles.licenseViewSection}>
-              <Text style={styles.licenseViewTitle}>License Documents</Text>
+              <Text style={styles.licenseViewTitle}>Licence Documents</Text>
               <View style={styles.licenseGrid}>
                 {user.licenceAttached.front && (
                   <View style={styles.licenseViewItem}>
