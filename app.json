@@ -1,10 +1,10 @@
 {
   "expo": {
     "name": "Success Van Hire",
-    "slug": "succesvanapp",
+    "slug": "success-van-hire",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "succesvanapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -12,33 +12,43 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.succesvanhire.app",
       "buildNumber": "1.0.0",
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": []
+      },
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "This app needs access to your microphone to record voice messages for AI-powered booking assistance."
+        "NSMicrophoneUsageDescription": "This app needs access to your microphone to record voice messages for AI-powered booking assistance.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload your driving license for verification.",
+        "NSCameraUsageDescription": "This app needs access to your camera to take a photo of your driving license for verification."
       }
     },
     "android": {
       "package": "com.succesvanhire.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFFF",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": ["RECEIVE_BOOT_COMPLETED", "RECORD_AUDIO"]
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "RECORD_AUDIO",
+        "RECEIVE_BOOT_COMPLETED",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
-      "favicon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
+          "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -47,7 +57,7 @@
       [
         "expo-notifications",
         {
-          "icon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
+          "icon": "./assets/images/icon.png",
           "color": "#fe9a00"
         }
       ]
@@ -59,8 +69,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "f9b74dec-6c80-4a99-b169-066df70a6647"
+        "projectId": "c3d8a5a5-bfdf-405f-a0fa-f001d5dcc3d1"
       }
+    },
+    "owner": "successvan-organization",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c3d8a5a5-bfdf-405f-a0fa-f001d5dcc3d1"
     }
   }
 }
