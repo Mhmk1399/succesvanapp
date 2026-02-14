@@ -50,7 +50,7 @@ const getLondonTime = (): Date => {
   });
   const [datePart, timePart] = londonStr.split(", ");
   if (!datePart || !timePart) {
-    console.error("Failed to split London time string");
+    console.log("Failed to split London time string");
     return new Date();
   }
   const [monthStr, dayStr, yearStr] = datePart.split("/");
@@ -376,8 +376,7 @@ function ReservationSheetContent({
   // Sync dateRange with pickupDate and returnDate
   useEffect(() => {
     if (pickupDate && returnDate) {
-      console.log("[dateSync] Setting dateRange:", { pickupDate, returnDate });
-      setDateRange([
+       setDateRange([
         {
           startDate: pickupDate,
           endDate: returnDate,
@@ -385,8 +384,7 @@ function ReservationSheetContent({
         },
       ]);
     } else if (pickupDate) {
-      console.log("[dateSync] Setting dateRange with pickup only:", pickupDate);
-      setDateRange([
+       setDateRange([
         {
           startDate: pickupDate,
           endDate: pickupDate,
@@ -523,8 +521,7 @@ function ReservationSheetContent({
       )
         .then((res) => res.json())
         .then((data) => {
-          console.log("[End Date Reserved Slots Response]", data);
-          if (data.data?.reservedSlots) {
+           if (data.data?.reservedSlots) {
             // Only keep slots that END on this return date
             const filteredSlots = data.data.reservedSlots.filter(
               (slot: {
@@ -537,8 +534,7 @@ function ReservationSheetContent({
                 return slot.endDate === endDateStr;
               },
             );
-            console.log("[End Date Filtered Slots]", filteredSlots);
-            setEndDateReservedSlots(filteredSlots);
+             setEndDateReservedSlots(filteredSlots);
           }
         })
         .catch((err) => {
@@ -704,12 +700,7 @@ function ReservationSheetContent({
   };
 
   const selectDate = (date: Date) => {
-    console.log("[selectDate] Called with:", {
-      date: date.toISOString().split("T")[0],
-      selectingDate,
-      currentPickupDate: pickupDate?.toISOString().split("T")[0],
-      currentReturnDate: returnDate?.toISOString().split("T")[0],
-    });
+   
 
     if (isDateDisabled(date)) {
       showEitherAlert("Office Closed", "This date is not available.");
@@ -718,8 +709,7 @@ function ReservationSheetContent({
 
     Haptics.selectionAsync();
     if (selectingDate === "pickup") {
-      console.log("[selectDate] Setting as pickup date");
-      setTempPickupDate(date);
+       setTempPickupDate(date);
       setPickupDate(date);
       setReturnDate(null);
       setSelectingDate("return");
@@ -732,8 +722,7 @@ function ReservationSheetContent({
         );
         return;
       }
-      console.log("[selectDate] Setting as return date");
-      setReturnDate(date);
+       setReturnDate(date);
       setDateRangeModalVisible(false);
       setSelectingDate("pickup");
       setTempPickupDate(null);
@@ -751,11 +740,7 @@ function ReservationSheetContent({
   };
 
   const selectTime = (time: string) => {
-    console.log("[selectTime] Called with:", {
-      time,
-      timeModalField,
-      timeType: typeof time,
-    });
+   
 
     if (timeModalField === "pickupTime") {
       console.log("[selectTime] Setting pickupTime to:", time);
@@ -824,14 +809,7 @@ function ReservationSheetContent({
   const handleBlur = () => setFocusedInput(null);
 
   const handleSubmit = async () => {
-    console.log("[handleSubmit] Form state at submission:", {
-      pickupDate: pickupDate?.toISOString().split("T")[0],
-      returnDate: returnDate?.toISOString().split("T")[0],
-      pickupTime,
-      returnTime,
-      selectedOffice,
-      selectedType,
-    });
+     
 
     if (!selectedOffice || !selectedType) {
       showEitherAlert("Missing details", "Please select office and category.");
@@ -969,8 +947,7 @@ function ReservationSheetContent({
       pickupExtensionFee,
       returnExtensionFee,
     };
-    console.log("[Reservation Payload]", reservationPayload);
-
+ 
     setIsSubmitting(false);
     setLoadingVans(true);
 
@@ -1027,8 +1004,7 @@ function ReservationSheetContent({
             selloffer: cat.selloffer || 0,
           }));
 
-        console.log("[filteredVans count]", filteredVans.length);
-
+ 
         setAvailableVans(filteredVans);
       }
     } catch (error) {

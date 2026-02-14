@@ -236,11 +236,7 @@ export default function UserReservations({
           type === "start" ? "startDate" : "endDate"
         }=${dateStr}&type=${type}`;
 
-        console.log("[reserve.tsx] Fetching reserved slots:", {
-          dateStr,
-          type,
-          timeModalField,
-        });
+       
 
         const response = await fetch(url);
         const data = await response.json();
@@ -260,8 +256,7 @@ export default function UserReservations({
               }
             },
           );
-          console.log("[reserve.tsx] Filtered slots:", filteredSlots);
-          setReservedSlots(filteredSlots);
+           setReservedSlots(filteredSlots);
         } else {
           setReservedSlots([]);
         }
@@ -719,8 +714,7 @@ export default function UserReservations({
                     <>
                       <Pressable
                         onPress={() => {
-                          console.log("[reserve.tsx] Opening date modal");
-                          setSelectingDate("pickup");
+                           setSelectingDate("pickup");
                           setTempPickupDate(null);
                           setDateModalVisible(true);
                         }}
@@ -738,9 +732,7 @@ export default function UserReservations({
                       >
                         <Pressable
                           onPress={() => {
-                            console.log(
-                              "[reserve.tsx] Opening pickup time modal",
-                            );
+                            
                             setTimeModalField("pickup");
                             setTimeModalVisible(true);
                           }}
@@ -754,9 +746,7 @@ export default function UserReservations({
                         </Pressable>
                         <Pressable
                           onPress={() => {
-                            console.log(
-                              "[reserve.tsx] Opening return time modal",
-                            );
+                           
                             setTimeModalField("return");
                             setTimeModalVisible(true);
                           }}
@@ -938,9 +928,7 @@ export default function UserReservations({
                         returnTime,
                         quantity,
                       );
-                      console.log(
-                        `[reserve.tsx] Addon: ${addon.name}, Type: ${addon.pricingType}, Quantity: ${quantity}, Price: ${price}`,
-                      );
+                      
                       addOnsPrice += price;
 
                       addonItems.push(

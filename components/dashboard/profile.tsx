@@ -22,8 +22,7 @@ const ACCENT = "#fe9a00";
 
 export default function UserProfileCard() {
   const { user, refreshUser } = useAuth();
-  console.log(user, "qqqqqqqqq");
-
+ 
   if (!user) {
     return (
       <View style={styles.card}>
@@ -91,10 +90,7 @@ export default function UserProfileCard() {
         city: editCity.trim(),
         postalCode: editPostalCode.trim(),
       };
-      console.log("=== PROFILE UPDATE ===");
-      console.log("API URL:", API_URL);
-      console.log("User ID:", user._id);
-      console.log("Request Body:", requestBody);
+     
 
       const response = await fetch(`${API_URL}/${user._id}`, {
         method: "PUT",
@@ -126,7 +122,7 @@ export default function UserProfileCard() {
         Alert.alert("Error", result.error || "Failed to update profile");
       }
     } catch (error) {
-      console.error("Profile Update Error:", error);
+      console.log("Profile Update Error:", error);
       Alert.alert(
         "Error",
         error instanceof Error ? error.message : "Network error",
@@ -192,7 +188,7 @@ export default function UserProfileCard() {
         Alert.alert("Error", result.error || "Failed to update licenses");
       }
     } catch (error) {
-      console.error("License Upload Error:", error);
+      console.log("License Upload Error:", error);
       Alert.alert(
         "Error",
         error instanceof Error ? error.message : "Network error",
