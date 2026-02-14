@@ -22,6 +22,20 @@ import {
 } from "./utils";
 import { discountService } from "@/services/discountService";
 
+const getLondonTime = () => {
+  const now = new Date();
+  const londonTimeStr = now.toLocaleString("en-GB", {
+    timeZone: "Europe/London",
+  });
+  console.log(londonTimeStr , "...")
+  const [datePart, timePart] = londonTimeStr.split(", ");
+  const [day, month, year] = datePart.split("/").map(Number);
+  const [hours, minutes, seconds] = timePart.split(":").map(Number);
+  const londonDate = new Date(year, month - 1, day, hours, minutes, seconds);
+  console.log(londonDate , "///////////")
+  return londonDate;
+};
+
 export const useBookingModal = (
   visible: boolean,
   van: Van | null,
@@ -443,6 +457,19 @@ export const useBookingModal = (
     }
 
     if (selectingDate === "pickup") {
+      const londonTime = getLondonTime();
+      const londonHour = londonTime.getUTCHours();
+      const today = new Date();
+      const minAllowedDate = new Date(today);
+
+      if (londonHour < 8) {
+        minAllowedDate.setDate(today.getDate() + 1);
+      } else {
+        minAllowedDate.setDate(today.getDate() + 2);
+      }
+
+   
+
       setPickupDate(date);
       setTempPickupDate(date);
       setSelectingDate("return");

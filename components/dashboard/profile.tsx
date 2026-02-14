@@ -49,10 +49,10 @@ export default function UserProfileCard() {
   const [licenseBack, setLicenseBack] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [licensePreviewFront, setLicensePreviewFront] = useState(
-    user?.licenceAttached?.front || null
+    user?.licenceAttached?.front || null,
   );
   const [licensePreviewBack, setLicensePreviewBack] = useState(
-    user?.licenceAttached?.back || null
+    user?.licenceAttached?.back || null,
   );
 
   const [isSaving, setIsSaving] = useState(false);
@@ -129,7 +129,7 @@ export default function UserProfileCard() {
       console.error("Profile Update Error:", error);
       Alert.alert(
         "Error",
-        error instanceof Error ? error.message : "Network error"
+        error instanceof Error ? error.message : "Network error",
       );
     } finally {
       setIsSaving(false);
@@ -195,7 +195,7 @@ export default function UserProfileCard() {
       console.error("License Upload Error:", error);
       Alert.alert(
         "Error",
-        error instanceof Error ? error.message : "Network error"
+        error instanceof Error ? error.message : "Network error",
       );
     } finally {
       setIsUploadingLicenses(false);

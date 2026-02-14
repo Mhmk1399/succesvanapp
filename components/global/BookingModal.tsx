@@ -26,10 +26,22 @@ import { FormFields } from "./BookingModal/FormFields";
 import { styles } from "./BookingModal/styles";
 import { BookingModalProps } from "./BookingModal/types";
 import { useBookingModal } from "./BookingModal/useBookingModal";
-import { getAvailableTimeSlots, getSelectedOffice } from "./BookingModal/utils";
+import { getAvailableTimeSlots, getSelectedOffice, isDateDisabled as checkDateDisabled } from "./BookingModal/utils";
 import { WorkingTime } from "@/types/type";
 import { discountService } from "@/services/discountService";
 import { useAuth } from "@/contexts/AuthContext";
+
+const getLondonTime = () => {
+  const now = new Date();
+  const londonTimeStr = now.toLocaleString("en-GB", {
+    timeZone: "Europe/London",
+  });
+  const [datePart, timePart] = londonTimeStr.split(", ");
+  const [day, month, year] = datePart.split("/").map(Number);
+  const [hours, minutes, seconds] = timePart.split(":").map(Number);
+  const londonDate = new Date(year, month - 1, day, hours, minutes, seconds);
+  return londonDate;
+};
 
 export default function BookingModal({
   visible,
@@ -1182,6 +1194,31 @@ export default function BookingModal({
             </View>
             <Calendar
               onDayPress={(day) => handleDateSelect(day.dateString)}
+              minDate={
+                selectingDate === "pickup"
+                  ? (() => {
+                      const londonTime = getLondonTime();
+                      const londonHour = londonTime.getUTCHours();
+                      const minDate = new Date();
+
+                      if (londonHour < 16) {
+                        minDate.setDate(minDate.getDate() + 1);
+                      } else {
+                        minDate.setDate(minDate.getDate() + 2);
+                      }
+                      return minDate.toISOString().split("T")[0];
+                    })()
+                  : tempPickupDate?.toISOString().split("T")[0]
+              }
+              maxDate={
+                selectingDate === "return" && tempPickupDate
+                  ? new Date(
+                      tempPickupDate.getTime() + 30 * 24 * 60 * 60 * 1000
+                    )
+                      .toISOString()
+                      .split("T")[0]
+                  : undefined
+              }
               markedDates={(() => {
                 const marked: Record<string, any> = {};
                 const currentPickup = tempPickupDate || pickupDate;
@@ -1208,40 +1245,43 @@ export default function BookingModal({
                     selectedTextColor: "#ffffff",
                   };
                 }
-                // Mark disabled dates (48-hour restriction)
+
+                // Mark disabled dates (London time-based restriction + office closed days)
+                const londonTime = getLondonTime();
+                const londonHour = londonTime.getUTCHours();
                 const today = new Date();
-                for (let i = 0; i < 2; i++) {
+                const minAllowedDate = new Date(today);
+
+                if (londonHour < 16) {
+                  minAllowedDate.setDate(today.getDate() + 1);
+                } else {
+                  minAllowedDate.setDate(today.getDate() + 2);
+                }
+
+                for (let i = 0; i < 60; i++) {
                   const checkDate = new Date(today);
                   checkDate.setDate(today.getDate() + i);
                   const dateStr = checkDate.toISOString().split("T")[0];
-                  if (selectingDate === "pickup") {
+
+                  if (checkDate < minAllowedDate) {
                     marked[dateStr] = {
                       disabled: true,
                       disableTouchEvent: true,
                     };
+                  } else if (selectingDate === "pickup") {
+                    const office = getSelectedOffice(offices, selectedOffice);
+                    if (office && checkDateDisabled(checkDate, office)) {
+                      marked[dateStr] = {
+                        disabled: true,
+                        disableTouchEvent: true,
+                      };
+                    }
                   }
                 }
+
                 return marked;
               })()}
               markingType="period"
-              minDate={
-                selectingDate === "pickup"
-                  ? (() => {
-                      const minDate = new Date();
-                      minDate.setDate(minDate.getDate() + 2);
-                      return minDate.toISOString().split("T")[0];
-                    })()
-                  : tempPickupDate?.toISOString().split("T")[0]
-              }
-              maxDate={
-                selectingDate === "return" && tempPickupDate
-                  ? new Date(
-                      tempPickupDate.getTime() + 30 * 24 * 60 * 60 * 1000
-                    )
-                      .toISOString()
-                      .split("T")[0]
-                  : undefined
-              }
               theme={{
                 calendarBackground: "transparent",
                 textSectionTitleColor: "#9ca3af",
@@ -1327,7 +1367,7 @@ export default function BookingModal({
 
                   const [startH, startM] = slots.start.split(":").map(Number);
                   const [endH, endM] = slots.end.split(":").map(Number);
-                  const times: string[] = [];
+                  let times: string[] = [];
                   for (let h = startH; h <= endH; h++) {
                     const startMin = h === startH ? startM : 0;
                     const endMin = h === endH ? endM : 45;
@@ -1337,6 +1377,20 @@ export default function BookingModal({
                           .toString()
                           .padStart(2, "0")}`
                       );
+                    }
+                  }
+
+                  if (!isPickup && pickupDate && returnDate && pickupTime) {
+                    const isSameDay =
+                      pickupDate.toDateString() === returnDate.toDateString();
+                    if (isSameDay) {
+                      const [pH, pM] = pickupTime.split(":").map(Number);
+                      const minReturnMinutes = pH * 60 + pM + 360;
+                      times = times.filter((time) => {
+                        const [rH, rM] = time.split(":").map(Number);
+                        const returnMinutes = rH * 60 + rM;
+                        return returnMinutes >= minReturnMinutes;
+                      });
                     }
                   }
 
@@ -1355,7 +1409,7 @@ export default function BookingModal({
                   const extension = isPickup
                     ? workingDay?.pickupExtension
                     : workingDay?.returnExtension;
-                  const is24Hours = slots.normalStart === slots.normalEnd;
+                  const isAllExtension = slots.normalStart === slots.normalEnd;
 
                   return times.map((time) => {
                     const isPickup = timeModalField === "pickupTime";
@@ -1370,10 +1424,10 @@ export default function BookingModal({
                       timeModalField === "pickupTime" ? pickupTime : returnTime;
                     const isAvailable = !isReserved;
                     const isExtension =
-                      !is24Hours &&
-                      slots.normalStart &&
+                      isAllExtension ||
+                      (slots.normalStart &&
                       slots.normalEnd &&
-                      (time < slots.normalStart || time > slots.normalEnd);
+                      (time < slots.normalStart || time > slots.normalEnd));
                     const extensionPrice =
                       isExtension && extension ? extension.flatPrice : 0;
 

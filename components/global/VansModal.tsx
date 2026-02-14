@@ -269,7 +269,7 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
             <Text style={styles.vanName} numberOfLines={1}>
               {van.name}
             </Text>
-            <Text style={styles.vanCargo}>{van.expert || "Modern van"}</Text>
+            <Text style={styles.vanCargo}>{van.expert || `Modern van`}</Text>
 
             <View style={styles.specs}>
               <View style={styles.spec}>

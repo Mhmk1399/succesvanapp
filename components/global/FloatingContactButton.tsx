@@ -113,7 +113,7 @@ export default function FloatingContactButton() {
   ).current;
 
   const makeCall = () => {
-    Linking.openURL("tel:+442012345678");
+    Linking.openURL("tel:+442030111198");
     closeModal();
   };
 
@@ -229,7 +229,7 @@ export default function FloatingContactButton() {
                               Call Us Now
                             </Text>
                             <Text style={styles.modalOptionDesc}>
-                              +44 20 1234 5678
+                              +44 20 3011 1198
                             </Text>
                             <Text style={styles.modalOptionBadge}>
                               Available 24/7

@@ -71,6 +71,9 @@ export default function VanList({
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
 
+  // Ensure vans is always a valid array
+  const safeVans = Array.isArray(vans) ? vans : [];
+
   const onRefresh = () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -87,28 +90,34 @@ export default function VanList({
     extrapolate: "clamp",
   });
 
-  const renderItem = ({ item, index }: { item: Van; index: number }) => (
-    <VanCard
-      van={item}
-      index={index}
-      isHighlighted={highlightedVanId === item.id}
-      onPress={() => {
-        Haptics.selectionAsync();
-        onSelectVan?.(item);
-      }}
-      onBook={async () => {
-        Haptics.selectionAsync();
-        onBookVan?.(item);
-      }}
-    />
-  );
+  const renderItem = ({ item, index }: { item: Van; index: number }) => {
+    // Ensure item has valid data
+    if (!item || !item.id) {
+      return null;
+    }
+    return (
+      <VanCard
+        van={item}
+        index={index}
+        isHighlighted={highlightedVanId === item.id}
+        onPress={() => {
+          Haptics.selectionAsync();
+          onSelectVan?.(item);
+        }}
+        onBook={async () => {
+          Haptics.selectionAsync();
+          onBookVan?.(item);
+        }}
+      />
+    );
+  };
 
   return (
     <View style={styles.container}>
       <FlatList
         ref={flatListRef}
-        data={vans}
-        keyExtractor={(item) => item.id}
+        data={safeVans}
+        keyExtractor={(item) => item?.id || Math.random().toString()}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: 120, paddingBottom: 100 }}
@@ -127,7 +136,7 @@ export default function VanList({
         }
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
+          { useNativeDriver: false },
         )}
         scrollEventThrottle={16}
         refreshControl={
@@ -195,6 +204,11 @@ type VanCardProps = {
 };
 
 function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
+  // Early return if van is invalid
+  if (!van || typeof van !== 'object') {
+    return null;
+  }
+  
   const { user } = useAuth();
   const router = useRouter();
   const [showDimensionsModal, setShowDimensionsModal] = useState(false);
@@ -208,8 +222,28 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
   const modalOpacity = useRef(new Animated.Value(0)).current;
   const arrowAnim = useRef(new Animated.Value(0)).current;
   const [activeTab, setActiveTab] = useState<"features" | "purpose">(
-    "features"
+    "features",
   );
+
+  // Create a safe version of van with all properties guaranteed to be correct types
+  const safeVan: Van = {
+    id: String(van.id || ''),
+    name: String(van.name || 'Unknown Van'),
+    image: van.image || require("@/assets/images/van.png"),
+    video: van.video || undefined,
+    purpose: String(van.purpose || ''),
+    seats: Number(van.seats) || 2,
+    fuel: String(van.fuel || 'Diesel'),
+    expert: String(van.expert || 'No'),
+    doors: Number(van.doors) || 2,
+    gear: van.gear,
+    showPrice: Number(van.showPrice) || 0,
+    pricingTiers: van.pricingTiers || [],
+    extraHoursRate: van.extraHoursRate,
+    cargo: van.cargo,
+    properties: van.properties || [],
+    selloffer: Number(van.selloffer) || 0,
+  };
 
   useEffect(() => {
     if (showDimensionsModal) {
@@ -217,11 +251,11 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
     }
   }, [showDimensionsModal]);
   const handleCardPress = () => {
-    if (van.video) {
+    if (safeVan.video) {
       Haptics.selectionAsync();
-      setShowVideoModal(true); // پخش ویدیو
+      setShowVideoModal(true);
     } else {
-      onPress?.(); // رفتار قبلی: رفتن به جزئیات
+      onPress?.();
     }
   };
 
@@ -264,7 +298,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
             useNativeDriver: false,
           }),
         ]),
-        { iterations: 2 }
+        { iterations: 2 },
       ).start();
     }
   }, [isHighlighted]);
@@ -282,7 +316,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
           duration: 800,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, []);
 
@@ -341,7 +375,11 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
   };
 
   const imageSource =
-    typeof van.image === "string" ? { uri: van.image } : van.image;
+    typeof safeVan.image === "string" && safeVan.image
+      ? { uri: safeVan.image }
+      : typeof safeVan.image === "number"
+        ? safeVan.image
+        : require("@/assets/images/van.png");
 
   const borderColor = highlightAnim.interpolate({
     inputRange: [0, 1],
@@ -366,14 +404,18 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
           style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.95 }]}
         >
           <View style={styles.imageContainer}>
-            <Pressable onPress={() => van.video && setShowVideoModal(true)}>
+            <Pressable
+              onPress={() =>
+                safeVan.video && setShowVideoModal(true)
+              }
+            >
               <Animated.View style={{ transform: [{ scale: imageScale }] }}>
                 <Image
                   source={imageSource}
                   style={styles.image}
                   contentFit="cover"
                 />
-                {van.video && (
+                {safeVan.video && (
                   <View style={styles.playIconOverlay}>
                     <View style={styles.playIconCircle}>
                       <Ionicons name="play" size={20} color="#fff" />
@@ -396,14 +438,14 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
           <View style={styles.overlayContent}>
             <View>
               <Text style={styles.vanName} numberOfLines={1}>
-                {van.name}
+                {safeVan.name}
               </Text>
               <Text style={styles.vanSub}>
-                {van.expert ? van.expert : "Modern van · or similar"}
+                {safeVan.expert || `Modern van · or similar`}
               </Text>
 
               <View style={styles.chipsRow}>
-                <Chip icon="people-outline" label={`${van.seats} seats`} />
+                <Chip icon="people-outline" label={`${safeVan.seats} seats`} />
                 <View style={styles.chip}>
                   <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
                     <Path
@@ -415,9 +457,9 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                       fill="none"
                     />
                   </Svg>
-                  <Text style={styles.chipText}>{`${van.doors} doors`}</Text>
+                  <Text style={styles.chipText}>{`${safeVan.doors} doors`}</Text>
                 </View>
-                <Chip icon="flame-outline" label={van.fuel} />
+                <Chip icon="flame-outline" label={safeVan.fuel} />
               </View>
               <View style={styles.gearRow}>
                 <Ionicons
@@ -426,21 +468,24 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                   color={"#07bc1fff"}
                 />
                 <Text style={styles.gearText}>
-                  {typeof van.gear === "string"
-                    ? van.gear === "manual,automatic"
+                  {typeof safeVan.gear === "string"
+                    ? safeVan.gear === "manual,automatic"
                       ? "Manual & Automatic"
-                      : van.gear.charAt(0).toUpperCase() + van.gear.slice(1)
-                    : van.gear?.availableTypes
-                        ?.join(" & ")
-                        .replace(/manual/g, "Manual")
-                        .replace(/automatic/g, "Automatic") || "Manual"}
+                      : (safeVan.gear?.charAt(0)?.toUpperCase() || "") +
+                        (safeVan.gear?.slice(1) || "")
+                    : Array.isArray(safeVan.gear?.availableTypes)
+                      ? safeVan.gear.availableTypes
+                          .join(" & ")
+                          .replace(/manual/g, "Manual")
+                          .replace(/automatic/g, "Automatic")
+                      : "Manual"}
                 </Text>
               </View>
             </View>
 
             <View style={styles.bottomRow}>
               <View style={styles.leftSection}>
-                {van.properties && van.properties.length > 0 && (
+                {Array.isArray(safeVan.properties) && safeVan.properties.length > 0 && (
                   <Pressable
                     onPress={(e) => {
                       e.stopPropagation();
@@ -473,12 +518,14 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                     </Animated.View>
                   </Pressable>
                 )}
-                {van.selloffer && van.selloffer > 0 && (
-                  <View style={styles.discountBadge}>
-                    <Ionicons name="pricetag" size={12} color="#fff" />
-                    <Text style={styles.discountText}>{van.selloffer}% OFF</Text>
-                  </View>
-                )}
+                {safeVan.selloffer && safeVan.selloffer > 0 && (
+                    <View style={styles.discountBadge}>
+                      <Ionicons name="pricetag" size={12} color="#fff" />
+                      <Text style={styles.discountText}>
+                        {safeVan.selloffer}% OFF
+                      </Text>
+                    </View>
+                  )}
               </View>
 
               <View style={styles.rightSection}>
@@ -488,7 +535,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                     if (!user) {
                       await AsyncStorage.setItem(
                         "pendingBookingVan",
-                        JSON.stringify(van)
+                        JSON.stringify(van),
                       );
                       Alert.alert(
                         "Login Required",
@@ -503,7 +550,7 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                             onPress: () => router.push("/register"),
                           },
                           { text: "Cancel", style: "cancel" },
-                        ]
+                        ],
                       );
                       return;
                     }
@@ -543,9 +590,9 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
             </View>
 
             {/* پخش واقعی ویدیو با expo-av */}
-            {van.video ? (
+            {safeVan.video ? (
               <Video
-                source={{ uri: van.video }}
+                source={{ uri: safeVan.video }}
                 rate={1.0}
                 volume={1.0}
                 isMuted={false}
@@ -589,7 +636,9 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                   <View style={styles.modalHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.modalTitle}>Van Details</Text>
-                      <Text style={styles.modalSubtitle}>{van.name}</Text>
+                      <Text style={styles.modalSubtitle}>
+                        {safeVan.name}
+                      </Text>
                     </View>
                     <Pressable
                       onPress={() => setShowDimensionsModal(false)}
@@ -642,15 +691,16 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                   >
                     {activeTab === "features" ? (
                       // تب ویژگی‌ها (همون قبلی)
-                      van.properties && van.properties.length > 0 ? (
+                      Array.isArray(safeVan.properties) &&
+                      safeVan.properties.length > 0 ? (
                         <View style={styles.dimensionsGrid}>
-                          {van.properties.map((prop) => (
-                            <View key={prop._id} style={styles.dimensionItem}>
+                          {safeVan.properties.map((prop: any) => (
+                            <View key={prop._id || Math.random()} style={styles.dimensionItem}>
                               <Text style={styles.dimensionKey}>
-                                {prop.key}
+                                {String(prop.key || '')}
                               </Text>
                               <Text style={styles.dimensionValue}>
-                                {prop.value}
+                                {String(prop.value || '')}
                               </Text>
                             </View>
                           ))}
@@ -660,9 +710,9 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                           No features available
                         </Text>
                       )
-                    ) : van.purpose ? (
+                    ) : safeVan.purpose ? (
                       <View style={styles.purposeContainer}>
-                        {van.purpose
+                        {safeVan.purpose
                           .split("\n")
                           .map((line: string, index: number) => {
                             const trimmed = line.trim();
@@ -673,7 +723,9 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
                               .toLowerCase()
                               .includes("ideal for");
                             const hasTick = trimmed.startsWith("✅");
-                            const displayText = hasTick ? trimmed.substring(2) : trimmed;
+                            const displayText = hasTick
+                              ? trimmed.substring(2)
+                              : trimmed;
 
                             return (
                               <View key={index} style={styles.purposeLine}>
@@ -723,7 +775,9 @@ function Chip({ icon, label }: ChipProps) {
   return (
     <View style={styles.chip}>
       <Ionicons name={icon} size={13} color={ACCENT} />
-      <Text style={styles.chipText}>{label}</Text>
+      <Text style={styles.chipText}>
+        {typeof label === "string" ? label : ""}
+      </Text>
     </View>
   );
 }

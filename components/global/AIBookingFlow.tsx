@@ -15,7 +15,7 @@ import {
   Text,
   TextInput,
   View,
-} from "react-native";
+ } from "react-native";
 import VanList, { Van } from "./vanlist";
 
 const { height } = Dimensions.get("window");
@@ -71,19 +71,26 @@ export default function AIBookingFlow({
 
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
     if (visible) {
       Animated.parallel([
         Animated.timing(opacity, {
           toValue: 1,
-          duration: 200,
+          duration: 300,
           useNativeDriver: true,
         }),
         Animated.spring(translateY, {
           toValue: 0,
-          tension: 55,
-          friction: 9,
+          tension: 50,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 8,
           useNativeDriver: true,
         }),
       ]).start();
@@ -330,51 +337,7 @@ export default function AIBookingFlow({
   const renderPhaseContent = () => {
     switch (agentState.phase) {
       case "ask_needs":
-        return (
-          <View style={styles.phaseContent}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="chatbubbles" size={40} color={ACCENT} />
-            </View>
-            <Text style={styles.phaseTitle}>Tell us what you need</Text>
-            <Text style={styles.phaseSubtitle}>
-              Be specific about what you're moving and how much
-            </Text>
-            
-            {/* Quick Examples */}
-            <View style={styles.examplesContainer}>
-              <Text style={styles.examplesTitle}>💡 Try saying:</Text>
-              <Pressable 
-                style={styles.exampleButton}
-                onPress={() => sendMessage("I need to move 20 heavy boxes from my office")}
-              >
-                <Text style={styles.exampleText}>"I need to move 20 heavy boxes"</Text>
-              </Pressable>
-              <Pressable 
-                style={styles.exampleButton}
-                onPress={() => sendMessage("Moving furniture - sofa, bed, and dining table")}
-              >
-                <Text style={styles.exampleText}>"Moving furniture - sofa, bed, table"</Text>
-              </Pressable>
-              <Pressable 
-                style={styles.exampleButton}
-                onPress={() => sendMessage("Need to transport 5 people with luggage")}
-              >
-                <Text style={styles.exampleText}>"Transport 5 people with luggage"</Text>
-              </Pressable>
-            </View>
-            
-            {/* Debug Info - Remove in production */}
-            {__DEV__ && (
-              <View style={styles.debugContainer}>
-                <Text style={styles.debugText}>Phase: {agentState.phase}</Text>
-                <Text style={styles.debugText}>Needs: {JSON.stringify(agentState.needs || {})}</Text>
-                <Text style={styles.debugText}>Last Message: {messages[messages.length - 1]?.content?.substring(0, 50)}...</Text>
-              </View>
-            )}
-            
-            {isLoading && <ActivityIndicator size="large" color={ACCENT} />}
-          </View>
-        );
+        return null;
 
       case "show_suggestions":
         return (
@@ -410,7 +373,7 @@ export default function AIBookingFlow({
             
             {/* Office Select */}
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Pickup Location *</Text>
+              <Text style={styles.formLabel}>📍 Pickup Location *</Text>
               <View style={styles.selectContainer}>
                 <Ionicons name="location" size={20} color={ACCENT} style={styles.selectIcon} />
                 <Text style={styles.selectText}>
@@ -421,8 +384,12 @@ export default function AIBookingFlow({
                 <Pressable
                   key={office._id}
                   style={[styles.optionButton, bookingForm.officeId === office._id && styles.selectedOption]}
-                  onPress={() => setBookingForm(p => ({ ...p, officeId: office._id }))}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setBookingForm(p => ({ ...p, officeId: office._id }));
+                  }}
                 >
+                  <Ionicons name={bookingForm.officeId === office._id ? "checkmark-circle" : "ellipse-outline"} size={18} color={bookingForm.officeId === office._id ? ACCENT : "#9ca3af"} />
                   <Text style={[styles.optionText, bookingForm.officeId === office._id && styles.selectedOptionText]}>
                     {office.name}
                   </Text>
@@ -433,7 +400,7 @@ export default function AIBookingFlow({
             {/* Dates */}
             <View style={styles.dateRow}>
               <View style={styles.dateGroup}>
-                <Text style={styles.formLabel}>Pickup Date *</Text>
+                <Text style={styles.formLabel}>📅 Pickup Date *</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="YYYY-MM-DD"
@@ -443,7 +410,7 @@ export default function AIBookingFlow({
                 />
               </View>
               <View style={styles.dateGroup}>
-                <Text style={styles.formLabel}>Return Date *</Text>
+                <Text style={styles.formLabel}>📅 Return Date *</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="YYYY-MM-DD"
@@ -457,7 +424,7 @@ export default function AIBookingFlow({
             {/* Times */}
             <View style={styles.dateRow}>
               <View style={styles.dateGroup}>
-                <Text style={styles.formLabel}>Pickup Time</Text>
+                <Text style={styles.formLabel}>🕐 Pickup Time</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="10:00"
@@ -467,7 +434,7 @@ export default function AIBookingFlow({
                 />
               </View>
               <View style={styles.dateGroup}>
-                <Text style={styles.formLabel}>Return Time</Text>
+                <Text style={styles.formLabel}>🕐 Return Time</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="10:00"
@@ -480,7 +447,7 @@ export default function AIBookingFlow({
             
             {/* Driver Age */}
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Driver Age *</Text>
+              <Text style={styles.formLabel}>👤 Driver Age *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="23-80"
@@ -488,12 +455,11 @@ export default function AIBookingFlow({
                 value={bookingForm.driverAge.toString()}
                 onChangeText={(text) => setBookingForm(p => ({ ...p, driverAge: parseInt(text) || 25 }))}
                 keyboardType="number-pad"
-                
               />
             </View>
             
             <Pressable
-              style={[styles.button, styles.confirmButton, styles.submitButton]}
+              style={[styles.button, styles.confirmButton, styles.submitButton, (isLoading || !bookingForm.officeId || !bookingForm.startDate || !bookingForm.endDate) && styles.buttonDisabled]}
               onPress={handleBookingSubmit}
               disabled={isLoading || !bookingForm.officeId || !bookingForm.startDate || !bookingForm.endDate}
             >
@@ -517,7 +483,7 @@ export default function AIBookingFlow({
         }
         
         return (
-          <View style={styles.phaseContent}>
+          <ScrollView contentContainerStyle={styles.phaseContentScroll}>
             <View style={styles.iconCircle}>
               <Ionicons name="settings" size={40} color={ACCENT} />
             </View>
@@ -573,7 +539,7 @@ export default function AIBookingFlow({
               <Ionicons name="checkmark" size={20} color="#fff" />
               <Text style={styles.buttonText}>Continue to Add-ons</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         );
 
       case "select_addons":
@@ -663,7 +629,7 @@ export default function AIBookingFlow({
 
       case "show_receipt":
         return (
-          <View style={styles.phaseContent}>
+          <ScrollView contentContainerStyle={styles.phaseContentScroll}>
             <View style={styles.iconCircle}>
               <Ionicons name="receipt" size={40} color={ACCENT} />
             </View>
@@ -685,12 +651,12 @@ export default function AIBookingFlow({
             >
               <Text style={styles.buttonText}>Confirm Booking</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         );
 
       case "verify_phone":
         return (
-          <View style={styles.phaseContent}>
+          <ScrollView contentContainerStyle={styles.phaseContentScroll}>
             <View style={styles.iconCircle}>
               <Ionicons name="phone-portrait" size={40} color={ACCENT} />
             </View>
@@ -737,12 +703,12 @@ export default function AIBookingFlow({
                 </Pressable>
               </>
             )}
-          </View>
+          </ScrollView>
         );
 
       case "complete":
         return (
-          <View style={styles.phaseContent}>
+          <ScrollView contentContainerStyle={styles.phaseContentScroll}>
             <View style={[styles.iconCircle, { backgroundColor: "#22c55e" }]}>
               <Ionicons name="checkmark-circle" size={40} color="#fff" />
             </View>
@@ -753,7 +719,7 @@ export default function AIBookingFlow({
             <Text style={styles.reservationId}>
               ID: {agentState.reservationId}
             </Text>
-          </View>
+          </ScrollView>
         );
 
       default:
@@ -770,7 +736,7 @@ export default function AIBookingFlow({
       </Animated.View>
 
       <Animated.View
-        style={[styles.container, { transform: [{ translateY }] }]}
+        style={[styles.container, { transform: [{ translateY }, { scale: scaleAnim }] }]}
       >
         <BlurView intensity={80} tint="dark" style={styles.content}>
           {/* Header */}
@@ -912,11 +878,11 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flex: 1,
-    maxHeight: 200,
   },
   messagesContent: {
     padding: 16,
     gap: 12,
+    paddingBottom: 16,
   },
   messageBubble: {
     padding: 12,
@@ -946,7 +912,10 @@ const styles = StyleSheet.create({
   },
   phaseContent: {
     flex: 1,
+  },
+  phaseContentScroll: {
     padding: 20,
+    paddingBottom: 20,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1063,19 +1032,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionButton: {
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
     backgroundColor: "rgba(255,255,255,0.05)",
-    marginBottom: 4,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   selectedOption: {
-    backgroundColor: "rgba(254,154,0,0.2)",
-    borderWidth: 1,
+    backgroundColor: "rgba(254,154,0,0.15)",
+    borderWidth: 2,
     borderColor: ACCENT,
   },
   optionText: {
     color: "#e5e7eb",
     fontSize: 14,
+    flex: 1,
   },
   selectedOptionText: {
     color: "#fff",
@@ -1236,36 +1211,40 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
     borderColor: "rgba(254,154,0,0.3)",
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 14,
     alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  exampleIcon: {
+    opacity: 0.6,
   },
   exampleText: {
     color: ACCENT,
-    fontSize: 14,
+    fontSize: 13,
     fontStyle: "italic",
+    flex: 1,
   },
   
-  // Debug (remove in production)
-  debugContainer: {
+  loadingContainer: {
+    alignItems: "center",
+    gap: 12,
     marginTop: 20,
-    padding: 12,
-    backgroundColor: "rgba(255,0,0,0.1)",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,0,0,0.3)",
   },
-  debugText: {
-    color: "#ff6b6b",
-    fontSize: 10,
-    fontFamily: "monospace",
+  loadingText: {
+    color: "#9ca3af",
+    fontSize: 13,
+    fontStyle: "italic",
   },
+
   voiceContainer: {
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.1)",
     alignItems: "center",
     gap: 12,
+    backgroundColor: "rgba(0,0,0,0.2)",
   },
   voiceHint: {
     alignItems: "center",
@@ -1289,6 +1268,15 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   skipButton: {
     backgroundColor: "rgba(255,255,255,0.1)",

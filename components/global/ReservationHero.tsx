@@ -17,9 +17,9 @@ const { width, height } = Dimensions.get("window");
 const ACCENT = "#fe9a00";
 
 const VAN_IMAGES = [
-  "https://vhsbuckets3.s3.eu-north-1.amazonaws.com/images/1-min.png",
-  "https://vhsbuckets3.s3.eu-north-1.amazonaws.com/images/2-min.png",
-  "https://vhsbuckets3.s3.eu-north-1.amazonaws.com/images/3-min.png",
+  "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/louton.png",
+  "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/14seater.png",
+  "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/shortee.png",
 ];
 
 // ─────────────────────────────────────────────────────────────────

@@ -12,12 +12,13 @@ function AppContent() {
   const { isLoading } = useFirstLaunch();
   const [showSplash, setShowSplash] = useState(true);
 
-  if (isLoading || showSplash) {
+  if (isLoading) {
     return <AppSplash onFinish={() => setShowSplash(false)} />;
   }
 
   return (
     <>
+      {showSplash && <AppSplash onFinish={() => setShowSplash(false)} />}
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="vans/index" />

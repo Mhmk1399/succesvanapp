@@ -118,7 +118,7 @@ export default function Footer() {
 
   const handleCall = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Linking.openURL("tel:+442012345678");
+    Linking.openURL("tel:+44 20 3011 1198");
   };
 
   const handleEmail = async () => {
@@ -202,7 +202,7 @@ export default function Footer() {
                 <ActionButton
                   icon="call"
                   title="Call Us"
-                  subtitle="+44 20 1234 5678"
+                  subtitle="+44 20 3011 1198"
                   onPress={handleCall}
                   isPrimary
                 />

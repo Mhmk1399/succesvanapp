@@ -33,6 +33,18 @@ const { height } = Dimensions.get("window");
 
 const ACCENT = "#fe9a00";
 
+const getLondonTime = () => {
+  const now = new Date();
+  const londonTimeStr = now.toLocaleString("en-GB", {
+    timeZone: "Europe/London",
+  });
+  const [datePart, timePart] = londonTimeStr.split(", ");
+  const [day, month, year] = datePart.split("/").map(Number);
+  const [hours, minutes, seconds] = timePart.split(":").map(Number);
+  const londonDate = new Date(year, month - 1, day, hours, minutes, seconds);
+  return londonDate;
+};
+
 type UserReservationsProps = {
   reservations: Reservation[];
   isLoading?: boolean;
@@ -83,7 +95,7 @@ export default function UserReservations({
   const [dateModalVisible, setDateModalVisible] = useState(false);
   const [timeModalVisible, setTimeModalVisible] = useState(false);
   const [selectingDate, setSelectingDate] = useState<"pickup" | "return">(
-    "pickup"
+    "pickup",
   );
   const [timeModalField, setTimeModalField] = useState<
     "pickup" | "return" | null
@@ -123,7 +135,7 @@ export default function UserReservations({
           }).start();
         }
       },
-    })
+    }),
   ).current;
 
   useEffect(() => {
@@ -174,14 +186,14 @@ export default function UserReservations({
       `${pickup.getHours().toString().padStart(2, "0")}:${pickup
         .getMinutes()
         .toString()
-        .padStart(2, "0")}`
+        .padStart(2, "0")}`,
     );
     setEditReturnDate(returnD);
     setEditReturnTime(
       `${returnD.getHours().toString().padStart(2, "0")}:${returnD
         .getMinutes()
         .toString()
-        .padStart(2, "0")}`
+        .padStart(2, "0")}`,
     );
     setEditMessage(selectedReservation.messege || "");
 
@@ -246,7 +258,7 @@ export default function UserReservations({
               } else {
                 return slot.endDate === dateStr;
               }
-            }
+            },
           );
           console.log("[reserve.tsx] Filtered slots:", filteredSlots);
           setReservedSlots(filteredSlots);
@@ -294,17 +306,19 @@ export default function UserReservations({
       selectedReservation.category?.pricingTiers || [],
       selectedReservation.category?.extrahoursRate ||
         selectedReservation.category?.extraHoursRate ||
-        0
+        0,
     );
 
+    const reservationAddOns = Array.isArray(selectedReservation.addOns)
+      ? selectedReservation.addOns.map((a) => a.addOn).filter(Boolean)
+      : [];
     const allAddons = [
-      ...(selectedReservation.addOns?.map((a) => a.addOn).filter(Boolean) ||
-        []),
-      ...availableAddons,
+      ...reservationAddOns,
+      ...(Array.isArray(availableAddons) ? availableAddons : []),
     ];
-    const uniqueAddons = allAddons.filter(
+    const uniqueAddons = (Array.isArray(allAddons) ? allAddons : []).filter(
       (addon, index, self) =>
-        addon && self.findIndex((a) => a?._id === addon._id) === index
+        addon && self.findIndex((a) => a?._id === addon._id) === index,
     );
 
     const addonsPrice = uniqueAddons.reduce((sum, addon) => {
@@ -317,7 +331,7 @@ export default function UserReservations({
         editReturnDate,
         editPickupTime,
         editReturnTime,
-        quantity
+        quantity,
       );
       return sum + price;
     }, 0);
@@ -337,7 +351,7 @@ export default function UserReservations({
   const getAvailableTimeSlots = (
     date: Date | null,
     office: { _id: string; name: string; workingTime?: WorkingTime[] },
-    isPickup: boolean
+    isPickup: boolean,
   ) => {
     if (!office || !date)
       return {
@@ -356,7 +370,7 @@ export default function UserReservations({
       "saturday",
     ][date.getDay()];
     const workingDay = office.workingTime?.find(
-      (w: WorkingTime) => w.day === dayName
+      (w: WorkingTime) => w.day === dayName,
     );
     if (workingDay && workingDay.isOpen) {
       let start = workingDay.startTime || "00:00";
@@ -371,11 +385,11 @@ export default function UserReservations({
         const [endH, endM] = end.split(":").map(Number);
         const extendedStartMin = Math.max(
           0,
-          startH * 60 + startM - extension.hoursBefore * 60
+          startH * 60 + startM - extension.hoursBefore * 60,
         );
         const extendedEndMin = Math.min(
           1439,
-          endH * 60 + endM + extension.hoursAfter * 60
+          endH * 60 + endM + extension.hoursAfter * 60,
         );
         start = `${Math.floor(extendedStartMin / 60)
           .toString()
@@ -422,6 +436,24 @@ export default function UserReservations({
     if (timeModalField === "pickup") {
       setEditPickupTime(time);
     } else {
+      if (editPickupDate && editReturnDate && editPickupTime) {
+        const isSameDay =
+          editPickupDate.toDateString() === editReturnDate.toDateString();
+        if (isSameDay) {
+          const [pH, pM] = editPickupTime.split(":").map(Number);
+          const [rH, rM] = time.split(":").map(Number);
+          const pickupMinutes = pH * 60 + pM;
+          const returnMinutes = rH * 60 + rM;
+          const diffMinutes = returnMinutes - pickupMinutes;
+          if (diffMinutes < 360) {
+            Alert.alert(
+              "Minimum Rental Period",
+              "Minimum 6 hours required for same-day rental.",
+            );
+            return;
+          }
+        }
+      }
       setEditReturnTime(time);
     }
     setTimeModalVisible(false);
@@ -460,7 +492,7 @@ export default function UserReservations({
           totalPrice: dynamicPrice,
           messege: editMessage,
           addOns: updatedAddOns,
-        }
+        },
       );
 
       if (result.success) {
@@ -593,10 +625,13 @@ export default function UserReservations({
     );
   }
 
+  // Ensure reservations is always a valid array
+  const safeReservations = Array.isArray(reservations) ? reservations : [];
+
   return (
     <>
       <FlatList
-        data={[...reservations].reverse()}
+        data={[...safeReservations].reverse()}
         keyExtractor={(item) => item._id || Math.random().toString()}
         renderItem={renderItem}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -704,7 +739,7 @@ export default function UserReservations({
                         <Pressable
                           onPress={() => {
                             console.log(
-                              "[reserve.tsx] Opening pickup time modal"
+                              "[reserve.tsx] Opening pickup time modal",
                             );
                             setTimeModalField("pickup");
                             setTimeModalVisible(true);
@@ -720,7 +755,7 @@ export default function UserReservations({
                         <Pressable
                           onPress={() => {
                             console.log(
-                              "[reserve.tsx] Opening return time modal"
+                              "[reserve.tsx] Opening return time modal",
                             );
                             setTimeModalField("return");
                             setTimeModalVisible(true);
@@ -810,7 +845,7 @@ export default function UserReservations({
                           <View key={index} style={styles.addonRow}>
                             <Ionicons
                               name="checkmark-circle"
-                              size={16}
+                              size={12}
                               color={ACCENT}
                             />
                             <Text style={styles.addonText}>
@@ -844,16 +879,28 @@ export default function UserReservations({
                     const days = Math.floor(totalHours / 24);
                     const hours = totalHours % 24;
 
+                    const addonsFromReservation = Array.isArray(
+                      selectedReservation.addOns,
+                    )
+                      ? selectedReservation.addOns
+                          .map((a: any) => a.addOn)
+                          .filter(
+                            (addon: any): addon is AddOn =>
+                              addon !== null && addon !== undefined,
+                          )
+                      : [];
                     const allAddons = [
-                      ...(selectedReservation.addOns
-                        ?.map((a) => a.addOn)
-                        .filter(Boolean) || []),
-                      ...availableAddons,
+                      ...addonsFromReservation,
+                      ...(Array.isArray(availableAddons)
+                        ? availableAddons
+                        : []),
                     ];
-                    const uniqueAddons = allAddons.filter(
+                    const uniqueAddons = (
+                      Array.isArray(allAddons) ? allAddons : []
+                    ).filter(
                       (addon, index, self) =>
                         addon &&
-                        self.findIndex((a) => a?._id === addon._id) === index
+                        self.findIndex((a) => a?._id === addon._id) === index,
                     );
 
                     const totalPrice = isEditing
@@ -868,7 +915,7 @@ export default function UserReservations({
                       const quantity = isEditing
                         ? editAddonSelections[addon._id] || 0
                         : selectedReservation.addOns?.find(
-                            (a) => a.addOn?._id === addon._id
+                            (a) => a.addOn?._id === addon._id,
                           )?.quantity || 0;
                       if (quantity === 0) return;
 
@@ -889,10 +936,10 @@ export default function UserReservations({
                         returnDate,
                         pickupTime,
                         returnTime,
-                        quantity
+                        quantity,
                       );
                       console.log(
-                        `[reserve.tsx] Addon: ${addon.name}, Type: ${addon.pricingType}, Quantity: ${quantity}, Price: ${price}`
+                        `[reserve.tsx] Addon: ${addon.name}, Type: ${addon.pricingType}, Quantity: ${quantity}, Price: ${price}`,
                       );
                       addOnsPrice += price;
 
@@ -937,7 +984,7 @@ export default function UserReservations({
                           >
                             £{price.toFixed(0)}
                           </Text>
-                        </View>
+                        </View>,
                       );
                     });
 
@@ -1197,7 +1244,17 @@ export default function UserReservations({
                 markingType="period"
                 minDate={
                   selectingDate === "pickup"
-                    ? new Date().toISOString().split("T")[0]
+                    ? (() => {
+                        const londonTime = getLondonTime();
+                        const londonHour = londonTime.getUTCHours();
+                        const minDate = new Date();
+                        if (londonHour < 16) {
+                          minDate.setDate(minDate.getDate() + 1);
+                        } else {
+                          minDate.setDate(minDate.getDate() + 2);
+                        }
+                        return minDate.toISOString().split("T")[0];
+                      })()
                     : tempPickupDate?.toISOString().split("T")[0]
                 }
                 theme={{
@@ -1276,7 +1333,7 @@ export default function UserReservations({
                         times.push(
                           `${h.toString().padStart(2, "0")}:${m
                             .toString()
-                            .padStart(2, "0")}`
+                            .padStart(2, "0")}`,
                         );
                       }
                     }
@@ -1294,7 +1351,7 @@ export default function UserReservations({
                       "saturday",
                     ][dateToCheck?.getDay() || 0];
                     const workingDay = office?.workingTime?.find(
-                      (w: WorkingTime) => w.day === dayName
+                      (w: WorkingTime) => w.day === dayName,
                     );
                     const extension = isPickup
                       ? workingDay?.pickupExtension
@@ -1504,7 +1561,7 @@ const styles = StyleSheet.create({
   },
   addonName: {
     color: "#e5e7eb",
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: "500",
   },
   modalOverlay: {
@@ -1621,7 +1678,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   addonText: {
-    fontSize: 14,
+    fontSize: 10,
     color: "#e5e7eb",
     fontWeight: "500",
   },

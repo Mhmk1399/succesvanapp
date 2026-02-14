@@ -36,6 +36,35 @@ const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
 const { height } = Dimensions.get("window");
 
+const getLondonTime = (): Date => {
+  const now = new Date();
+  const londonStr = now.toLocaleString("en-US", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const [datePart, timePart] = londonStr.split(", ");
+  if (!datePart || !timePart) {
+    console.error("Failed to split London time string");
+    return new Date();
+  }
+  const [monthStr, dayStr, yearStr] = datePart.split("/");
+  const [hourStr, minuteStr, secondStr] = timePart.split(":");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10) - 1;
+  const day = parseInt(dayStr, 10);
+  const hour = parseInt(hourStr, 10);
+  const minute = parseInt(minuteStr, 10);
+  const second = parseInt(secondStr, 10);
+  const londonDate = new Date(Date.UTC(year, month, day, hour, minute, second));
+  return londonDate;
+};
+
 type PickerField =
   | "pickupDate"
   | "pickupTime"
@@ -85,7 +114,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
           }).start();
         }
       },
-    })
+    }),
   ).current;
 
   useEffect(() => {
@@ -94,7 +123,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
         toValue: 1,
         duration: 2500,
         useNativeDriver: true,
-      })
+      }),
     ).start();
   }, []);
 
@@ -267,7 +296,7 @@ function ReservationSheetContent({
   const [pickupDate, setPickupDate] = useState<Date | null>(new Date());
   const [pickupTime, setPickupTime] = useState<string>("");
   const [returnDate, setReturnDate] = useState<Date | null>(
-    new Date(Date.now() + 24 * 60 * 60 * 1000)
+    new Date(Date.now() + 24 * 60 * 60 * 1000),
   );
   const [returnTime, setReturnTime] = useState<string>("");
 
@@ -290,7 +319,7 @@ function ReservationSheetContent({
   >(null);
   const [dateRangeModalVisible, setDateRangeModalVisible] = useState(false);
   const [selectingDate, setSelectingDate] = useState<"pickup" | "return">(
-    "pickup"
+    "pickup",
   );
   const [tempPickupDate, setTempPickupDate] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -388,13 +417,13 @@ function ReservationSheetContent({
           setSelectedOffice(data.office || "");
           setSelectedType(data.type || "");
           setPickupDate(
-            data.pickupDate ? new Date(data.pickupDate) : new Date()
+            data.pickupDate ? new Date(data.pickupDate) : new Date(),
           );
           setPickupTime(data.pickupTime || "");
           setReturnDate(
             data.returnDate
               ? new Date(data.returnDate)
-              : new Date(Date.now() + 24 * 60 * 60 * 1000)
+              : new Date(Date.now() + 24 * 60 * 60 * 1000),
           );
           setReturnTime(data.returnTime || "");
           setDriverAge(data.driverAge || "");
@@ -445,7 +474,7 @@ function ReservationSheetContent({
           headers: {
             "Content-Type": "application/json",
           },
-        }
+        },
       )
         .then((res) => res.json())
         .then((data) => {
@@ -460,7 +489,7 @@ function ReservationSheetContent({
                 isSameDay: boolean;
               }) => {
                 return slot.startDate === startDateStr;
-              }
+              },
             );
             console.log("[Start Date Filtered Slots]", filteredSlots);
             setStartDateReservedSlots(filteredSlots);
@@ -490,7 +519,7 @@ function ReservationSheetContent({
           headers: {
             "Content-Type": "application/json",
           },
-        }
+        },
       )
         .then((res) => res.json())
         .then((data) => {
@@ -506,7 +535,7 @@ function ReservationSheetContent({
                 isSameDay: boolean;
               }) => {
                 return slot.endDate === endDateStr;
-              }
+              },
             );
             console.log("[End Date Filtered Slots]", filteredSlots);
             setEndDateReservedSlots(filteredSlots);
@@ -519,7 +548,7 @@ function ReservationSheetContent({
     }
   }, [selectedOffice, returnDate]);
 
-  const getSelectedOffice = (): Office | undefined =>
+    const getSelectedOffice = (): Office | undefined =>
     offices.find((o) => o._id === selectedOffice);
 
   // ---- DATE/TIME HELPERS (ported from web) ----
@@ -541,7 +570,7 @@ function ReservationSheetContent({
     ][date.getDay()];
 
     const specialDay = office.specialDays?.find(
-      (sd) => sd.month === month && sd.day === day
+      (sd) => sd.month === month && sd.day === day,
     );
     if (specialDay && !specialDay.isOpen) return true;
 
@@ -553,7 +582,7 @@ function ReservationSheetContent({
 
   const getAvailableTimeSlots = (
     date: Date | null,
-    isPickup: boolean = true
+    isPickup: boolean = true,
   ) => {
     const office = getSelectedOffice();
     if (!office || !date)
@@ -577,7 +606,7 @@ function ReservationSheetContent({
     ][date.getDay()];
 
     const specialDay = office.specialDays?.find(
-      (sd) => sd.month === month && sd.day === day
+      (sd) => sd.month === month && sd.day === day,
     );
     if (specialDay && specialDay.isOpen) {
       return {
@@ -603,11 +632,11 @@ function ReservationSheetContent({
         const [endH, endM] = end.split(":").map(Number);
         const extendedStartMin = Math.max(
           0,
-          startH * 60 + startM - extension.hoursBefore * 60
+          startH * 60 + startM - extension.hoursBefore * 60,
         );
         const extendedEndMin = Math.min(
           1439,
-          endH * 60 + endM + extension.hoursAfter * 60
+          endH * 60 + endM + extension.hoursAfter * 60,
         );
         start = `${Math.floor(extendedStartMin / 60)
           .toString()
@@ -656,7 +685,7 @@ function ReservationSheetContent({
       const h = Math.floor(currentMinutes / 60);
       const m = currentMinutes % 60;
       slots.push(
-        `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+        `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`,
       );
       currentMinutes += 15;
     }
@@ -699,7 +728,7 @@ function ReservationSheetContent({
       if (baseDate && date < baseDate) {
         showEitherAlert(
           "Invalid Date",
-          "Return date must be after pickup date."
+          "Return date must be after pickup date.",
         );
         return;
       }
@@ -749,7 +778,7 @@ function ReservationSheetContent({
         if (diffHours < 6) {
           showEitherAlert(
             "Minimum Rental Period",
-            "Minimum rental period is 6 hours. Please select a later return time or date."
+            "Minimum rental period is 6 hours. Please select a later return time or date.",
           );
           return;
         }
@@ -768,7 +797,7 @@ function ReservationSheetContent({
     if (pickerMode === "date" && isDateDisabled(date)) {
       showEitherAlert(
         "Office Closed",
-        "The selected date is not available for this office."
+        "The selected date is not available for this office.",
       );
       hidePicker();
       return;
@@ -811,14 +840,14 @@ function ReservationSheetContent({
     if (!pickupDate || !returnDate) {
       showEitherAlert(
         "Missing dates",
-        "Please choose pickup and return dates."
+        "Please choose pickup and return dates.",
       );
       return;
     }
     if (!pickupTime || !returnTime) {
       showEitherAlert(
         "Missing times",
-        "Please choose pickup and return times."
+        "Please choose pickup and return times.",
       );
       return;
     }
@@ -840,7 +869,7 @@ function ReservationSheetContent({
       if (diffHours < 6) {
         showAlert(
           "Minimum Rental Period",
-          "Minimum rental period is 6 hours. Please adjust your dates and times."
+          "Minimum rental period is 6 hours. Please adjust your dates and times.",
         );
         return;
       }
@@ -858,7 +887,7 @@ function ReservationSheetContent({
           pickupTime,
           returnTime,
           driverAge,
-        })
+        }),
       );
       setLoginModalVisible(true);
       return;
@@ -893,7 +922,7 @@ function ReservationSheetContent({
         "saturday",
       ][pickupDate.getDay()];
       const workingDay = officeObj?.workingTime?.find(
-        (w: WorkingTime) => w.day === dayName
+        (w: WorkingTime) => w.day === dayName,
       );
       if (workingDay?.pickupExtension) {
         const slots = getAvailableTimeSlots(pickupDate, true);
@@ -916,7 +945,7 @@ function ReservationSheetContent({
         "saturday",
       ][returnDate.getDay()];
       const workingDay = officeObj?.workingTime?.find(
-        (w: WorkingTime) => w.day === dayName
+        (w: WorkingTime) => w.day === dayName,
       );
       if (workingDay?.returnExtension) {
         const slots = getAvailableTimeSlots(returnDate, false);
@@ -966,7 +995,7 @@ function ReservationSheetContent({
 
         // Defensive: officeCategoryIds may contain id strings or objects like { _id }
         const officeIdsStr = (officeCategoryIds || []).map((id: any) =>
-          String(id && (id._id ?? id))
+          String(id && (id._id ?? id)),
         );
 
         const filteredVans = (
@@ -977,7 +1006,7 @@ function ReservationSheetContent({
             const matchesOffice = officeIdsStr.includes(catId);
 
             // cat.type may be either an object { _id } or a plain id string
-            const catTypeId = cat.type ? cat.type._id ?? cat.type : undefined;
+            const catTypeId = cat.type ? (cat.type._id ?? cat.type) : undefined;
             const matchesType =
               String(catTypeId ?? "") === String(selectedType ?? "");
 
@@ -1025,7 +1054,7 @@ function ReservationSheetContent({
     onChangeText: (text: string) => void,
     icon: keyof typeof Ionicons.glyphMap,
     inputName: string,
-    keyboardType: "default" | "numeric" = "default"
+    keyboardType: "default" | "numeric" = "default",
   ) => {
     const isFocused = focusedInput === inputName;
     return (
@@ -1318,8 +1347,8 @@ function ReservationSheetContent({
                       ? `Selected: ${formatDate(pickupDate)}`
                       : "Choose your pickup date"
                     : returnDate
-                    ? `Selected: ${formatDate(returnDate)}`
-                    : "Choose your return date"}
+                      ? `Selected: ${formatDate(returnDate)}`
+                      : "Choose your return date"}
                 </Text>
               </View>
               <Pressable
@@ -1343,8 +1372,15 @@ function ReservationSheetContent({
               minDate={
                 selectingDate === "pickup"
                   ? (() => {
+                      const londonTime = getLondonTime();
+                      const londonHour = londonTime.getUTCHours();
                       const minDate = new Date();
-                      minDate.setDate(minDate.getDate() + 2);
+
+                      if (londonHour < 16) {
+                        minDate.setDate(minDate.getDate() + 1);
+                      } else {
+                        minDate.setDate(minDate.getDate() + 2);
+                      }
                       return minDate.toISOString().split("T")[0];
                     })()
                   : pickupDate?.toISOString().split("T")[0]
@@ -1394,13 +1430,23 @@ function ReservationSheetContent({
                 }
 
                 // Mark disabled dates (48-hour restriction + office closed days)
+                const londonTime = getLondonTime();
+                const londonHour = londonTime.getUTCHours();
                 const today = new Date();
+                const minAllowedDate = new Date(today);
+
+                if (londonHour < 16) {
+                  minAllowedDate.setDate(today.getDate() + 1);
+                } else {
+                  minAllowedDate.setDate(today.getDate() + 2);
+                }
+
                 for (let i = 0; i < 60; i++) {
                   const checkDate = new Date(today);
                   checkDate.setDate(today.getDate() + i);
                   const dateStr = checkDate.toISOString().split("T")[0];
 
-                  if (selectingDate === "pickup" && i < 2) {
+                  if (checkDate < minAllowedDate) {
                     marked[dateStr] = {
                       disabled: true,
                       disableTouchEvent: true,
@@ -1494,10 +1540,25 @@ function ReservationSheetContent({
                 const isPickup = timeModalField === "pickupTime";
                 const dateToCheck = isPickup ? pickupDate : returnDate;
                 const slots = getAvailableTimeSlots(dateToCheck, isPickup);
-                const timeSlots = generateTimeSlots(slots.start, slots.end);
+                let timeSlots = generateTimeSlots(slots.start, slots.end);
                 const selectedTime = formatTime(
-                  isPickup ? pickupTime : returnTime
+                  isPickup ? pickupTime : returnTime,
                 );
+
+                // Filter return times if same day rental
+                if (!isPickup && pickupDate && returnDate && pickupTime) {
+                  const isSameDay =
+                    pickupDate.toDateString() === returnDate.toDateString();
+                  if (isSameDay) {
+                    const [pH, pM] = pickupTime.split(":").map(Number);
+                    const minReturnMinutes = pH * 60 + pM + 360; // 360 = 6 hours
+                    timeSlots = timeSlots.filter((time) => {
+                      const [rH, rM] = time.split(":").map(Number);
+                      const returnMinutes = rH * 60 + rM;
+                      return returnMinutes >= minReturnMinutes;
+                    });
+                  }
+                }
 
                 const office = getSelectedOffice();
                 const dayName = dateToCheck
@@ -1512,7 +1573,7 @@ function ReservationSheetContent({
                     ][dateToCheck.getDay()]
                   : "";
                 const workingDay = office?.workingTime?.find(
-                  (w: WorkingTime) => w.day === dayName
+                  (w: WorkingTime) => w.day === dayName,
                 );
                 const extension = isPickup
                   ? workingDay?.pickupExtension
@@ -1686,7 +1747,7 @@ function ReservationSheetContent({
                     ellipsizeMode="tail"
                   >
                     {selectedOffice
-                      ? getSelectedOffice()?.name ?? "Selected office"
+                      ? (getSelectedOffice()?.name ?? "Selected office")
                       : "Select office"}
                   </Text>
                   <Ionicons
@@ -1735,8 +1796,8 @@ function ReservationSheetContent({
                     ellipsizeMode="tail"
                   >
                     {selectedType
-                      ? type.find((c) => c._id === selectedType)?.name ??
-                        "Selected type"
+                      ? (type.find((c) => c._id === selectedType)?.name ??
+                        "Selected type")
                       : "Select type"}
                   </Text>
                   <Ionicons
@@ -1898,7 +1959,7 @@ function ReservationSheetContent({
                 setDriverAge,
                 "person-outline",
                 "driverAge",
-                "numeric"
+                "numeric",
               )}
             </View>
           </View>
@@ -1962,7 +2023,7 @@ function ReservationSheetContent({
               "saturday",
             ][pickupDate.getDay()];
             const workingDay = officeObj.workingTime?.find(
-              (w: WorkingTime) => w.day === dayName
+              (w: WorkingTime) => w.day === dayName,
             );
             if (workingDay?.pickupExtension) {
               const slots = getAvailableTimeSlots(pickupDate, true);
@@ -1985,7 +2046,7 @@ function ReservationSheetContent({
               "saturday",
             ][returnDate.getDay()];
             const workingDay = officeObj.workingTime?.find(
-              (w: WorkingTime) => w.day === dayName
+              (w: WorkingTime) => w.day === dayName,
             );
             if (workingDay?.returnExtension) {
               const slots = getAvailableTimeSlots(returnDate, false);
@@ -2126,7 +2187,7 @@ function VoiceAIButton() {
               duration: 260 + index * 60,
               useNativeDriver: false,
             }),
-          ])
+          ]),
         ).start();
       });
     } else {

@@ -20,6 +20,9 @@ export default function VansScreen() {
   const flatListRef = useRef<FlatList>(null);
   const [highlightedVanId, setHighlightedVanId] = useState<string | null>(null);
 
+  // Ensure vans is always a valid array with proper data
+  const safeVans: Van[] = Array.isArray(vans) ? vans.filter(v => v && v.id) : [];
+
   useEffect(() => {
     loadCategories();
   }, []);
@@ -66,24 +69,24 @@ export default function VansScreen() {
       const result = await categoryService.getAll();
       if (result.success) {
         let mappedVans: Van[] = result.data.map((cat: Category) => ({
-          id: cat._id,
-          name: cat.name,
+          id: cat._id || "",
+          name: typeof cat.name === "string" ? cat.name : "Unknown Van",
           image: cat.image || require("@/assets/images/van.png"),
           video: cat.video,
-          purpose: cat.purpose,
-          seats: cat.seats || 2,
-          fuel: cat.fuel || "Diesel",
-          doors: cat.doors || 2,
+          purpose: typeof cat.purpose === "string" ? cat.purpose : "",
+          seats: typeof cat.seats === "number" ? cat.seats : 2,
+          fuel: typeof cat.fuel === "string" ? cat.fuel : "Diesel",
+          doors: typeof cat.doors === "number" ? cat.doors : 2,
           gear:
             typeof cat.gear === "object" && cat.gear?.availableTypes
               ? cat.gear
               : "manual",
-          showPrice: cat.showPrice || 0,
+          showPrice: typeof cat.showPrice === "number" ? cat.showPrice : 0,
           pricingTiers: cat.pricingTiers || [],
           extraHoursRate: cat.extrahoursRate || cat.extraHoursRate || 0,
-          expert:cat.expert || "No",
-          properties: cat.properties || [],
-          selloffer: cat.selloffer || 0,
+          expert: typeof cat.expert === "string" ? cat.expert : "No",
+          properties: Array.isArray(cat.properties) ? cat.properties : [],
+          selloffer: typeof cat.selloffer === "number" ? cat.selloffer : 0,
         }));
 
         // Filter by category if provided
@@ -130,7 +133,7 @@ export default function VansScreen() {
         style={StyleSheet.absoluteFill}
       />
       <VanList
-        vans={vans}
+        vans={safeVans}
         onSelectVan={handleSelectVan}
         onBookVan={handleBookVan}
         flatListRef={flatListRef}
