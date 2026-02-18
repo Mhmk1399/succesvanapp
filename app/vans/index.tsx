@@ -66,7 +66,23 @@ export default function VansScreen() {
 
   const loadCategories = async () => {
     try {
+      console.log("=== DEBUGGING CATEGORY SERVICE ===");
+      console.log("categoryService object:", categoryService);
+      console.log("categoryService type:", typeof categoryService);
+      console.log("categoryService.getAll:", categoryService?.getAll);
+      console.log("API URL:", process.env.EXPO_PUBLIC_CATEGORIES_API);
+      
+      if (!categoryService) {
+        throw new Error("categoryService is undefined - import failed");
+      }
+      if (!categoryService.getAll) {
+        throw new Error("categoryService.getAll is undefined - check service exports");
+      }
+      
+      console.log("Calling categoryService.getAll()...");
       const result = await categoryService.getAll();
+      console.log("Result received:", result);
+      
       if (result.success) {
         let mappedVans: Van[] = result.data.map((cat: Category) => ({
           id: cat._id || "",
@@ -94,10 +110,15 @@ export default function VansScreen() {
           mappedVans = mappedVans.filter((van) => van.id === params.category);
         }
 
+        console.log("Mapped vans count:", mappedVans.length);
         setVans(mappedVans);
       }
     } catch (error) {
-      console.log("Load categories error:", error);
+      console.error("=== LOAD CATEGORIES ERROR ===");
+      console.error("Error type:", error?.constructor?.name);
+      console.error("Error message:", error instanceof Error ? error.message : String(error));
+      console.error("Full error:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : undefined);
     } finally {
       setLoading(false);
     }
