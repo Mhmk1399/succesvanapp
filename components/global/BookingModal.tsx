@@ -159,6 +159,17 @@ export default function BookingModal({
         style={[styles.modalContainer, { transform: [{ translateY }] }]}
       >
         <BlurView intensity={50} tint="dark" style={styles.blurContainer}>
+          {/* Android glass effect fallback - BlurView doesn't work properly on Android */}
+          {Platform.OS === "android" && (
+            <LinearGradient
+              colors={[
+                "rgba(15,23,42,0.95)",
+                "rgba(15,23,42,0.88)",
+                "rgba(15,23,42,0.85)",
+              ]}
+              style={StyleSheet.absoluteFill}
+            />
+          )}
           <View {...panResponder.panHandlers} style={styles.handleArea}>
             <View style={styles.handle} />
           </View>
@@ -542,6 +553,17 @@ export default function BookingModal({
           </KeyboardAvoidingView>
 
           <BlurView intensity={40} tint="dark" style={styles.fixedBottom}>
+            {/* Android glass effect fallback - BlurView doesn't work properly on Android */}
+            {Platform.OS === "android" && (
+              <LinearGradient
+                colors={[
+                  "rgba(15,23,42,0.95)",
+                  "rgba(15,23,42,0.88)",
+                  "rgba(15,23,42,0.85)",
+                ]}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
             {(() => {
               if (
                 !pickupDate ||

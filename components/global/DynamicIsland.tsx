@@ -71,7 +71,6 @@ const LoginIcon = ({ size = 26, color = "#fff", filled = false }) => (
 
 const ACCENT = "#fe9a00";
 const ACCENT_DIM = "rgba(254,154,0,0.5)";
-const GLASS_BG = Platform.OS === "android" ? "rgba(10,15,35,0.88)" : undefined;
 const INACTIVE_COLOR = "rgba(255,255,255,0.35)";
 const ITEM_W = 56;
 const ITEM_H = 44;
@@ -466,13 +465,19 @@ export default function DynamicIsland() {
           tint="dark"
           style={styles.island}
         >
-          {/* Android fallback bg */}
+          {/* Android glass effect fallback - BlurView doesn't work properly on Android */}
           {Platform.OS === "android" && (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: GLASS_BG, borderRadius: ISLAND_RADIUS - 1 },
+            <LinearGradient
+              colors={[
+                "rgba(30,40,70,0.85)",
+                "rgba(15,25,50,0.92)",
+                "rgba(10,18,40,0.95)",
+                "rgba(15,25,50,0.92)",
+                "rgba(30,40,70,0.85)",
               ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[StyleSheet.absoluteFill, { borderRadius: ISLAND_RADIUS - 1 }]}
             />
           )}
 

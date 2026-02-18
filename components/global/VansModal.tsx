@@ -3,12 +3,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useRef } from "react";
 import {
   ActivityIndicator,
   Animated,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -94,6 +96,17 @@ export default function VansModal({
       >
         <View style={styles.container}>
           <BlurView intensity={90} tint="dark" style={styles.blurContainer}>
+            {/* Android glass effect fallback - BlurView doesn't work properly on Android */}
+            {Platform.OS === "android" && (
+              <LinearGradient
+                colors={[
+                  "rgba(15,23,42,0.95)",
+                  "rgba(15,23,42,0.88)",
+                  "rgba(15,23,42,0.85)",
+                ]}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
             <View style={styles.header}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.title}>Available Vans</Text>
