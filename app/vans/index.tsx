@@ -1,13 +1,13 @@
-import BookingModal from "@/components/global/BookingModal";
-import VanList, { Van } from "@/components/global/vanlist";
-import { useAuth } from "@/contexts/AuthContext";
-import { categoryService } from "@/services/categoryService";
-import { Category } from "@/types/type";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
+import { useAuth } from "@/contexts/AuthContext";
+import { Category } from "@/types/type";
+import { categoryService } from "@/services/categoryService";
+import BookingModal from "@/components/global/BookingModal";
+import VanList, { Van } from "@/components/global/vanlist";
 
 export default function VansScreen() {
   const { user } = useAuth();
