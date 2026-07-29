@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 import * as Haptics from "expo-haptics";
 
 const ACCENT = "#fe9a00";
@@ -31,13 +31,13 @@ export default function FloatingContactButton() {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 1500,
+          toValue: 1.04,
+          duration: 2200,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 1500,
+          duration: 2200,
           useNativeDriver: true,
         }),
       ])
@@ -135,7 +135,7 @@ export default function FloatingContactButton() {
           {...panResponder.panHandlers}
         >
           <Pressable onPress={openModal} style={styles.arrowTab}>
-            <BlurView intensity={80} tint="dark" style={styles.arrowBlur}>
+            <GlassView intensity={80} tint="dark" style={styles.arrowBlur}>
               <LinearGradient
                 colors={["rgba(254,154,0,0.2)", "rgba(255,140,0,0.3)"]}
                 start={{ x: 0, y: 0 }}
@@ -146,7 +146,7 @@ export default function FloatingContactButton() {
                   <Ionicons name="chatbubbles" size={18} color="#fff" />
                 </View>
               </LinearGradient>
-            </BlurView>
+            </GlassView>
           </Pressable>
         </Animated.View>
       </View>
@@ -168,7 +168,7 @@ export default function FloatingContactButton() {
             ]}
           >
             <Pressable>
-              <BlurView intensity={100} tint="dark" style={styles.modalBlur}>
+              <GlassView intensity={100} tint="dark" style={styles.modalBlur}>
                 <LinearGradient
                   colors={[
                     "rgba(15,23,42,0.1)",
@@ -190,7 +190,7 @@ export default function FloatingContactButton() {
                         <Ionicons name="headset" size={28} color="#fff" />
                       </LinearGradient>
                     </View>
-                    <Text style={styles.modalTitle}>Get in Touch</Text>
+                    <Text style={styles.modalTitle}>Contact Support</Text>
                     <Text style={styles.modalSubtitle}>
                       Choose your preferred contact method
                     </Text>
@@ -302,7 +302,7 @@ export default function FloatingContactButton() {
                     <Text style={styles.modalCloseText}>Close</Text>
                   </Pressable>
                 </LinearGradient>
-              </BlurView>
+              </GlassView>
             </Pressable>
           </Animated.View>
         </Pressable>
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: "100%",
-    zIndex: 1000,
+    zIndex: 850,
     justifyContent: "center",
     pointerEvents: "box-none",
   },
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.56)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,

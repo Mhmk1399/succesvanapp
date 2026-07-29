@@ -13,12 +13,13 @@ import {
 } from "@/utils/reservationNotifier";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Modal,
   Pressable,
@@ -35,7 +36,7 @@ type TabKey = "profile" | "reservations";
 export default function ProfileScreen() {
   const tabsRowRef = useRef<View>(null);
   const [tabsRowWidth, setTabsRowWidth] = useState<number>(0);
-  const { user, logout } = useAuth();
+  const { user, token, isLoading: authLoading, logout } = useAuth();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -44,8 +45,15 @@ export default function ProfileScreen() {
   const [licenseModalVisible, setLicenseModalVisible] = useState(false);
   const router = useRouter();
 
-  const indicatorX = useRef(new Animated.Value(1)).current;
+  const indicatorX = useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
   const prevTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    if (!authLoading && !token) {
+      router.replace("/register");
+    }
+  }, [authLoading, router, token]);
 
   useEffect(() => {
     fetchReservations();
@@ -61,10 +69,7 @@ export default function ProfileScreen() {
     prevTabRef.current = activeTab;
 
     if (prevTab !== activeTab && tabsRowWidth > 0) {
-      const padding = 4 * 2; // padding: 4 on both sides
-      const tabWidth = (tabsRowWidth - padding) / 2;
-
-      const targetX = activeTab === "profile" ? 0 : 1;
+      const targetX = activeTab === "reservations" ? 0 : 1;
 
       Animated.spring(indicatorX, {
         toValue: targetX,
@@ -101,6 +106,7 @@ export default function ProfileScreen() {
 
   const handleTabChange = async (tab: TabKey) => {
     await Haptics.selectionAsync();
+    scrollY.setValue(0);
     setActiveTab(tab);
   };
 
@@ -118,6 +124,131 @@ export default function ProfileScreen() {
   };
 
   const hasLicense = user?.licenceAttached?.front && user?.licenceAttached?.back;
+  const activeReservations = reservations.filter((reservation) =>
+    ["pending", "confirmed", "delivered"].includes(
+      String(reservation.status),
+    ),
+  ).length;
+  const floatingHeaderOpacity = scrollY.interpolate({
+    inputRange: [36, 96],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
+  const floatingHeaderTranslateY = scrollY.interpolate({
+    inputRange: [36, 96],
+    outputRange: [-18, 0],
+    extrapolate: "clamp",
+  });
+  const handleDashboardScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: false },
+  );
+
+  const dashboardChrome = (
+    <>
+      <DashboardHeader
+        name={user?.name || "Customer"}
+        onBack={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.back();
+        }}
+        onLogout={() => {
+          Haptics.selectionAsync();
+          setLogoutModalVisible(true);
+        }}
+      />
+
+      <DashboardSummary
+        total={reservations.length}
+        active={activeReservations}
+        hasLicense={!!hasLicense}
+      />
+
+      <View
+        ref={tabsRowRef}
+        onLayout={handleTabsRowLayout}
+        style={styles.tabsRow}
+      >
+        <Animated.View
+          style={[
+            styles.tabIndicator,
+            tabsRowWidth > 0 && {
+              transform: [
+                {
+                  translateX: indicatorX.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, (tabsRowWidth - 10) / 2],
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+        <Pressable
+          onPress={() => handleTabChange("reservations")}
+          style={({ pressed }) => [
+            styles.tabButton,
+            pressed && styles.tabButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name={activeTab === "reservations" ? "calendar" : "calendar-outline"}
+            size={16}
+            color={activeTab === "reservations" ? "#0f172a" : "#e5e7eb"}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "reservations" && styles.tabTextActive,
+            ]}
+          >
+            Reservations
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => handleTabChange("profile")}
+          style={({ pressed }) => [
+            styles.tabButton,
+            pressed && styles.tabButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name={activeTab === "profile" ? "person" : "person-outline"}
+            size={16}
+            color={activeTab === "profile" ? "#0f172a" : "#e5e7eb"}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "profile" && styles.tabTextActive,
+            ]}
+          >
+            Profile
+          </Text>
+        </Pressable>
+      </View>
+
+      {!hasLicense && (
+        <LicenseUploadBanner onPress={() => setLicenseModalVisible(true)} />
+      )}
+    </>
+  );
+
+  if (authLoading || !token) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={["#fe9a00", "#0f172b"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.authGuardLoading}>
+          <ActivityIndicator size="small" color={ACCENT} />
+          <Text style={styles.authGuardText}>Checking account...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <>
@@ -126,122 +257,47 @@ export default function ProfileScreen() {
           colors={["#fe9a00", "#0f172b"]}
           style={StyleSheet.absoluteFill}
         />
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.back();
-            }}
-            style={styles.backButton}
-          >
-            <Ionicons name="chevron-back" size={28} color="#f9fafb" />
-          </Pressable>
-          <Text style={styles.headerTitle}>My Account</Text>
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync();
-              setLogoutModalVisible(true);
-            }}
-            style={styles.logoutButton}
-          >
-            <Ionicons name="log-out-outline" size={22} color="#ef4444" />
-          </Pressable>
-        </View>
-
-        {/* Tabs */}
-        <View
-          ref={tabsRowRef}
-          onLayout={handleTabsRowLayout}
-          style={styles.tabsRow}
-        >
-          <Animated.View
-            style={[
-              styles.tabIndicator,
-              tabsRowWidth > 0 && {
-                transform: [
-                  {
-                    translateX: indicatorX.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, (tabsRowWidth - 8) / 2], // 8 = padding 4*2
-                    }),
-                  },
-                ],
-              },
-            ]}
-          />
-          {/* Your two Pressable tabs remain exactly the same */}
-          <Pressable
-            onPress={() => handleTabChange("profile")}
-            style={({ pressed }) => [
-              styles.tabButton,
-              pressed && styles.tabButtonPressed,
-            ]}
-          >
-            <Ionicons
-              name={activeTab === "profile" ? "person" : "person-outline"}
-              size={16}
-              color={activeTab === "profile" ? "#0f172a" : "#e5e7eb"}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "profile" && styles.tabTextActive,
-              ]}
-            >
-              Profile
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => handleTabChange("reservations")}
-            style={({ pressed }) => [
-              styles.tabButton,
-              pressed && styles.tabButtonPressed,
-            ]}
-          >
-            <Ionicons
-              name={
-                activeTab === "reservations" ? "calendar" : "calendar-outline"
-              }
-              size={16}
-              color={activeTab === "reservations" ? "#0f172a" : "#e5e7eb"}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "reservations" && styles.tabTextActive,
-              ]}
-            >
-              Reserves
-            </Text>
-          </Pressable>
-        </View>
-
-        {!hasLicense && <LicenseUploadBanner onPress={() => setLicenseModalVisible(true)} />}
-
         {/* محتوا */}
         {activeTab === "profile" ? (
           <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{
-              paddingHorizontal: 20,
-              paddingTop: 10,
-              paddingBottom: 30,
-            }}
+            style={styles.tabContent}
+            contentContainerStyle={styles.profileScrollContent}
             showsVerticalScrollIndicator={false}
+            onScroll={handleDashboardScroll}
+            scrollEventThrottle={16}
           >
-            <UserProfileCard />
+            {dashboardChrome}
+            <View style={styles.profileCardWrap}>
+              <UserProfileCard />
+            </View>
           </ScrollView>
         ) : (
-          <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}>
+          <View style={styles.tabContent}>
             <UserReservations
               reservations={reservations}
               isLoading={isLoading}
               onRefresh={handleRefresh}
               isRefreshing={isRefreshing}
+              onScroll={handleDashboardScroll}
+              ListHeaderComponent={
+                <View style={styles.chromeInList}>{dashboardChrome}</View>
+              }
             />
           </View>
         )}
+
+        <DashboardFloatingHeader
+          opacity={floatingHeaderOpacity}
+          translateY={floatingHeaderTranslateY}
+          onBack={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.back();
+          }}
+          onLogout={() => {
+            Haptics.selectionAsync();
+            setLogoutModalVisible(true);
+          }}
+        />
       </View>
 
       <Modal
@@ -254,7 +310,7 @@ export default function ProfileScreen() {
           style={styles.modalOverlay}
           onPress={() => setLogoutModalVisible(false)}
         >
-          <BlurView intensity={70} tint="dark" style={styles.modalBlur}>
+          <GlassView intensity={70} tint="dark" style={styles.modalBlur}>
             <Pressable onPress={(e) => e.stopPropagation()}>
               <View style={styles.modalContent}>
                 <View style={styles.modalIcon}>
@@ -283,7 +339,7 @@ export default function ProfileScreen() {
                 </View>
               </View>
             </Pressable>
-          </BlurView>
+          </GlassView>
         </Pressable>
       </Modal>
 
@@ -299,6 +355,163 @@ export default function ProfileScreen() {
   );
 }
 
+function DashboardFloatingHeader({
+  opacity,
+  translateY,
+  onBack,
+  onLogout,
+}: {
+  opacity: Animated.AnimatedInterpolation<number>;
+  translateY: Animated.AnimatedInterpolation<number>;
+  onBack: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <Animated.View
+      pointerEvents="box-none"
+      style={[
+        styles.floatingHeader,
+        {
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      <GlassView
+        pointerEvents="box-none"
+        intensity={88}
+        tint="dark"
+        style={styles.floatingHeaderBlur}
+      >
+        <Pressable
+          onPress={onBack}
+          style={({ pressed }) => [
+            styles.floatingIconButton,
+            pressed && styles.floatingIconButtonPressed,
+          ]}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="chevron-back" size={20} color="#f8fafc" />
+        </Pressable>
+
+        <Text style={styles.floatingHeaderTitle}>Dashboard</Text>
+
+        <Pressable
+          onPress={onLogout}
+          style={({ pressed }) => [
+            styles.floatingIconButton,
+            styles.floatingLogoutButton,
+            pressed && styles.floatingIconButtonPressed,
+          ]}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="log-out-outline" size={18} color="#fb7185" />
+        </Pressable>
+      </GlassView>
+    </Animated.View>
+  );
+}
+
+function DashboardHeader({
+  name,
+  onBack,
+  onLogout,
+}: {
+  name: string;
+  onBack: () => void;
+  onLogout: () => void;
+}) {
+  const initial = name.trim().charAt(0).toUpperCase() || "S";
+
+  return (
+    <View style={styles.headerWrap}>
+      <GlassView intensity={34} tint="dark" style={styles.headerCard}>
+        <View style={styles.headerTop}>
+          <Pressable onPress={onBack} style={styles.headerIconButton}>
+            <Ionicons name="chevron-back" size={21} color="#f8fafc" />
+          </Pressable>
+          <Text style={styles.headerCenterText}>Dashboard</Text>
+          <Pressable
+            onPress={onLogout}
+            style={[styles.headerIconButton, styles.logoutButton]}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#fb7185" />
+          </Pressable>
+        </View>
+
+        <View style={styles.accountRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
+          </View>
+          <View style={styles.accountCopy}>
+            <Text style={styles.accountKicker}>Welcome back</Text>
+            <Text style={styles.accountName} numberOfLines={1}>
+              {name}
+            </Text>
+          </View>
+          <View style={styles.accountBadge}>
+            <Ionicons name="shield-checkmark-outline" size={13} color={ACCENT} />
+            <Text style={styles.accountBadgeText}>Secure</Text>
+          </View>
+        </View>
+      </GlassView>
+    </View>
+  );
+}
+
+function DashboardSummary({
+  total,
+  active,
+  hasLicense,
+}: {
+  total: number;
+  active: number;
+  hasLicense: boolean;
+}) {
+  return (
+    <View style={styles.summaryRow}>
+      <SummaryTile
+        icon="calendar-outline"
+        label="Bookings"
+        value={String(total)}
+      />
+      <SummaryTile icon="flash-outline" label="Active" value={String(active)} />
+      <SummaryTile
+        icon={hasLicense ? "checkmark-circle-outline" : "card-outline"}
+        label="Licence"
+        value={hasLicense ? "Ready" : "Needed"}
+        warning={!hasLicense}
+      />
+    </View>
+  );
+}
+
+function SummaryTile({
+  icon,
+  label,
+  value,
+  warning,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  warning?: boolean;
+}) {
+  return (
+    <GlassView intensity={28} tint="dark" style={styles.summaryTile}>
+      <View style={[styles.summaryIcon, warning && styles.summaryIconWarning]}>
+        <Ionicons name={icon} size={16} color={warning ? "#fbbf24" : ACCENT} />
+      </View>
+      <Text style={styles.summaryValue} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={styles.summaryLabel} numberOfLines={1}>
+        {label}
+      </Text>
+    </GlassView>
+  );
+}
+
 const styles = StyleSheet.create({
   // safe: {
   //   // flex: 1,
@@ -307,17 +520,162 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    marginTop: 40,
-    paddingBottom: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
+  authGuardLoading: {
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
   },
-  backButton: {
-    padding: 8,
-    zIndex: 10,
+  authGuardText: {
+    color: "#f8fafc",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  tabContent: {
+    flex: 1,
+  },
+  profileScrollContent: {
+    paddingBottom: 30,
+  },
+  profileCardWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  chromeInList: {
+    marginHorizontal: -20,
+  },
+  floatingHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+  },
+  floatingHeaderBlur: {
+    minHeight: 88,
+    paddingTop: 42,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(15,23,42,0.64)",
+  },
+  floatingHeaderTitle: {
+    position: "absolute",
+    left: 76,
+    right: 76,
+    bottom: 19,
+    color: "#f8fafc",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  floatingIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.11)",
+    zIndex: 1,
+  },
+  floatingLogoutButton: {
+    backgroundColor: "rgba(127,29,29,0.16)",
+    borderColor: "rgba(251,113,133,0.18)",
+  },
+  floatingIconButtonPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.96 }],
+  },
+  headerWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 42,
+    paddingBottom: 12,
+  },
+  headerCard: {
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(15,23,42,0.42)",
+    padding: 12,
+  },
+  headerTop: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+  },
+  headerCenterText: {
+    color: "rgba(248,250,252,0.76)",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  accountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingTop: 12,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: ACCENT,
+  },
+  avatarText: {
+    color: "#0f172a",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  accountCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  accountKicker: {
+    color: "rgba(248,250,252,0.54)",
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  accountName: {
+    color: "#f8fafc",
+    fontSize: 20,
+    fontWeight: "900",
+    marginTop: 2,
+  },
+  accountBadge: {
+    minHeight: 30,
+    paddingHorizontal: 9,
+    borderRadius: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(254,154,0,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.24)",
+  },
+  accountBadgeText: {
+    color: ACCENT,
+    fontSize: 11,
+    fontWeight: "900",
   },
   headerTitle: {
     color: "#f9fafb",
@@ -331,29 +689,67 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   logoutButton: {
-    padding: 8,
-    zIndex: 10,
-    backgroundColor: "rgba(15, 23, 42, 0.76)",
-    borderRadius: 20,
+    backgroundColor: "rgba(127,29,29,0.16)",
+    borderColor: "rgba(251,113,133,0.16)",
+  },
+  summaryRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  summaryTile: {
+    flex: 1,
+    minHeight: 76,
+    borderRadius: 18,
+    overflow: "hidden",
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(15,23,42,0.42)",
+  },
+  summaryIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.14)",
+    marginBottom: 6,
+  },
+  summaryIconWarning: {
+    backgroundColor: "rgba(251,191,36,0.13)",
+  },
+  summaryValue: {
+    color: "#f8fafc",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  summaryLabel: {
+    color: "rgba(248,250,252,0.58)",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 2,
   },
   tabsRow: {
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: "rgba(15,23,42,0.72)",
     marginHorizontal: 16,
-    borderRadius: 999,
-    padding: 8,
+    borderRadius: 22,
+    padding: 5,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.5)",
+    borderColor: "rgba(255,255,255,0.12)",
     position: "relative",
+    marginBottom: 10,
   },
   tabIndicator: {
     position: "absolute",
-    top: 4,
-    left: 4,
-    bottom: 4,
+    top: 5,
+    left: 5,
+    bottom: 5,
     width: "50%", // Each tab takes half the width
     backgroundColor: ACCENT,
-    borderRadius: 999,
+    borderRadius: 17,
     // Remove right: "50%" — it was causing issues
   },
   tabButton: {
@@ -362,8 +758,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     columnGap: 6,
-    paddingVertical: 8,
-    borderRadius: 999,
+    minHeight: 42,
+    paddingVertical: 9,
+    borderRadius: 17,
     zIndex: 1,
   },
   tabButtonActive: {},
@@ -372,8 +769,8 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: "#e5e7eb",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "900",
   },
   tabTextActive: {
     color: "#0f172a",

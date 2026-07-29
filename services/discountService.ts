@@ -1,3 +1,5 @@
+import { safeFetch } from "./apiClient";
+
 const API_URL = process.env.EXPO_PUBLIC_DISCOUNTS_API;
 
 export const discountService = {
@@ -69,8 +71,9 @@ export const discountService = {
 
   async applyDiscount(discountId: string, userId: string) {
     try {
-      const response = await fetch(`${API_URL}?id=${discountId}`, {
+      const response = await safeFetch(`${API_URL}?id=${discountId}`, {
         method: "PATCH",
+        toast: { silent: true },
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ addUserToUsedBy: userId }),
       });

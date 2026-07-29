@@ -10,11 +10,12 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Svg, { Path } from "react-native-svg";
 import { ACCENT } from "../global/BookingModal/constants";
+import { appTheme } from "@/constants/appTheme";
 
 const { width, height } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.85;
@@ -57,12 +58,16 @@ export type Van = {
 
 type HorizontalVanListProps = {
   vans: Van[];
+  loading?: boolean;
+  error?: string | null;
   onSelectVan?: (van: Van) => void;
   onViewAll?: () => void;
 };
 
 export default function HorizontalVanList({
   vans,
+  loading = false,
+  error,
   onSelectVan,
   onViewAll,
 }: HorizontalVanListProps) {
@@ -134,13 +139,11 @@ export default function HorizontalVanList({
     [scrollX, onSelectVan]
   );
 
-  if (!vans || vans.length === 0) return null;
-
   return (
     <View style={styles.container}>
       {/* Header with Glass Effect */}
       <View style={styles.headerWrapper}>
-        <BlurView intensity={20} tint="dark" style={styles.headerBlur}>
+        <GlassView intensity={20} tint="dark" style={styles.headerBlur}>
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.titleRow}>
@@ -148,7 +151,13 @@ export default function HorizontalVanList({
                 <Text style={styles.title}>Featured Vans</Text>
               </View>
               <Text style={styles.subtitle}>
-                {vans.length} premium vehicles available
+                {loading
+                  ? "Finding the best options for you"
+                  : error
+                    ? "We could not refresh the fleet"
+                    : vans.length > 0
+                      ? `${vans.length} premium vehicles available`
+                      : "Browse our available fleet"}
               </Text>
             </View>
             <Pressable
@@ -167,40 +176,123 @@ export default function HorizontalVanList({
               </View>
             </Pressable>
           </View>
-        </BlurView>
+        </GlassView>
       </View>
 
-      {/* Cards Carousel */}
-      <Animated.FlatList
-        ref={flatListRef}
-        data={vans}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={CARD_WIDTH + CARD_SPACING}
-        decelerationRate={Platform.OS === "ios" ? 0 : 0.98}
-        bounces={true}
-        overScrollMode="never"
-        contentContainerStyle={{
-          paddingHorizontal: SIDE_PADDING,
-          paddingVertical: 16,
-        }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: true }
-        )}
-        onMomentumScrollEnd={onMomentumScrollEnd}
-        scrollEventThrottle={16}
-        nestedScrollEnabled
-        getItemLayout={(_, index) => ({
-          length: CARD_WIDTH + CARD_SPACING,
-          offset: (CARD_WIDTH + CARD_SPACING) * index,
-          index,
-        })}
-      />
+      {loading ? (
+        <LoadingFleetState />
+      ) : !vans || vans.length === 0 ? (
+        <EmptyFleetState
+          message={
+            error ||
+            "No featured vans are showing right now. You can still browse the full fleet."
+          }
+          onPress={onViewAll}
+        />
+      ) : (
+        <>
+          <Animated.FlatList
+            ref={flatListRef}
+            data={vans}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={CARD_WIDTH + CARD_SPACING}
+            decelerationRate={Platform.OS === "ios" ? 0 : 0.98}
+            bounces
+            overScrollMode="never"
+            contentContainerStyle={{
+              paddingHorizontal: SIDE_PADDING,
+              paddingVertical: 16,
+            }}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+              { useNativeDriver: true },
+            )}
+            onMomentumScrollEnd={onMomentumScrollEnd}
+            scrollEventThrottle={16}
+            nestedScrollEnabled
+            getItemLayout={(_, index) => ({
+              length: CARD_WIDTH + CARD_SPACING,
+              offset: (CARD_WIDTH + CARD_SPACING) * index,
+              index,
+            })}
+          />
+          <FleetPagination count={vans.length} activeIndex={activeIndex} />
+        </>
+      )}
 
       {/* Quick Navigation */}
+    </View>
+  );
+}
+
+function FleetPagination({
+  count,
+  activeIndex,
+}: {
+  count: number;
+  activeIndex: number;
+}) {
+  if (count < 2) return null;
+
+  return (
+    <View style={styles.pagination}>
+      {Array.from({ length: count }).map((_, index) => (
+        <View
+          key={index}
+          style={[styles.dot, index === activeIndex && styles.dotActive]}
+        />
+      ))}
+    </View>
+  );
+}
+
+function LoadingFleetState() {
+  return (
+    <View style={styles.stateRow}>
+      {[0, 1].map((item) => (
+        <View key={item} style={styles.skeletonCard}>
+          <View style={styles.skeletonImage} />
+          <View style={styles.skeletonLineWide} />
+          <View style={styles.skeletonLine} />
+          <View style={styles.skeletonButton} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function EmptyFleetState({
+  message,
+  onPress,
+}: {
+  message: string;
+  onPress?: () => void;
+}) {
+  return (
+    <View style={styles.emptyWrap}>
+      <GlassView intensity={24} tint="dark" style={styles.emptyGlass}>
+        <View style={styles.emptyIcon}>
+          <Ionicons name="car-sport-outline" size={22} color={COLORS.accent} />
+        </View>
+        <Text style={styles.emptyTitle}>Fleet is loading slowly</Text>
+        <Text style={styles.emptyText}>{message}</Text>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onPress?.();
+          }}
+          style={({ pressed }) => [
+            styles.emptyButton,
+            pressed && styles.bookButtonPressed,
+          ]}
+        >
+          <Text style={styles.emptyButtonText}>View all vans</Text>
+          <Ionicons name="arrow-forward" size={15} color={COLORS.dark} />
+        </Pressable>
+      </GlassView>
     </View>
   );
 }
@@ -342,11 +434,21 @@ function VanCard({
               />
             </Animated.View>
 
-            {/* Gradient Overlays */}
+            <LinearGradient
+              colors={["rgba(0,0,0,0.04)", "rgba(8,11,18,0.68)"]}
+              locations={[0.35, 1]}
+              style={styles.imageShade}
+            />
+            <View style={styles.badgeRow}>
+              <GlassView intensity={18} tint="dark" style={styles.featuredBadge}>
+                <Ionicons name="sparkles" size={12} color={COLORS.accent} />
+                <Text style={styles.featuredText}>Featured</Text>
+              </GlassView>
+            </View>
           </View>
 
           {/* Content Section with Glass Effect */}
-          <BlurView intensity={25} tint="dark" style={styles.contentBlur}>
+          <GlassView intensity={25} tint="dark" style={styles.contentBlur}>
             <View style={styles.content}>
               {/* Van Name */}
               <View style={styles.nameRow}>
@@ -389,6 +491,16 @@ function VanCard({
 
               {/* Footer */}
               <View style={styles.footer}>
+                <View style={styles.priceContainer}>
+                  <Text style={styles.priceLabel}>From</Text>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.currency}>£</Text>
+                    <Text style={styles.price}>
+                      {Number(van.pricePerHour || 0).toFixed(0)}
+                    </Text>
+                    <Text style={styles.priceUnit}>/day</Text>
+                  </View>
+                </View>
                 <Pressable
                   onPress={onPress}
                   style={({ pressed }) => [
@@ -402,7 +514,7 @@ function VanCard({
                     end={{ x: 1, y: 1 }}
                     style={styles.bookButtonGradient}
                   >
-                    <Text style={styles.bookButtonText}>View</Text>
+                    <Text style={styles.bookButtonText}>View van</Text>
                     <Ionicons
                       name="arrow-forward"
                       size={16}
@@ -412,7 +524,7 @@ function VanCard({
                 </Pressable>
               </View>
             </View>
-          </BlurView>
+          </GlassView>
         </View>
       </Pressable>
     </Animated.View>
@@ -458,9 +570,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.text,
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   subtitle: {
     color: COLORS.textSecondary,
@@ -500,6 +612,99 @@ const styles = StyleSheet.create({
   cardContainer: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
+  },
+  stateRow: {
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  skeletonCard: {
+    flex: 1,
+    minHeight: 240,
+    borderRadius: 24,
+    padding: 16,
+    justifyContent: "flex-end",
+    backgroundColor: appTheme.color.panelSoft,
+    borderWidth: 1,
+    borderColor: appTheme.color.border,
+    overflow: "hidden",
+  },
+  skeletonImage: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.055)",
+  },
+  skeletonLineWide: {
+    width: "72%",
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.13)",
+    marginBottom: 10,
+  },
+  skeletonLine: {
+    width: "48%",
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginBottom: 18,
+  },
+  skeletonButton: {
+    width: "58%",
+    height: 42,
+    borderRadius: 16,
+    backgroundColor: appTheme.color.accentSoft,
+  },
+  emptyWrap: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  emptyGlass: {
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: appTheme.color.border,
+    padding: 18,
+    alignItems: "center",
+  },
+  emptyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: appTheme.color.accentSoft,
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    color: appTheme.color.text,
+    fontSize: 17,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  emptyText: {
+    color: appTheme.color.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 7,
+    maxWidth: 280,
+  },
+  emptyButton: {
+    minHeight: 44,
+    marginTop: 16,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: COLORS.accent,
+  },
+  emptyButtonText: {
+    color: COLORS.dark,
+    fontSize: 14,
+    fontWeight: "900",
   },
   cardPressable: {
     flex: 1,
@@ -553,7 +758,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  gradient: {
+  imageShade: {
     ...StyleSheet.absoluteFillObject,
   },
   shimmer: {
@@ -567,7 +772,7 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
   },
   ratingBadge: {
     flexDirection: "row",
@@ -589,8 +794,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
     borderRadius: 100,
     overflow: "hidden",
     borderWidth: 1,
@@ -620,7 +825,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 22,
     fontWeight: "800",
-    letterSpacing: -0.3,
+    letterSpacing: 0,
   },
   bookmarkButton: {
     width: 40,
@@ -668,6 +873,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 12,
   },
   priceContainer: {
     flex: 1,
@@ -689,9 +895,9 @@ const styles = StyleSheet.create({
   },
   price: {
     color: COLORS.text,
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "800",
-    letterSpacing: -1,
+    letterSpacing: 0,
   },
   priceUnit: {
     color: COLORS.textSecondary,
@@ -723,11 +929,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    marginTop: 20,
+    marginTop: 4,
   },
   dot: {
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  dotActive: {
+    width: 18,
     backgroundColor: COLORS.accent,
   },
   quickNav: {

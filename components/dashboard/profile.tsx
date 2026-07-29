@@ -1,5 +1,7 @@
 // components/dashboard/UserProfileCard.tsx
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/components/global/AppToast";
+import { safeFetch } from "@/services/apiClient";
 import { uploadToS3 } from "@/utils/s3Upload";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -8,7 +10,6 @@ import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -22,6 +23,7 @@ const ACCENT = "#fe9a00";
 
 export default function UserProfileCard() {
   const { user, refreshUser } = useAuth();
+  const { showToast } = useToast();
  
   if (!user) {
     return (
@@ -92,8 +94,13 @@ export default function UserProfileCard() {
       };
      
 
-      const response = await fetch(`${API_URL}/${user._id}`, {
+      const response = await safeFetch(`${API_URL}/${user._id}`, {
         method: "PUT",
+        toast: {
+          successTitle: "Profile updated",
+          successMessage: "Your account details have been saved.",
+          errorTitle: "Update failed",
+        },
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -116,17 +123,21 @@ export default function UserProfileCard() {
       if (result.success) {
         await AsyncStorage.setItem("user", JSON.stringify(result.data));
         await refreshUser();
-        Alert.alert("Success", "Profile updated successfully");
         setIsEditing(false);
       } else {
-        Alert.alert("Error", result.error || "Failed to update profile");
+        showToast({
+          type: "error",
+          title: "Update failed",
+          message: result.error || "Failed to update profile",
+        });
       }
     } catch (error) {
       console.log("Profile Update Error:", error);
-      Alert.alert(
-        "Error",
-        error instanceof Error ? error.message : "Network error",
-      );
+      showToast({
+        type: "error",
+        title: "Update failed",
+        message: error instanceof Error ? error.message : "Network error",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -134,7 +145,11 @@ export default function UserProfileCard() {
 
   const handleUploadLicenses = async () => {
     if (!licenseFront && !licenseBack) {
-      Alert.alert("Error", "Please select at least one license image");
+      showToast({
+        type: "error",
+        title: "Licence image needed",
+        message: "Please select at least one licence image.",
+      });
       return;
     }
 
@@ -159,8 +174,13 @@ export default function UserProfileCard() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/${user._id}`, {
+      const response = await safeFetch(`${API_URL}/${user._id}`, {
         method: "PUT",
+        toast: {
+          successTitle: "Licence uploaded",
+          successMessage: "Your licence images have been saved.",
+          errorTitle: "Upload failed",
+        },
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -183,16 +203,20 @@ export default function UserProfileCard() {
         await refreshUser();
         setLicenseFront(null);
         setLicenseBack(null);
-        Alert.alert("Success", "Licenses uploaded successfully");
       } else {
-        Alert.alert("Error", result.error || "Failed to update licenses");
+        showToast({
+          type: "error",
+          title: "Upload failed",
+          message: result.error || "Failed to update licences",
+        });
       }
     } catch (error) {
       console.log("License Upload Error:", error);
-      Alert.alert(
-        "Error",
-        error instanceof Error ? error.message : "Network error",
-      );
+      showToast({
+        type: "error",
+        title: "Upload failed",
+        message: error instanceof Error ? error.message : "Network error",
+      });
     } finally {
       setIsUploadingLicenses(false);
     }
@@ -228,7 +252,11 @@ export default function UserProfileCard() {
         Haptics.selectionAsync();
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to pick image");
+      showToast({
+        type: "error",
+        title: "Image not selected",
+        message: "Failed to pick image.",
+      });
     }
   };
 

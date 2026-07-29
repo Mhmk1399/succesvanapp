@@ -1,4 +1,6 @@
 import { uploadToS3 } from "@/utils/s3Upload";
+import { useToast } from "@/components/global/AppToast";
+import { safeFetch } from "@/services/apiClient";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -6,7 +8,6 @@ import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -30,6 +31,7 @@ export default function LicenseUploadModal({
   userId,
   onSuccess,
 }: LicenseUploadModalProps) {
+  const { showToast } = useToast();
   const [licenseFront, setLicenseFront] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [licenseBack, setLicenseBack] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -52,13 +54,21 @@ export default function LicenseUploadModal({
         Haptics.selectionAsync();
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to pick image");
+      showToast({
+        type: "error",
+        title: "Image not selected",
+        message: "Failed to pick image.",
+      });
     }
   };
 
   const handleUpload = async () => {
     if (!licenseFront || !licenseBack) {
-      Alert.alert("Error", "Please select both front and back images");
+      showToast({
+        type: "error",
+        title: "Licence images needed",
+        message: "Please select both front and back images.",
+      });
       return;
     }
 
@@ -83,8 +93,13 @@ export default function LicenseUploadModal({
         return;
       }
 
-      const response = await fetch(`${API_URL}/${userId}`, {
+      const response = await safeFetch(`${API_URL}/${userId}`, {
         method: "PUT",
+        toast: {
+          successTitle: "Licence uploaded",
+          successMessage: "Your licence is ready for review.",
+          errorTitle: "Upload failed",
+        },
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -96,14 +111,21 @@ export default function LicenseUploadModal({
 
       if (result.success) {
         await AsyncStorage.setItem("user", JSON.stringify(result.data));
-        Alert.alert("Success", "Licenses uploaded successfully");
         onSuccess();
         handleClose();
       } else {
-        Alert.alert("Error", result.error || "Failed to upload licenses");
+        showToast({
+          type: "error",
+          title: "Upload failed",
+          message: result.error || "Failed to upload licences",
+        });
       }
     } catch (error) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Network error");
+      showToast({
+        type: "error",
+        title: "Upload failed",
+        message: error instanceof Error ? error.message : "Network error",
+      });
     } finally {
       setIsUploading(false);
     }

@@ -5,7 +5,8 @@ import { calculateAddonPrice } from "@/utils/addonCalculator";
 import { calculatePrice } from "@/utils/priceCalculator";
 import { addonService } from "@/services/addonService";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
+import { useToast } from "@/components/global/AppToast";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -50,6 +51,8 @@ type UserReservationsProps = {
   isLoading?: boolean;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  ListHeaderComponent?: React.ReactElement | null;
+  onScroll?: (event: any) => void;
 };
 
 type WorkingTime = {
@@ -84,7 +87,10 @@ export default function UserReservations({
   isLoading = false,
   onRefresh,
   isRefreshing = false,
+  ListHeaderComponent,
+  onScroll,
 }: UserReservationsProps) {
+  const { showToast } = useToast();
   const [selectedReservation, setSelectedReservation] =
     useState<Reservation | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -491,15 +497,22 @@ export default function UserReservations({
       );
 
       if (result.success) {
-        Alert.alert("Success", "Reservation updated successfully");
         setIsEditing(false);
         closeModal();
         onRefresh?.();
       } else {
-        Alert.alert("Error", result.error || "Failed to update reservation");
+        showToast({
+          type: "error",
+          title: "Update failed",
+          message: result.error || "Failed to update reservation",
+        });
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to update reservation");
+      showToast({
+        type: "error",
+        title: "Update failed",
+        message: "Failed to update reservation",
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -597,26 +610,58 @@ export default function UserReservations({
 
   if (isLoading) {
     return (
-      <View style={styles.emptyState}>
-        <ActivityIndicator size="large" color={"#fff"} />
-        <Text style={styles.emptySubtitle}>Loading reservations...</Text>
-      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={ACCENT}
+            colors={[ACCENT]}
+          />
+        }
+      >
+        {ListHeaderComponent}
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={"#fff"} />
+          <Text style={styles.emptySubtitle}>Loading reservations...</Text>
+        </View>
+      </ScrollView>
     );
   }
 
   if (!reservations.length) {
     return (
-      <View style={styles.emptyState}>
-        <Ionicons
-          name="calendar-outline"
-          size={40}
-          color="rgba(255, 255, 255, 0.9)"
-        />
-        <Text style={styles.emptyTitle}>No reservations yet</Text>
-        <Text style={styles.emptySubtitle}>
-          When you book a van, your reservations will appear here.
-        </Text>
-      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={ACCENT}
+            colors={[ACCENT]}
+          />
+        }
+      >
+        {ListHeaderComponent}
+        <View style={styles.emptyState}>
+          <Ionicons
+            name="calendar-outline"
+            size={40}
+            color="rgba(255, 255, 255, 0.9)"
+          />
+          <Text style={styles.emptyTitle}>No reservations yet</Text>
+          <Text style={styles.emptySubtitle}>
+            When you book a van, your reservations will appear here.
+          </Text>
+        </View>
+      </ScrollView>
     );
   }
 
@@ -629,7 +674,10 @@ export default function UserReservations({
         data={[...safeReservations].reverse()}
         keyExtractor={(item) => item._id || Math.random().toString()}
         renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        ListHeaderComponent={ListHeaderComponent}
+        contentContainerStyle={styles.listContent}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -656,7 +704,7 @@ export default function UserReservations({
           <Animated.View
             style={[styles.modalContainer, { transform: [{ translateY }] }]}
           >
-            <BlurView intensity={90} tint="dark" style={styles.modalContent}>
+            <GlassView intensity={90} tint="dark" style={styles.modalContent}>
               <View {...panResponder.panHandlers} style={styles.handleArea}>
                 <View style={styles.handle} />
               </View>
@@ -1162,7 +1210,7 @@ export default function UserReservations({
                   </View>
                 )}
               </ScrollView>
-            </BlurView>
+            </GlassView>
           </Animated.View>
         )}
       </Modal>
@@ -1429,6 +1477,10 @@ export default function UserReservations({
 }
 
 const styles = StyleSheet.create({
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
   card: {
     backgroundColor: "rgba(15,23,42,0.7)",
     borderRadius: 18,

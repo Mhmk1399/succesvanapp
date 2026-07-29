@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 import * as Haptics from "expo-haptics";
 
 const CARD_WIDTH = 180;
@@ -381,7 +381,7 @@ function FeatureCard({ feature, index, scrollX }: FeatureCardProps) {
         onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
         style={styles.cardPressable}
       >
-        <BlurView intensity={30} tint="dark" style={styles.card}>
+        <GlassView intensity={30} tint="dark" style={styles.card}>
           <LinearGradient
             colors={[`${feature.color}15`, `${feature.color}08`, "transparent"]}
             style={styles.cardGradient}
@@ -452,7 +452,7 @@ function FeatureCard({ feature, index, scrollX }: FeatureCardProps) {
               />
             </View>
           </LinearGradient>
-        </BlurView>
+        </GlassView>
       </Pressable>
     </Animated.View>
   );

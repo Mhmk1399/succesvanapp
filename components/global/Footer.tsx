@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 import * as Haptics from "expo-haptics";
 
 // Premium color palette
@@ -159,7 +159,7 @@ export default function Footer() {
         ]}
       >
         {/* Main Footer Card */}
-        <BlurView intensity={30} tint="dark" style={styles.mainCard}>
+        <GlassView intensity={30} tint="dark" style={styles.mainCard}>
           <LinearGradient
             colors={[
               "rgba(255,149,0,0.1)",
@@ -239,11 +239,11 @@ export default function Footer() {
               </View>
             </View>
           </LinearGradient>
-        </BlurView>
+        </GlassView>
 
         {/* Bottom Bar */}
         <View style={styles.bottomBar}>
-          <BlurView intensity={20} tint="dark" style={styles.bottomBlur}>
+          <GlassView intensity={20} tint="dark" style={styles.bottomBlur}>
             <View style={styles.bottomContent}>
               <View style={styles.copyrightRow}>
                 <Ionicons name="heart" size={12} color={COLORS.accent} />
@@ -254,7 +254,7 @@ export default function Footer() {
 
               <Text style={styles.madeWith}>Made with ❤️ in London</Text>
             </View>
-          </BlurView>
+          </GlassView>
         </View>
       </Animated.View>
     </View>

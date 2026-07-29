@@ -1,6 +1,6 @@
 import { calculateAddonPrice } from "@/utils/addonCalculator";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 
@@ -30,6 +30,7 @@ import { getAvailableTimeSlots, getSelectedOffice, isDateDisabled as checkDateDi
 import { WorkingTime } from "@/types/type";
 import { discountService } from "@/services/discountService";
 import { useAuth } from "@/contexts/AuthContext";
+import LoginRequiredModal from "@/components/global/LoginRequiredModal";
 
 const getLondonTime = () => {
   const now = new Date();
@@ -138,6 +139,9 @@ export default function BookingModal({
     setSelectedGear,
     termsAccepted,
     setTermsAccepted,
+    loginRequiredVisible,
+    handleLoginRequiredLogin,
+    handleLoginRequiredCancel,
   } = useBookingModal(
     visible,
     van,
@@ -150,6 +154,7 @@ export default function BookingModal({
   if (!van) return null;
 
   return (
+    <>
     <Modal visible={visible} transparent animationType="none">
       <Pressable style={styles.backdrop} onPress={handleClose}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity }]} />
@@ -158,8 +163,7 @@ export default function BookingModal({
       <Animated.View
         style={[styles.modalContainer, { transform: [{ translateY }] }]}
       >
-        <BlurView intensity={50} tint="dark" style={styles.blurContainer}>
-          {/* Android glass effect fallback - BlurView doesn't work properly on Android */}
+        <GlassView intensity={50} tint="dark" style={styles.blurContainer}>
           {Platform.OS === "android" && (
             <LinearGradient
               colors={[
@@ -552,8 +556,7 @@ export default function BookingModal({
             </ScrollView>
           </KeyboardAvoidingView>
 
-          <BlurView intensity={40} tint="dark" style={styles.fixedBottom}>
-            {/* Android glass effect fallback - BlurView doesn't work properly on Android */}
+          <GlassView intensity={40} tint="dark" style={styles.fixedBottom}>
             {Platform.OS === "android" && (
               <LinearGradient
                 colors={[
@@ -1164,8 +1167,8 @@ export default function BookingModal({
                 </>
               );
             })()}
-          </BlurView>
-        </BlurView>
+          </GlassView>
+        </GlassView>
       </Animated.View>
 
       <Modal visible={dateRangeModalVisible} transparent animationType="fade">
@@ -1557,5 +1560,13 @@ export default function BookingModal({
         </Pressable>
       </Modal>
     </Modal>
+
+    <LoginRequiredModal
+      visible={loginRequiredVisible}
+      message="Please login or register to book this van."
+      onLogin={handleLoginRequiredLogin}
+      onCancel={handleLoginRequiredCancel}
+    />
+    </>
   );
 }

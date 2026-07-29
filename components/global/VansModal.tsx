@@ -1,6 +1,6 @@
 import { calculatePrice } from "@/utils/priceCalculator";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -95,8 +95,7 @@ export default function VansModal({
         animationType="slide"
       >
         <View style={styles.container}>
-          <BlurView intensity={90} tint="dark" style={styles.blurContainer}>
-            {/* Android glass effect fallback - BlurView doesn't work properly on Android */}
+          <GlassView intensity={90} tint="dark" style={styles.blurContainer}>
             {Platform.OS === "android" && (
               <LinearGradient
                 colors={[
@@ -155,7 +154,7 @@ export default function VansModal({
                 ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
               />
             )}
-          </BlurView>
+          </GlassView>
         </View>
       </Modal>
 

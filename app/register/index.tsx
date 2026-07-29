@@ -7,9 +7,11 @@ export default function RegisterScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={["#fe9a00", "#0f172b"]}
+        colors={["#1b2337", "#101827", "#080b12"]}
+        locations={[0, 0.48, 1]}
         style={StyleSheet.absoluteFill}
       />
+      <View style={styles.topBand} />
       <AuthScreen />
     </View>
   );
@@ -18,5 +20,14 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  topBand: {
+    position: "absolute",
+    top: -70,
+    left: -40,
+    right: -40,
+    height: 230,
+    backgroundColor: "rgba(254,154,0,0.16)",
+    transform: [{ rotate: "-7deg" }],
   },
 });

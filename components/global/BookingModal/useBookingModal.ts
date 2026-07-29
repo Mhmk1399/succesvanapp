@@ -1,4 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/components/global/AppToast";
 import { addonService } from "@/services/addonService";
 import { officeService } from "@/services/officeService";
 import { reservationService } from "@/services/reservationService";
@@ -55,10 +56,12 @@ export const useBookingModal = (
 ) => {
   const hasPrefilledData = !!prefilledData;
   const { user } = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [loginRequiredVisible, setLoginRequiredVisible] = useState(false);
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -516,21 +519,7 @@ export const useBookingModal = (
     if (!user) {
       await AsyncStorage.setItem("pendingBookingVan", JSON.stringify(van));
       handleClose();
-      Alert.alert(
-        "Login Required",
-        "Please login or register to book this van.",
-        [
-          {
-            text: "Login",
-            onPress: () => router.push("/register"),
-          },
-          {
-            text: "Register",
-            onPress: () => router.push("/register"),
-          },
-          { text: "Cancel", style: "cancel" },
-        ]
-      );
+      setLoginRequiredVisible(true);
       return;
     }
 
@@ -670,13 +659,18 @@ export const useBookingModal = (
         onReservationComplete?.();
         router.push("/dashboard?tab=reservations");
       } else {
-        Alert.alert("Error", result.error || "Booking failed");
+        showToast({
+          type: "error",
+          title: "Booking failed",
+          message: result.error || "Please check your booking details.",
+        });
       }
     } catch (error) {
-      Alert.alert(
-        "Network error",
-        error instanceof Error ? error.message : "Unknown error"
-      );
+      showToast({
+        type: "error",
+        title: "Booking failed",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -742,5 +736,12 @@ export const useBookingModal = (
     setSelectedGear,
     termsAccepted,
     setTermsAccepted,
+    loginRequiredVisible,
+    setLoginRequiredVisible,
+    handleLoginRequiredLogin: () => {
+      setLoginRequiredVisible(false);
+      router.push("/register");
+    },
+    handleLoginRequiredCancel: () => setLoginRequiredVisible(false),
   };
 };

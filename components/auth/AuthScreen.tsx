@@ -2,14 +2,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { authService } from "@/services/authService";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
+import { useToast } from "@/components/global/AppToast";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,12 +23,15 @@ import {
 
 const ACCENT = "#fe9a00";
 const DARK = "#0f172a";
+const PHONE_LENGTH = 10;
+const CODE_LENGTH = 6;
 
 type Step = "phone" | "code" | "register";
 
 export default function AuthScreen() {
   const router = useRouter();
   const { refreshUser } = useAuth();
+  const { showToast } = useToast();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -41,11 +45,95 @@ export default function AuthScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const codeInputRef = React.useRef<TextInput>(null);
+  const shakeAnims = React.useRef<Record<string, Animated.Value>>({
+    phone: new Animated.Value(0),
+    code: new Animated.Value(0),
+    name: new Animated.Value(0),
+    lastName: new Animated.Value(0),
+    email: new Animated.Value(0),
+    city: new Animated.Value(0),
+  }).current;
+
+  const onlyDigits = (value: string, maxLength: number) =>
+    value.replace(/\D/g, "").slice(0, maxLength);
+
+  const shakeField = (field: keyof typeof shakeAnims) => {
+    const anim = shakeAnims[field];
+    anim.stopAnimation();
+    anim.setValue(0);
+    Animated.sequence([
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 55,
+        useNativeDriver: true,
+      }),
+      Animated.timing(anim, {
+        toValue: -1,
+        duration: 55,
+        useNativeDriver: true,
+      }),
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 55,
+        useNativeDriver: true,
+      }),
+      Animated.timing(anim, {
+        toValue: 0,
+        duration: 55,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const showFieldError = (
+    field: keyof typeof shakeAnims,
+    message: string,
+    extraErrors: Record<string, string> = {},
+    shouldToast = true,
+  ) => {
+    setErrors({ ...extraErrors, [field]: message });
+    if (shouldToast) {
+      showToast({ type: "error", title: "Check this field", message });
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    shakeField(field);
+  };
+
+  const inputShakeStyle = (field: keyof typeof shakeAnims) => ({
+    transform: [
+      {
+        translateX: shakeAnims[field].interpolate({
+          inputRange: [-1, 0, 1],
+          outputRange: [-9, 0, 9],
+        }),
+      },
+    ],
+  });
+
+  const finishAuthFlow = async () => {
+    await refreshUser();
+    const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
+    const pendingForm = await AsyncStorage.getItem("pendingReservationForm");
+
+    if (pendingVan) {
+      router.replace("/vans");
+      return;
+    }
+
+    if (pendingForm) {
+      router.replace("/");
+      return;
+    }
+
+    router.replace("/dashboard");
+  };
 
   const handleSendCode = async () => {
-    if (!phone.trim()) {
-      setErrors({ phone: "Phone required" });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    if (phone.length !== PHONE_LENGTH) {
+      showFieldError(
+        "phone",
+        `Enter exactly ${PHONE_LENGTH} digits after +44.`
+      );
       return;
     }
 
@@ -60,17 +148,16 @@ export default function AuthScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setStep("code");
         setTimeout(() => codeInputRef.current?.focus(), 100);
-        Alert.alert("Code Sent", `Verification code sent to ${fullPhone}`, [
-          { text: "OK" },
-        ]);
       } else {
-        Alert.alert("Error", result.message || "Failed to send code");
+        showFieldError("phone", result.message || "Failed to send code.", {}, false);
       }
     } catch (error) {
       console.log("Send code error:", error);
-      Alert.alert(
-        "Error",
-        error instanceof Error ? error.message : "Network error"
+      showFieldError(
+        "phone",
+        error instanceof Error ? error.message : "Network error",
+        {},
+        false,
       );
     } finally {
       setIsSubmitting(false);
@@ -78,50 +165,32 @@ export default function AuthScreen() {
   };
 
   const handleVerifyCode = async () => {
-    if (!code.trim()) {
-      setErrors({ code: "Code required" });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    if (code.length !== CODE_LENGTH) {
+      showFieldError("code", `Enter the ${CODE_LENGTH}-digit SMS code.`);
       return;
     }
 
     setIsSubmitting(true);
+    setErrors({});
     try {
       const fullPhone = `+44${phone}`;
       const result = await authService.verifyCode(fullPhone, code);
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (result.data.userExists) {
-          await refreshUser();
-          const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
-          const pendingForm = await AsyncStorage.getItem(
-            "pendingReservationForm"
-          );
-          if (pendingVan) {
-            await AsyncStorage.removeItem("pendingBookingVan");
-            Alert.alert("✅ Success", "Logged in! Redirecting to booking...", [
-              { text: "OK", onPress: () => router.push("/vans") },
-            ]);
-          } else if (pendingForm) {
-            Alert.alert(
-              "✅ Success",
-              "Logged in! Continuing your reservation...",
-              [{ text: "OK", onPress: () => router.push("/") }]
-            );
-          } else {
-            Alert.alert("✅ Success", "Logged in!", [
-              { text: "OK", onPress: () => router.push("/dashboard") },
-            ]);
-          }
+          await finishAuthFlow();
         } else {
           setStep("register");
         }
       } else {
-        Alert.alert("Error", result.message || "Invalid code");
+        showFieldError("code", result.message || "Invalid SMS code.", {}, false);
       }
     } catch (error) {
-      Alert.alert(
-        "Error",
-        error instanceof Error ? error.message : "Network error"
+      showFieldError(
+        "code",
+        error instanceof Error ? error.message : "Network error",
+        {},
+        false,
       );
     } finally {
       setIsSubmitting(false);
@@ -138,7 +207,14 @@ export default function AuthScreen() {
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      showToast({
+        type: "error",
+        title: "Almost there",
+        message: newErrors[Object.keys(newErrors)[0]],
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const firstField = Object.keys(newErrors)[0] as keyof typeof shakeAnims;
+      if (shakeAnims[firstField]) shakeField(firstField);
       return;
     }
 
@@ -150,43 +226,32 @@ export default function AuthScreen() {
         name,
         lastName,
         email,
-        city,
+        address,
         postalCode,
-        address
+        city
       );
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        await refreshUser();
-        const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
-        const pendingForm = await AsyncStorage.getItem(
-          "pendingReservationForm"
-        );
-        if (pendingVan) {
-          await AsyncStorage.removeItem("pendingBookingVan");
-          Alert.alert(
-            "✅ Success",
-            "Account created! Redirecting to booking...",
-            [{ text: "OK", onPress: () => router.push("/vans") }]
-          );
-        } else if (pendingForm) {
-          Alert.alert(
-            "✅ Success",
-            "Account created! Continuing your reservation...",
-            [{ text: "OK", onPress: () => router.push("/") }]
-          );
-        } else {
-          Alert.alert("✅ Success", "Account created!", [
-            { text: "OK", onPress: () => router.push("/dashboard") },
-          ]);
-        }
+        await finishAuthFlow();
       } else {
-        Alert.alert("Error", result.message || "Registration failed");
+        setErrors({ form: result.message || "Registration failed." });
+        showToast({
+          type: "error",
+          title: "Registration failed",
+          message: result.message || "Please check your details and try again.",
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     } catch (error) {
-      Alert.alert(
-        "Error",
-        error instanceof Error ? error.message : "Network error"
-      );
+      setErrors({
+        form: error instanceof Error ? error.message : "Network error",
+      });
+      showToast({
+        type: "error",
+        title: "Registration failed",
+        message: error instanceof Error ? error.message : "Network error",
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsSubmitting(false);
     }
@@ -215,13 +280,16 @@ export default function AuthScreen() {
           <Ionicons name="chevron-back" size={28} color="#f9fafb" />
         </Pressable>
 
-        <BlurView intensity={40} tint="dark" style={styles.formCard}>
+        <GlassView intensity={40} tint="dark" style={styles.formCard}>
           <View style={styles.formContent}>
             {step === "phone" && (
               <>
                 <Text style={styles.stepTitle}>Enter Phone Number</Text>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Phone</Text>
+                  <Text style={styles.label}>Phone number</Text>
+                  <Animated.View
+                    style={inputShakeStyle("phone")}
+                  >
                   <View
                     style={[
                       styles.inputWrapper,
@@ -236,11 +304,11 @@ export default function AuthScreen() {
                     />
                     <Text style={styles.prefix}>+44</Text>
                     <TextInput
-                      placeholder="7700 900000"
+                      placeholder="7700900000"
                       placeholderTextColor="#6b7280"
                       value={phone}
                       onChangeText={(text) => {
-                        setPhone(text);
+                        setPhone(onlyDigits(text, PHONE_LENGTH));
                         if (errors.phone) setErrors({ ...errors, phone: "" });
                       }}
                       onFocus={() => {
@@ -249,11 +317,14 @@ export default function AuthScreen() {
                       }}
                       onBlur={() => setFocusedInput(null)}
                       style={styles.input}
-                      keyboardType="phone-pad"
+                      keyboardType="number-pad"
+                      textContentType="telephoneNumber"
+                      maxLength={PHONE_LENGTH}
                     />
                   </View>
+                  </Animated.View>
                   {errors.phone && (
-                    <Text style={styles.errorText}>{errors.phone}</Text>
+                    <InlineError message={errors.phone} />
                   )}
                 </View>
                 <Pressable
@@ -289,7 +360,10 @@ export default function AuthScreen() {
                 <Text style={styles.stepTitle}>Enter Verification Code</Text>
                 <Text style={styles.stepDesc}>Code sent to +44{phone}</Text>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Code</Text>
+                  <Text style={styles.label}>SMS code</Text>
+                  <Animated.View
+                    style={inputShakeStyle("code")}
+                  >
                   <View
                     style={[
                       styles.inputWrapper,
@@ -305,11 +379,11 @@ export default function AuthScreen() {
                     <TextInput
                       ref={codeInputRef}
                       autoFocus
-                      placeholder="xxxxxx"
+                      placeholder="000000"
                       placeholderTextColor="#9a9a9bff"
                       value={code}
                       onChangeText={(text) => {
-                        setCode(text);
+                        setCode(onlyDigits(text, CODE_LENGTH));
                         if (errors.code) setErrors({ ...errors, code: "" });
                       }}
                       onFocus={() => {
@@ -319,11 +393,13 @@ export default function AuthScreen() {
                       onBlur={() => setFocusedInput(null)}
                       style={styles.input}
                       keyboardType="number-pad"
-                      maxLength={6}
+                      textContentType="oneTimeCode"
+                      maxLength={CODE_LENGTH}
                     />
                   </View>
+                  </Animated.View>
                   {errors.code && (
-                    <Text style={styles.errorText}>{errors.code}</Text>
+                    <InlineError message={errors.code} />
                   )}
                 </View>
                 <Pressable
@@ -370,11 +446,13 @@ export default function AuthScreen() {
             {step === "register" && (
               <>
                 <Text style={styles.stepTitle}>Complete Registration</Text>
+                {errors.form && <FormError message={errors.form} />}
 
                 {/* Name Row */}
                 <View style={styles.row}>
                   <View style={styles.half}>
                     <Text style={styles.label}>First Name</Text>
+                    <Animated.View style={inputShakeStyle("name")}>
                     <View
                       style={[
                         styles.inputWrapper,
@@ -403,13 +481,15 @@ export default function AuthScreen() {
                         style={styles.input}
                       />
                     </View>
+                    </Animated.View>
                     {errors.name && (
-                      <Text style={styles.errorText}>{errors.name}</Text>
+                      <InlineError message={errors.name} />
                     )}
                   </View>
 
                   <View style={styles.half}>
                     <Text style={styles.label}>Last Name</Text>
+                    <Animated.View style={inputShakeStyle("lastName")}>
                     <View
                       style={[
                         styles.inputWrapper,
@@ -439,8 +519,9 @@ export default function AuthScreen() {
                         style={styles.input}
                       />
                     </View>
+                    </Animated.View>
                     {errors.lastName && (
-                      <Text style={styles.errorText}>{errors.lastName}</Text>
+                      <InlineError message={errors.lastName} />
                     )}
                   </View>
                 </View>
@@ -448,6 +529,7 @@ export default function AuthScreen() {
                 {/* Email Input */}
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Email</Text>
+                  <Animated.View style={inputShakeStyle("email")}>
                   <View
                     style={[
                       styles.inputWrapper,
@@ -478,8 +560,9 @@ export default function AuthScreen() {
                       autoCapitalize="none"
                     />
                   </View>
+                  </Animated.View>
                   {errors.email && (
-                    <Text style={styles.errorText}>{errors.email}</Text>
+                    <InlineError message={errors.email} />
                   )}
                 </View>
 
@@ -524,6 +607,7 @@ export default function AuthScreen() {
                   </View>
                   <View style={styles.inputGroup}>
                     <Text style={styles.label}>City</Text>
+                    <Animated.View style={inputShakeStyle("city")}>
                     <View
                       style={[
                         styles.inputWrapper,
@@ -552,8 +636,9 @@ export default function AuthScreen() {
                         style={styles.input}
                       />
                     </View>
+                    </Animated.View>
                     {errors.city && (
-                      <Text style={styles.errorText}>{errors.city}</Text>
+                      <InlineError message={errors.city} />
                     )}
                   </View>
 
@@ -625,18 +710,40 @@ export default function AuthScreen() {
               </>
             )}
           </View>
-        </BlurView>
+        </GlassView>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+function InlineError({ message }: { message: string }) {
+  return (
+    <View style={styles.inlineError}>
+      <Ionicons name="alert-circle" size={14} color="#fecaca" />
+      <Text style={styles.errorText}>{message}</Text>
+    </View>
+  );
+}
+
+function FormError({ message }: { message: string }) {
+  return (
+    <View style={styles.formError}>
+      <Ionicons name="warning" size={18} color="#fecaca" />
+      <Text style={styles.formErrorText}>{message}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, marginTop: 46 },
-  header: { alignItems: "center", marginBottom: 40 },
-  logo: { fontSize: 32, fontWeight: "900", color: "#fff", marginBottom: 4 },
-  tagline: { fontSize: 14, color: "#ece6e6ff", fontWeight: "600" },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 46,
+    paddingBottom: 42,
+  },
+  header: { alignItems: "center", marginBottom: 34 },
+  logo: { fontSize: 34, fontWeight: "900", color: "#fff", marginBottom: 4 },
+  tagline: { fontSize: 14, color: "rgba(255,255,255,0.78)", fontWeight: "700" },
   backButton: {
     position: "absolute",
     left: 10,
@@ -645,19 +752,19 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   formCard: {
-    borderRadius: 24,
+    borderRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.2)",
+    borderColor: "rgba(255,255,255,0.14)",
   },
-  formContent: { padding: 24, backgroundColor: "rgba(15,23,42,0.4)" },
+  formContent: { padding: 24, backgroundColor: "rgba(8,12,22,0.54)" },
   stepTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 22,
+    fontWeight: "900",
     color: "#fff",
     marginBottom: 8,
   },
-  stepDesc: { fontSize: 14, color: "#9ca3af", marginBottom: 20 },
+  stepDesc: { fontSize: 14, color: "rgba(229,231,235,0.72)", marginBottom: 20 },
   inputGroup: { marginBottom: 20 },
   row: { flexDirection: "row", gap: 12, marginBottom: 20 },
   half: { flex: 1 },
@@ -672,19 +779,22 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: 18,
     paddingHorizontal: 16,
     gap: 12,
-    minHeight: 52,
+    minHeight: 58,
   },
   inputFocused: {
-    backgroundColor: "rgba(254,154,0,0.08)",
+    backgroundColor: "rgba(254,154,0,0.1)",
     borderColor: ACCENT,
   },
-  inputError: { borderColor: "#ef4444" },
+  inputError: {
+    borderColor: "#fb7185",
+    backgroundColor: "rgba(127,29,29,0.22)",
+  },
   input: {
     flex: 1,
     color: "#f9fafb",
@@ -692,14 +802,45 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     fontWeight: "500",
   },
-  errorText: {
-    color: "#ef4444",
-    fontSize: 13,
-    marginTop: 6,
-    marginLeft: 4,
-    fontWeight: "500",
+  inlineError: {
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "rgba(127,29,29,0.32)",
+    borderWidth: 1,
+    borderColor: "rgba(251,113,133,0.32)",
   },
-  submitBtn: { borderRadius: 16, overflow: "hidden", marginTop: 8 },
+  errorText: {
+    flex: 1,
+    color: "#fecaca",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
+  },
+  formError: {
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9,
+    backgroundColor: "rgba(127,29,29,0.34)",
+    borderWidth: 1,
+    borderColor: "rgba(251,113,133,0.36)",
+  },
+  formErrorText: {
+    flex: 1,
+    color: "#fee2e2",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "800",
+  },
+  submitBtn: { borderRadius: 18, overflow: "hidden", marginTop: 8 },
   submitBtnPressed: { transform: [{ scale: 0.98 }] },
   submitBtnDisabled: { opacity: 0.6 },
   submitGradient: {
@@ -708,7 +849,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     paddingVertical: 20,
-    minHeight: 56,
+    minHeight: 60,
   },
   submitText: { fontSize: 16, fontWeight: "800", color: DARK },
   prefix: {

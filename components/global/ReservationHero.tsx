@@ -385,8 +385,8 @@ export default function ReservationHero() {
     <View style={styles.container}>
       {/* Background Gradient */}
       <LinearGradient
-        colors={["#fe9a00", "#d97706", "#0f172b", "#0f172b"]}
-        locations={[0, 0.3, 0.7, 1]}
+        colors={["#ff9f1c", "#c66a08", "#172033", "#0c111d"]}
+        locations={[0, 0.24, 0.62, 1]}
         style={StyleSheet.absoluteFill}
       />
 
@@ -444,6 +444,19 @@ export default function ReservationHero() {
             style={styles.logo}
           />
         </View>
+{/* 
+        <Animated.View
+          style={[
+            styles.statusRail,
+            {
+              opacity: badgeFade,
+              transform: [{ translateY: badgeSlide }],
+            },
+          ]}
+        >
+          <StatusPill icon="time" text="Fast booking" />
+          <StatusPill icon="shield-checkmark" text="Verified fleet" />
+        </Animated.View> */}
 
         {/* Title */}
         <Animated.View
@@ -458,8 +471,8 @@ export default function ReservationHero() {
 
         {/* Description */}
         <Animated.Text style={[styles.description, { opacity: descFade }]}>
-          Affordable, reliable & fast van rental services across London. Perfect
-          for moving, deliveries and business needs.
+          Reliable vans across London for moves, deliveries and business trips.
+          Pick a vehicle, choose your time and get moving.
         </Animated.Text>
 
         {/* Van Carousel */}
@@ -515,18 +528,33 @@ function StatItem({
   );
 }
 
+function StatusPill({
+  icon,
+  text,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  text: string;
+}) {
+  return (
+    <View style={styles.statusPill}>
+      <Ionicons name={icon} size={13} color="#ffb84d" />
+      <Text style={styles.statusText}>{text}</Text>
+    </View>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Styles
 // ─────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 35,
+    paddingTop: 30,
+    paddingBottom: 26,
     alignItems: "center",
     position: "relative",
     overflow: "hidden",
-    minHeight: height * 0.72,
+    minHeight: height * 0.62,
   },
   bgPattern: {
     ...StyleSheet.absoluteFillObject,
@@ -561,7 +589,7 @@ const styles = StyleSheet.create({
   },
   heroInner: {
     alignItems: "center",
-    gap: 14,
+    gap: 12,
     maxWidth: 600,
     zIndex: 10,
     width: "100%",
@@ -587,9 +615,32 @@ const styles = StyleSheet.create({
     }),
   },
   logo: {
-    width: 150,
-    height: 80,
+    width: 128,
+    height: 62,
     borderRadius: 16,
+  },
+  statusRail: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusPill: {
+    minHeight: 30,
+    paddingHorizontal: 11,
+    borderRadius: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  statusText: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 11,
+    fontWeight: "700",
   },
   trustBadge: {
     flexDirection: "row",
@@ -628,7 +679,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   title: {
-    fontSize: 32,
+    fontSize: 29,
     fontWeight: "900",
     textAlign: "center",
     letterSpacing: 0.5,
@@ -654,17 +705,17 @@ const styles = StyleSheet.create({
   description: {
     color: "rgba(255,255,255,0.85)",
     textAlign: "center",
-    lineHeight: 22,
-    fontSize: 14,
+    lineHeight: 20,
+    fontSize: 13,
     maxWidth: 480,
     paddingHorizontal: 12,
-    marginTop: 4,
+    marginTop: 0,
   },
   vanOuter: {
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 8,
+    marginVertical: 2,
   },
   carouselContainer: {
     width: "100%",
@@ -731,9 +782,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    gap: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
     backgroundColor: "rgba(15,23,42,0.6)",
     borderRadius: 24,
     borderWidth: 1,
@@ -753,7 +804,7 @@ const styles = StyleSheet.create({
   },
   statItem: {
     alignItems: "center",
-    minWidth: 80,
+    minWidth: 66,
   },
   statIconContainer: {
     width: 32,

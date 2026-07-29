@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { safeFetch } from "./apiClient";
 
 const API_URL = process.env.EXPO_PUBLIC_AUTH_API || " ";
 
@@ -8,8 +9,13 @@ export const authService = {
       throw new Error("API URL not configured");
     }
 
-    const response = await fetch(API_URL, {
+    const response = await safeFetch(API_URL, {
       method: "POST",
+      toast: {
+        successTitle: "Code sent",
+        successMessage: "Check your SMS for the verification code.",
+        errorTitle: "Code not sent",
+      },
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "send-code", phoneNumber }),
     });
@@ -33,8 +39,13 @@ export const authService = {
   },
 
   async verifyCode(phoneNumber: string, code: string) {
-    const response = await fetch(API_URL, {
+    const response = await safeFetch(API_URL, {
       method: "POST",
+      toast: {
+        successTitle: "Verified",
+        successMessage: "Your phone number has been confirmed.",
+        errorTitle: "Invalid code",
+      },
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "verify", phoneNumber, code }),
     });
@@ -61,8 +72,13 @@ export const authService = {
     postalCode: string,
     city: string
   ) {
-    const response = await fetch(API_URL, {
+    const response = await safeFetch(API_URL, {
       method: "POST",
+      toast: {
+        successTitle: "Account ready",
+        successMessage: "Welcome to Success Van Hire.",
+        errorTitle: "Registration failed",
+      },
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "register",

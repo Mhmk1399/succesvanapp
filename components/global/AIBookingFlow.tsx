@@ -1,11 +1,11 @@
 import { AddOnOption, CategorySuggestion, SelectedAddOn, useFastAgent } from "@/hooks/useFastAgent";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
+import { useToast } from "@/components/global/AppToast";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -33,6 +33,7 @@ export default function AIBookingFlow({
   onClose,
   onComplete,
 }: AIBookingFlowProps) {
+  const { showToast } = useToast();
   const {
     isLoading,
     isRecording,
@@ -169,7 +170,11 @@ export default function AIBookingFlow({
   const handleBookingSubmit = async (e?: any) => {
     e?.preventDefault?.();
     if (!bookingForm.officeId || !bookingForm.startDate || !bookingForm.endDate) {
-      Alert.alert("Missing Information", "Please fill in all required fields");
+      showToast({
+        type: "error",
+        title: "Missing information",
+        message: "Please fill in all required fields.",
+      });
       return;
     }
     await submitBooking(bookingForm);
@@ -242,7 +247,11 @@ export default function AIBookingFlow({
 
   const handlePhoneSubmit = async () => {
     if (phoneInput.length < 10) {
-      Alert.alert("Invalid Phone", "Please enter a valid phone number");
+      showToast({
+        type: "error",
+        title: "Invalid phone",
+        message: "Please enter a valid phone number.",
+      });
       return;
     }
     await sendCode(phoneInput);
@@ -250,7 +259,11 @@ export default function AIBookingFlow({
 
   const handleCodeSubmit = async () => {
     if (codeInput.length < 6) {
-      Alert.alert("Invalid Code", "Please enter the 6-digit code");
+      showToast({
+        type: "error",
+        title: "Invalid code",
+        message: "Please enter the 6-digit code.",
+      });
       return;
     }
     await verifyCode(codeInput);
@@ -732,13 +745,13 @@ export default function AIBookingFlow({
   return (
     <Modal visible={visible} transparent animationType="none">
       <Animated.View style={[styles.backdrop, { opacity }]}>
-        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+        <GlassView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
       </Animated.View>
 
       <Animated.View
         style={[styles.container, { transform: [{ translateY }, { scale: scaleAnim }] }]}
       >
-        <BlurView intensity={80} tint="dark" style={styles.content}>
+        <GlassView intensity={80} tint="dark" style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
             <View>
@@ -832,7 +845,7 @@ export default function AIBookingFlow({
               </Pressable>
             </View>
           )}
-        </BlurView>
+        </GlassView>
       </Animated.View>
     </Modal>
   );

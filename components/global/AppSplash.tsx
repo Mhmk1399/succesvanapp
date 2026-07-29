@@ -10,7 +10,7 @@ import {
 import { Image } from "expo-image";
 import { useEffect, useRef } from "react";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 
 const { width, height } = Dimensions.get("window");
 const ACCENT = "#fe9a00";
@@ -754,7 +754,7 @@ export default function AppSplash({ onFinish }: Props) {
         {/* Outer glow */}
         <View style={styles.glassGlowOuter} />
 
-        <BlurView
+        <GlassView
           intensity={Platform.OS === "ios" ? 40 : 20}
           tint="dark"
           style={styles.glassCard}
@@ -934,7 +934,7 @@ export default function AppSplash({ onFinish }: Props) {
               </Animated.View>
             </View>
           </Animated.View>
-        </BlurView>
+        </GlassView>
       </Animated.View>
 
       {/* ── Bottom dots ── */}

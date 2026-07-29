@@ -1,30 +1,32 @@
 import AlertProvider from "@/components/global/CustomAlert";
 import DynamicIsland from "@/components/global/DynamicIsland";
 import FloatingContactButton from "@/components/global/FloatingContactButton";
-import ScreenEdgeBlur from "@/components/global/ScreenEdgeBlur";
-import AppSplash from "@/components/global/AppSplash";
+import FirstLaunchOnboarding from "@/components/global/FirstLaunchOnboarding";
+import { ToastProvider } from "@/components/global/AppToast";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
 import { useFirstLaunch } from "@/utils/useFirstLaunch";
-import { useState } from "react";
+import { View } from "react-native";
 
 function AppContent() {
-  const { isLoading } = useFirstLaunch();
-  const [showSplash, setShowSplash] = useState(true);
+  const { isFirstLaunch, isLoading, completeFirstLaunch } = useFirstLaunch();
 
   if (isLoading) {
-    return <AppSplash onFinish={() => setShowSplash(false)} />;
+    return <View style={{ flex: 1, backgroundColor: "#080a10" }} />;
+  }
+
+  if (isFirstLaunch) {
+    return <FirstLaunchOnboarding onFinish={completeFirstLaunch} />;
   }
 
   return (
     <>
-      {showSplash && <AppSplash onFinish={() => setShowSplash(false)} />}
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="vans/index" />
         <Stack.Screen name="dashboard/index" />
       </Stack>
-      <ScreenEdgeBlur />
+      {/* <ScreenEdgeBlur /> */}
       <DynamicIsland />
       <FloatingContactButton />
     </>
@@ -34,9 +36,11 @@ function AppContent() {
 export default function RootLayout() {
   return (
     <AlertProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ToastProvider>
     </AlertProvider>
   );
 }

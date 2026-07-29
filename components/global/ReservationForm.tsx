@@ -1,12 +1,15 @@
 // components/ReservationForm.tsx
 import { useAlert } from "@/components/global/CustomAlert";
+import { useToast } from "@/components/global/AppToast";
+import LoginRequiredModal from "@/components/global/LoginRequiredModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { officeService } from "@/services/officeService";
 import { typeService } from "@/services/typeService";
 import { Category, Type, Office, WorkingTime } from "@/types/type";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
+import { appTheme } from "@/constants/appTheme";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -232,7 +235,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
             },
           ]}
         >
-          <BlurView intensity={80} tint="dark" style={styles.blurContainer}>
+          <GlassView intensity={80} tint="dark" style={styles.blurContainer}>
             <View {...panResponder.panHandlers} style={styles.handleArea}>
               <View style={styles.sheetHandle} />
             </View>
@@ -242,7 +245,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
               onCompleted={onCompleted}
               isSheetOpen={sheetVisible}
             />
-          </BlurView>
+          </GlassView>
         </Animated.View>
       </Modal>
     </>
@@ -275,6 +278,7 @@ function ReservationSheetContent({
   }>({});
 
   const showEitherAlert = (title?: string, message?: string) => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     if (isSheetOpen) {
       setInlinePayload({ title: title || "", message: message || "" });
       setInlineAlertVisible(true);
@@ -845,7 +849,7 @@ function ReservationSheetContent({
       end.setHours(rH, rM, 0, 0);
       const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
       if (diffHours < 6) {
-        showAlert(
+        showEitherAlert(
           "Minimum Rental Period",
           "Minimum rental period is 6 hours. Please adjust your dates and times.",
         );
@@ -1694,6 +1698,31 @@ function ReservationSheetContent({
           {/* Voice + AI button (kept) */}
           <VoiceAIButton />
 
+          {/* <BookingProgress
+            steps={[
+              {
+                label: "Office",
+                done: !!selectedOffice,
+                icon: "location-outline",
+              },
+              {
+                label: "Van type",
+                done: !!selectedType,
+                icon: "car-sport-outline",
+              },
+              {
+                label: "Dates",
+                done: !!pickupDate && !!returnDate,
+                icon: "calendar-outline",
+              },
+              {
+                label: "Times",
+                done: !!pickupTime && !!returnTime,
+                icon: "time-outline",
+              },
+            ]}
+          /> */}
+
           {/* Office + Category */}
           <View style={[sheetStyles.section, { marginTop: 4 }]}>
             <View style={sheetStyles.row}>
@@ -1703,6 +1732,7 @@ function ReservationSheetContent({
                   onPress={() => setOfficeModalVisible(true)}
                   style={({ pressed }) => [
                     sheetStyles.inputWrapper,
+                    selectedOffice && selectionStyles.selectedField,
                     pressed && sheetStyles.inputWrapperFocused,
                   ]}
                 >
@@ -1727,9 +1757,9 @@ function ReservationSheetContent({
                       : "Select office"}
                   </Text>
                   <Ionicons
-                    name="chevron-down"
+                    name={selectedOffice ? "checkmark-circle" : "chevron-down"}
                     size={16}
-                    color="rgba(255,255,255,0.5)"
+                    color={selectedOffice ? ACCENT : "rgba(255,255,255,0.5)"}
                   />
                 </Pressable>
               </View>
@@ -1740,6 +1770,7 @@ function ReservationSheetContent({
                   onPress={() => setCategoryModalVisible(true)}
                   style={({ pressed }) => [
                     sheetStyles.inputWrapper,
+                    selectedType && selectionStyles.selectedField,
                     pressed && sheetStyles.inputWrapperFocused,
                   ]}
                 >
@@ -1777,9 +1808,9 @@ function ReservationSheetContent({
                       : "Select type"}
                   </Text>
                   <Ionicons
-                    name="chevron-down"
+                    name={selectedType ? "checkmark-circle" : "chevron-down"}
                     size={16}
-                    color="rgba(255,255,255,0.5)"
+                    color={selectedType ? ACCENT : "rgba(255,255,255,0.5)"}
                   />
                 </Pressable>
               </View>
@@ -1796,6 +1827,7 @@ function ReservationSheetContent({
               }}
               style={({ pressed }) => [
                 sheetStyles.dateRangeButton,
+                pickupDate && returnDate && selectionStyles.selectedField,
                 pressed && sheetStyles.inputWrapperFocused,
               ]}
             >
@@ -1867,6 +1899,7 @@ function ReservationSheetContent({
                   onPress={() => openTimeModal("pickupTime")}
                   style={({ pressed }) => [
                     sheetStyles.inputWrapper,
+                    pickupTime && selectionStyles.selectedField,
                     pressed && sheetStyles.inputWrapperFocused,
                   ]}
                 >
@@ -1885,9 +1918,9 @@ function ReservationSheetContent({
                     {formatTime(pickupTime)}
                   </Text>
                   <Ionicons
-                    name="chevron-down"
+                    name={pickupTime ? "checkmark-circle" : "chevron-down"}
                     size={16}
-                    color="rgba(255,255,255,0.5)"
+                    color={pickupTime ? ACCENT : "rgba(255,255,255,0.5)"}
                   />
                 </Pressable>
               </View>
@@ -1899,6 +1932,7 @@ function ReservationSheetContent({
                   onPress={() => openTimeModal("returnTime")}
                   style={({ pressed }) => [
                     sheetStyles.inputWrapper,
+                    returnTime && selectionStyles.selectedField,
                     pressed && sheetStyles.inputWrapperFocused,
                   ]}
                 >
@@ -1917,9 +1951,9 @@ function ReservationSheetContent({
                     {formatTime(returnTime)}
                   </Text>
                   <Ionicons
-                    name="chevron-down"
+                    name={returnTime ? "checkmark-circle" : "chevron-down"}
                     size={16}
-                    color="rgba(255,255,255,0.5)"
+                    color={returnTime ? ACCENT : "rgba(255,255,255,0.5)"}
                   />
                 </Pressable>
               </View>
@@ -1932,7 +1966,7 @@ function ReservationSheetContent({
               {renderInput(
                 "Driver age (23-80)",
                 driverAge,
-                setDriverAge,
+                (text) => setDriverAge(text.replace(/\D/g, "").slice(0, 2)),
                 "person-outline",
                 "driverAge",
                 "numeric",
@@ -1966,7 +2000,7 @@ function ReservationSheetContent({
                   <>
                     <Ionicons name="checkmark-circle" size={20} color={DARK} />
                     <Text style={sheetStyles.submitText}>
-                      {isSubmitting ? "Validating..." : "Confirm Reservation"}
+                      {isSubmitting ? "Validating..." : "Show Available Vans"}
                     </Text>
                   </>
                 )}
@@ -2049,90 +2083,12 @@ function ReservationSheetContent({
         onReservationComplete={onClose}
       />
 
-      {/* Custom Login Required Modal (replaces Alert.alert) */}
-      <Modal
+      <LoginRequiredModal
         visible={loginModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setLoginModalVisible(false)}
-      >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onPress={() => setLoginModalVisible(false)}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              width: "86%",
-              backgroundColor: "#0b1220",
-              padding: 18,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.06)",
-            }}
-          >
-            <Text
-              style={{
-                color: "#fff",
-                fontSize: 18,
-                fontWeight: "700",
-                marginBottom: 8,
-              }}
-            >
-              Login Required
-            </Text>
-            <Text style={{ color: "#cbd5e1", marginBottom: 14 }}>
-              Please login or register to continue with your reservation.
-            </Text>
-
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
-              <Pressable
-                onPress={handleCancelLogin}
-                style={({ pressed }) => [
-                  {
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    borderRadius: 8,
-                    backgroundColor: pressed
-                      ? "rgba(255,255,255,0.04)"
-                      : "transparent",
-                  },
-                ]}
-              >
-                <Text style={{ color: "#cbd5e1", fontWeight: "600" }}>
-                  Cancel
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={handleLoginPress}
-                style={({ pressed }) => [
-                  {
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    borderRadius: 8,
-                    backgroundColor: pressed ? "rgba(254,154,0,0.9)" : ACCENT,
-                  },
-                ]}
-              >
-                <Text style={{ color: "#0b1220", fontWeight: "800" }}>
-                  Login / Register
-                </Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        message="Please login or register to continue with your reservation."
+        onLogin={handleLoginPress}
+        onCancel={handleCancelLogin}
+      />
     </>
   );
 }
@@ -2141,6 +2097,68 @@ function ReservationSheetContent({
 
 import AIBookingFlow from "./AIBookingFlow";
 import Svg, { Path } from "react-native-svg";
+
+type BookingProgressStep = {
+  label: string;
+  done: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+};
+
+function BookingProgress({ steps }: { steps: BookingProgressStep[] }) {
+  const completed = steps.filter((step) => step.done).length;
+
+  return (
+    <View style={progressStyles.card}>
+      <View style={progressStyles.header}>
+        <View>
+          <Text style={progressStyles.eyebrow}>Booking progress</Text>
+          <Text style={progressStyles.title}>
+            {completed === steps.length
+              ? "Ready to search"
+              : `${completed}/${steps.length} details completed`}
+          </Text>
+        </View>
+        <View style={progressStyles.badge}>
+          <Text style={progressStyles.badgeText}>{completed}</Text>
+          <Text style={progressStyles.badgeMuted}>/{steps.length}</Text>
+        </View>
+      </View>
+
+      <View style={progressStyles.track}>
+        <View
+          style={[
+            progressStyles.trackFill,
+            { width: `${(completed / steps.length) * 100}%` },
+          ]}
+        />
+      </View>
+
+      <View style={progressStyles.steps}>
+        {steps.map((step) => (
+          <View
+            key={step.label}
+            style={[progressStyles.step, step.done && progressStyles.stepDone]}
+          >
+            <Ionicons
+              name={step.done ? "checkmark" : step.icon}
+              size={14}
+              color={step.done ? DARK : appTheme.color.textMuted}
+            />
+            <Text
+              numberOfLines={1}
+              style={[
+                progressStyles.stepText,
+                step.done && progressStyles.stepTextDone,
+              ]}
+            >
+              {step.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 function VoiceAIButton() {
   const [recording, setRecording] = useState(false);
@@ -2181,7 +2199,7 @@ function VoiceAIButton() {
     setShowAIFlow(true);
   };
 
-  const { showAlert } = useAlert();
+  const { showToast } = useToast();
 
   return (
     <>
@@ -2233,9 +2251,115 @@ function VoiceAIButton() {
         onClose={() => setShowAIFlow(false)}
         onComplete={() => {
           setShowAIFlow(false);
-          showAlert("Success", "Booking completed successfully!");
+          showToast({
+            type: "success",
+            title: "Booking completed",
+            message: "Your van reservation is ready.",
+          });
         }}
       />
     </>
   );
 }
+
+const selectionStyles = StyleSheet.create({
+  selectedField: {
+    borderColor: "rgba(254,154,0,0.5)",
+    backgroundColor: "rgba(254,154,0,0.075)",
+  },
+});
+
+const progressStyles = StyleSheet.create({
+  card: {
+    marginBottom: 18,
+    padding: 14,
+    borderRadius: appTheme.radius.lg,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderWidth: 1,
+    borderColor: appTheme.color.border,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  eyebrow: {
+    color: appTheme.color.textFaint,
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  title: {
+    color: appTheme.color.text,
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  badge: {
+    minWidth: 48,
+    height: 34,
+    paddingHorizontal: 10,
+    borderRadius: 17,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: appTheme.color.accentSoft,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.25)",
+  },
+  badgeText: {
+    color: appTheme.color.accentStrong,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  badgeMuted: {
+    color: appTheme.color.textFaint,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  track: {
+    height: 5,
+    borderRadius: 999,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    marginTop: 12,
+  },
+  trackFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: ACCENT,
+  },
+  steps: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+  },
+  step: {
+    flexGrow: 1,
+    minWidth: "46%",
+    minHeight: 34,
+    paddingHorizontal: 10,
+    borderRadius: 17,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  stepDone: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  stepText: {
+    color: appTheme.color.textMuted,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  stepTextDone: {
+    color: DARK,
+  },
+});

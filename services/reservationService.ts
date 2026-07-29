@@ -26,6 +26,11 @@ export const reservationService = {
     console.log("Body:", JSON.stringify({ userData, reservationData }));
     const response = await safeFetch(API_URL, {
       method: "POST",
+      toast: {
+        successTitle: "Booking confirmed",
+        successMessage: "Your van reservation has been created.",
+        errorTitle: "Booking failed",
+      },
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userData, reservationData }),
     });
@@ -47,8 +52,13 @@ export const reservationService = {
   },
 
   async update(reservationId: string, updateData: Partial<ReservationCreate>) {
-    const response = await fetch(`${API_URL}/${reservationId}`, {
+    const response = await safeFetch(`${API_URL}/${reservationId}`, {
       method: "PATCH",
+      toast: {
+        successTitle: "Reservation updated",
+        successMessage: "Your booking changes have been saved.",
+        errorTitle: "Update failed",
+      },
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updateData),
     });
