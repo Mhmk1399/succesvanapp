@@ -3,14 +3,25 @@ import { useToast } from "@/components/global/AppToast";
 import { addonService } from "@/services/addonService";
 import { officeService } from "@/services/officeService";
 import { reservationService } from "@/services/reservationService";
-import { AddOn, Category, Office, WorkingTime } from "@/types/type";
-import { calculateAddonPrice } from "@/utils/addonCalculator";
-import { calculatePrice } from "@/utils/priceCalculator";
+import { AddOn, Category, Office } from "@/types/type";
+import {
+  calculateBookingPrice,
+  getAddonLineItems,
+  getMatchingAddonTierIndex,
+  getMinDriverAge,
+} from "@/utils/bookingPrice";
+import { calculateOfficeExtensionPrices } from "@/utils/bookingSchedule";
+import {
+  createLondonDateTime,
+  formatDateForStorage,
+  getLondonTime,
+  syncServerClock,
+} from "@/utils/londonTime";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Animated, Keyboard, PanResponder } from "react-native";
 import { Van } from "../vanlist";
 import { height } from "./constants";
@@ -23,19 +34,27 @@ import {
 } from "./utils";
 import { discountService } from "@/services/discountService";
 
-const getLondonTime = () => {
-  const now = new Date();
-  const londonTimeStr = now.toLocaleString("en-GB", {
-    timeZone: "Europe/London",
-  });
-  console.log(londonTimeStr , "...")
-  const [datePart, timePart] = londonTimeStr.split(", ");
-  const [day, month, year] = datePart.split("/").map(Number);
-  const [hours, minutes, seconds] = timePart.split(":").map(Number);
-  const londonDate = new Date(year, month - 1, day, hours, minutes, seconds);
-  console.log(londonDate , "///////////")
-  return londonDate;
+const buildLocalDateTime = (date: Date | null, time: string) => {
+  if (!date || !time) return null;
+  const [hour, minute] = time.split(":").map(Number);
+  const result = new Date(date);
+  result.setHours(hour, minute, 0, 0);
+  return result;
 };
+
+const parseStoredDate = (displayDate?: string, isoDate?: string) => {
+  const source = displayDate || isoDate;
+  if (!source) return null;
+  const datePart = source.split("T")[0];
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const sanitizeDriverAge = (value?: string | number | null) =>
+  String(value ?? "")
+    .replace(/\D/g, "")
+    .slice(0, 2);
 
 export const useBookingModal = (
   visible: boolean,
@@ -50,6 +69,10 @@ export const useBookingModal = (
     returnTime?: string;
     driverAge?: string | number;
     calculatedPrice?: number;
+    pickupExtensionFee?: number;
+    returnExtensionFee?: number;
+    startDateDisplay?: string;
+    endDateDisplay?: string;
   },
   onReservationComplete?: () => void,
   discountData?: any
@@ -67,20 +90,19 @@ export const useBookingModal = (
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [pickupDate, setPickupDate] = useState<Date | null>(() => {
-    if (!prefilledData?.pickupDate) return new Date();
-    const d = new Date(prefilledData.pickupDate);
-    const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return localDate;
+    return (
+      parseStoredDate(prefilledData?.startDateDisplay, prefilledData?.pickupDate) ||
+      new Date()
+    );
   });
   const [pickupTime, setPickupTime] = useState<string>(
     prefilledData?.pickupTime || ""
   );
   const [returnDate, setReturnDate] = useState<Date | null>(() => {
-    if (!prefilledData?.returnDate)
-      return new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const d = new Date(prefilledData.returnDate);
-    const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return localDate;
+    return (
+      parseStoredDate(prefilledData?.endDateDisplay, prefilledData?.returnDate) ||
+      new Date(Date.now() + 24 * 60 * 60 * 1000)
+    );
   });
   const [returnTime, setReturnTime] = useState<string>(
     prefilledData?.returnTime || ""
@@ -102,7 +124,7 @@ export const useBookingModal = (
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [addons, setAddons] = useState<AddOn[]>([]);
   const [addonSelections, setAddonSelections] = useState<
-    Record<string, { quantity: number; tierId?: string }>
+    Record<string, { quantity: number; tierId?: string; selectedTierIndex?: number }>
   >({});
   const [offices, setOffices] = useState<Office[]>([]);
   const [filteredOffices, setFilteredOffices] = useState<Office[]>([]);
@@ -112,7 +134,7 @@ export const useBookingModal = (
   );
   const [officeModalVisible, setOfficeModalVisible] = useState(false);
   const [driverAge, setDriverAge] = useState(
-    prefilledData?.driverAge?.toString() || ""
+    sanitizeDriverAge(prefilledData?.driverAge)
   );
   const [message, setMessage] = useState("");
   const [dynamicVanPrice, setDynamicVanPrice] = useState<number>(0);
@@ -120,112 +142,139 @@ export const useBookingModal = (
     "manual"
   );
 
-  useEffect(() => {
-    if (!pickupDate || !returnDate || !pickupTime || !returnTime || !van)
-      return;
+  const minDriverAge = useMemo(
+    () => getMinDriverAge((van as any)?.type?.name || van?.name),
+    [van],
+  );
 
-    if (prefilledData?.calculatedPrice) {
-      setDynamicVanPrice(prefilledData.calculatedPrice);
-      return;
+  const selectedOfficeObject = useMemo(
+    () => getSelectedOffice(offices, selectedOffice),
+    [offices, selectedOffice],
+  );
+
+  const localStartDate = useMemo(
+    () => buildLocalDateTime(pickupDate, pickupTime),
+    [pickupDate, pickupTime],
+  );
+
+  const localEndDate = useMemo(
+    () => buildLocalDateTime(returnDate, returnTime),
+    [returnDate, returnTime],
+  );
+
+  const extensionPrices = useMemo(() => {
+    if (hasPrefilledData) {
+      return {
+        pickupExtension: prefilledData?.pickupExtensionFee || 0,
+        returnExtension: prefilledData?.returnExtensionFee || 0,
+      };
     }
 
-    const start = new Date(pickupDate);
-    const end = new Date(returnDate);
-    const [pH, pM] = pickupTime.split(":").map(Number);
-    const [rH, rM] = returnTime.split(":").map(Number);
-    start.setHours(pH, pM, 0, 0);
-    end.setHours(rH, rM, 0, 0);
-
-    let basePrice = calculatePrice(
-      start,
-      end,
-      van.pricingTiers || [],
-      van.extraHoursRate || 0,
-      (van as any).selloffer
-    );
-
-    // Add automatic gear cost
-    if (
-      selectedGear === "automatic" &&
-      typeof van.gear === "object" &&
-      van.gear.automaticExtraCost
-    ) {
-      const diffMs = end.getTime() - start.getTime();
-      const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      basePrice += van.gear.automaticExtraCost * days;
+    if (!selectedOfficeObject) {
+      return { pickupExtension: 0, returnExtension: 0 };
     }
 
-    // Calculate extension fees
-    let pickupExtensionFee = 0;
-    let returnExtensionFee = 0;
-    const office = getSelectedOffice(offices, selectedOffice);
-
-    if (office && pickupDate && pickupTime) {
-      const dayName = [
-        "sunday",
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-      ][pickupDate.getDay()];
-      const workingDay = office.workingTime?.find(
-        (w: WorkingTime) => w.day === dayName
-      );
-      if (workingDay?.pickupExtension) {
-        const slots = getAvailableTimeSlots(pickupDate, office, true);
-        if (slots.normalStart && slots.normalEnd) {
-          const isExtension =
-            pickupTime < slots.normalStart || pickupTime > slots.normalEnd;
-          if (isExtension) {
-            pickupExtensionFee = workingDay.pickupExtension.flatPrice;
-          }
-        }
-      }
-    }
-
-    if (office && returnDate && returnTime) {
-      const dayName = [
-        "sunday",
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-      ][returnDate.getDay()];
-      const workingDay = office.workingTime?.find(
-        (w: WorkingTime) => w.day === dayName
-      );
-      if (workingDay?.returnExtension) {
-        const slots = getAvailableTimeSlots(returnDate, office, false);
-        if (slots.normalStart && slots.normalEnd) {
-          const isExtension =
-            returnTime < slots.normalStart || returnTime > slots.normalEnd;
-          if (isExtension) {
-            returnExtensionFee = workingDay.returnExtension.flatPrice;
-          }
-        }
-      }
-    }
-
-    setDynamicVanPrice(basePrice + pickupExtensionFee + returnExtensionFee);
+    return calculateOfficeExtensionPrices({
+      office: selectedOfficeObject,
+      pickupDate,
+      pickupTime,
+      returnDate,
+      returnTime,
+    });
   }, [
+    hasPrefilledData,
     pickupDate,
-    returnDate,
     pickupTime,
+    prefilledData?.pickupExtensionFee,
+    prefilledData?.returnExtensionFee,
+    returnDate,
     returnTime,
-    van,
-    prefilledData?.calculatedPrice,
-    offices,
-    selectedOffice,
-    selectedGear,
+    selectedOfficeObject,
   ]);
+
+  const baseBookingPrice = useMemo(
+    () =>
+      calculateBookingPrice({
+        startDate: localStartDate,
+        endDate: localEndDate,
+        pricingTiers: van?.pricingTiers || [],
+        extraHoursRate: van?.extraHoursRate || 0,
+        pickupExtensionPrice: extensionPrices.pickupExtension,
+        returnExtensionPrice: extensionPrices.returnExtension,
+        gearExtraCostPerDay:
+          selectedGear === "automatic" &&
+          typeof van?.gear === "object" &&
+          van.gear.availableTypes?.includes("automatic") &&
+          van.gear.availableTypes?.includes("manual")
+            ? van.gear.automaticExtraCost || 0
+            : 0,
+        sellOffer: (van as any)?.selloffer || 0,
+      }),
+    [
+      extensionPrices.pickupExtension,
+      extensionPrices.returnExtension,
+      localEndDate,
+      localStartDate,
+      selectedGear,
+      van,
+    ],
+  );
+
+  const addonLineItems = useMemo(
+    () =>
+      getAddonLineItems(
+        addons,
+        addonSelections,
+        baseBookingPrice?.totalDays || 1,
+      ),
+    [addonSelections, addons, baseBookingPrice?.totalDays],
+  );
+
+  const addOnsPrice = useMemo(
+    () => addonLineItems.reduce((sum, item) => sum + item.price, 0),
+    [addonLineItems],
+  );
+
+  const bookingPrice = useMemo(
+    () =>
+      calculateBookingPrice({
+        startDate: localStartDate,
+        endDate: localEndDate,
+        pricingTiers: van?.pricingTiers || [],
+        extraHoursRate: van?.extraHoursRate || 0,
+        pickupExtensionPrice: extensionPrices.pickupExtension,
+        returnExtensionPrice: extensionPrices.returnExtension,
+        gearExtraCostPerDay:
+          selectedGear === "automatic" &&
+          typeof van?.gear === "object" &&
+          van.gear.availableTypes?.includes("automatic") &&
+          van.gear.availableTypes?.includes("manual")
+            ? van.gear.automaticExtraCost || 0
+            : 0,
+        addOnsPrice,
+        sellOffer: (van as any)?.selloffer || 0,
+        discountPercentage: discountData?.percentage || 0,
+      }),
+    [
+      addOnsPrice,
+      discountData?.percentage,
+      extensionPrices.pickupExtension,
+      extensionPrices.returnExtension,
+      localEndDate,
+      localStartDate,
+      selectedGear,
+      van,
+    ],
+  );
+
+  useEffect(() => {
+    setDynamicVanPrice(bookingPrice?.totalPrice || 0);
+  }, [bookingPrice?.totalPrice]);
 
   // Reset when modal opens/closes if desired
   useEffect(() => {
     if (visible) {
+      syncServerClock().catch(() => {});
       setTermsAccepted(false);
     }
   }, [visible]);
@@ -270,7 +319,7 @@ export const useBookingModal = (
 
   useEffect(() => {
     if (user) {
-      setName(user.name || "");
+      setName([user.name, user.lastName].filter(Boolean).join(" ") || "");
       setLastName(user.lastName || "");
       setEmail(user.emaildata?.emailAddress || "");
       setPhone(user.phoneData?.phoneNumber || "");
@@ -291,7 +340,7 @@ export const useBookingModal = (
       setReturnDate(localDate);
     }
     if (prefilledData?.driverAge) {
-      setDriverAge(prefilledData.driverAge.toString());
+      setDriverAge(sanitizeDriverAge(prefilledData.driverAge));
     }
     if (prefilledData?.office) {
       setSelectedOffice(prefilledData.office);
@@ -312,7 +361,14 @@ export const useBookingModal = (
           addonService.getAll("?status=active"),
           officeService.getAll("?status=active"),
         ]);
-        setAddons(addonsResult.data.data || []);
+        const addonData = Array.isArray(addonsResult?.data?.data)
+          ? addonsResult.data.data
+          : Array.isArray(addonsResult?.data)
+            ? addonsResult.data
+            : Array.isArray(addonsResult)
+              ? addonsResult
+              : [];
+        setAddons(addonData);
         const allOffices = officesResult.data || [];
         setOffices(allOffices);
 
@@ -427,14 +483,16 @@ export const useBookingModal = (
     }
   }, [visible]);
 
-  const openDatePicker = () => {
+  const openDatePicker = (
+    initialSelection: "pickup" | "return" = "pickup",
+  ) => {
     if (!selectedOffice) {
       Alert.alert("Select Office", "Please select an office first.");
       return;
     }
     Haptics.selectionAsync();
-    setSelectingDate("pickup");
-    setTempPickupDate(null);
+    setSelectingDate(initialSelection);
+    setTempPickupDate(initialSelection === "return" ? pickupDate : null);
     setDateRangeModalVisible(true);
   };
 
@@ -465,7 +523,7 @@ export const useBookingModal = (
       const today = new Date();
       const minAllowedDate = new Date(today);
 
-      if (londonHour < 8) {
+      if (londonHour < 16) {
         minAllowedDate.setDate(today.getDate() + 1);
       } else {
         minAllowedDate.setDate(today.getDate() + 2);
@@ -537,9 +595,16 @@ export const useBookingModal = (
         newErrors.return = "Please select return date and time";
     }
 
-    const age = Number(driverAge);
-    if (!driverAge || age < 23 || age > 80)
-      newErrors.driverAge = "Driver age must be between 23 and 80";
+    const normalizedDriverAge = sanitizeDriverAge(driverAge);
+    const age = Number(normalizedDriverAge);
+    if (
+      !normalizedDriverAge ||
+      !Number.isInteger(age) ||
+      age < minDriverAge ||
+      age > 80
+    ) {
+      newErrors.driverAge = `Driver age must be between ${minDriverAge} and 80`;
+    }
 
     // Check minimum 6 hours rental
     if (pickupDate && returnDate && pickupTime && returnTime) {
@@ -573,67 +638,55 @@ export const useBookingModal = (
     try {
       const userData = { userId: user._id };
 
-      const [pickupHour, pickupMinute] = pickupTime.split(":");
-      const [returnHour, returnMinute] = returnTime.split(":");
-
-      const startDateTime = new Date(pickupDate!);
-      startDateTime.setHours(
-        parseInt(pickupHour),
-        parseInt(pickupMinute),
-        0,
-        0
-      );
-
-      const endDateTime = new Date(returnDate!);
-      endDateTime.setHours(parseInt(returnHour), parseInt(returnMinute), 0, 0);
+      const startDateTime = createLondonDateTime(pickupDate!, pickupTime);
+      const endDateTime = createLondonDateTime(returnDate!, returnTime);
 
       console.log("[BookingModal.handleSubmit] Dates before reservation:", {
-        pickupDate: pickupDate?.toISOString().split("T")[0],
-        returnDate: returnDate?.toISOString().split("T")[0],
-        startDateTime: startDateTime.toISOString(),
-        endDateTime: endDateTime.toISOString(),
+        pickupDate: formatDateForStorage(pickupDate!),
+        returnDate: formatDateForStorage(returnDate!),
+        startDateTime,
+        endDateTime,
       });
 
-      const vanPrice = dynamicVanPrice;
-
       const addonsForPayload = Object.entries(addonSelections)
-        .filter(([_, selection]) => selection.quantity > 0)
-        .map(([addonId, selection]) => ({
-          addOn: addonId,
-          quantity: selection.quantity,
-        }));
-
-      const addonsPrice = Object.entries(addonSelections).reduce(
-        (sum, [addonId, selection]) => {
+        .filter(([_, selection]) => Number(selection?.quantity || 0) > 0)
+        .map(([addonId, selection]) => {
           const addon = addons.find((a) => a._id === addonId);
-          if (!addon) return sum;
-
-          const addonPrice = calculateAddonPrice(
-            addon,
-            pickupDate!,
-            returnDate!,
-            pickupTime,
-            returnTime,
-            selection.quantity
-          );
-          return sum + addonPrice;
-        },
-        0
-      );
-
-      const totalPrice = vanPrice + addonsPrice;
+          const quantity = Number(selection.quantity || 0);
+          const selectedTierIndex =
+            selection.selectedTierIndex ??
+            (addon
+              ? getMatchingAddonTierIndex(addon, bookingPrice?.totalDays || 1)
+              : undefined);
+          return {
+            addOn: addonId,
+            quantity,
+            ...(selectedTierIndex !== undefined ? { selectedTierIndex } : {}),
+          };
+        });
 
       const categoryId = van?.id;
 
       const reservationData = {
         category: categoryId,
         office: hasPrefilledData ? prefilledData.office : selectedOffice,
-        startDate: startDateTime.toISOString(),
-        endDate: endDateTime.toISOString(),
-        driverAge: driverAge,
-        dirverAge: driverAge,
-        totalPrice,
+        startDate: startDateTime,
+        endDate: endDateTime,
+        startDateDisplay:
+          prefilledData?.startDateDisplay || formatDateForStorage(pickupDate!),
+        endDateDisplay:
+          prefilledData?.endDateDisplay || formatDateForStorage(returnDate!),
+        pickupTime,
+        returnTime,
+        driverAge: age,
+        dirverAge: age,
+        totalPrice: bookingPrice?.totalPrice || 0,
         addOns: addonsForPayload,
+        discountCode: discountData?.code || null,
+        selectedGear,
+        pickupExtensionPrice: extensionPrices.pickupExtension,
+        returnExtensionPrice: extensionPrices.returnExtension,
+        reservationType: "Website" as const,
         messege: message,
       };
       console.log(reservationData, "reservationData");
@@ -732,6 +785,9 @@ export const useBookingModal = (
     setTimeModalField,
     reservedSlots,
     dynamicVanPrice,
+    bookingPrice,
+    addonLineItems,
+    minDriverAge,
     selectedGear,
     setSelectedGear,
     termsAccepted,

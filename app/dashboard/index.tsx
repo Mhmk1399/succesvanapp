@@ -1,7 +1,6 @@
 // app/profile.tsx
 import UserProfileCard from "@/components/dashboard/profile";
 import UserReservations from "@/components/dashboard/reserve";
-import LicenseUploadBanner from "@/components/dashboard/LicenseUploadBanner";
 import LicenseUploadModal from "@/components/dashboard/LicenseUploadModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { reservationService } from "@/services/reservationService";
@@ -14,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import GlassView from "@/components/global/GlassView";
+import HeaderBackButton from "@/components/global/HeaderBackButton";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -22,6 +22,7 @@ import {
   ActivityIndicator,
   Animated,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,6 +31,9 @@ import {
 } from "react-native";
 
 const ACCENT = "#fe9a00";
+const INK = "#050914";
+const PANEL = "#10182a";
+const PANEL_2 = "#121b2e";
 
 type TabKey = "profile" | "reservations";
 
@@ -63,7 +67,6 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
-  // Update the effect to use dynamic value
   useEffect(() => {
     const prevTab = prevTabRef.current;
     prevTabRef.current = activeTab;
@@ -98,7 +101,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // New: Measure the tabs row width on mount/layout change
   const handleTabsRowLayout = (event: any) => {
     const { width } = event.nativeEvent.layout;
     setTabsRowWidth(width);
@@ -123,22 +125,24 @@ export default function ProfileScreen() {
     router.replace("/");
   };
 
-  const hasLicense = user?.licenceAttached?.front && user?.licenceAttached?.back;
+  const hasLicense =
+    user?.licenceAttached?.front && user?.licenceAttached?.back;
   const activeReservations = reservations.filter((reservation) =>
-    ["pending", "confirmed", "delivered"].includes(
-      String(reservation.status),
-    ),
+    ["pending", "confirmed", "delivered"].includes(String(reservation.status)),
   ).length;
+
   const floatingHeaderOpacity = scrollY.interpolate({
     inputRange: [36, 96],
     outputRange: [0, 1],
     extrapolate: "clamp",
   });
+
   const floatingHeaderTranslateY = scrollY.interpolate({
     inputRange: [36, 96],
     outputRange: [-18, 0],
     extrapolate: "clamp",
   });
+
   const handleDashboardScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
     { useNativeDriver: false },
@@ -170,6 +174,7 @@ export default function ProfileScreen() {
         style={styles.tabsRow}
       >
         <Animated.View
+          pointerEvents="none"
           style={[
             styles.tabIndicator,
             tabsRowWidth > 0 && {
@@ -177,13 +182,22 @@ export default function ProfileScreen() {
                 {
                   translateX: indicatorX.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [0, (tabsRowWidth - 10) / 2],
+                    outputRange: [0, (tabsRowWidth - 8) / 2],
                   }),
                 },
               ],
             },
           ]}
-        />
+        >
+          <LinearGradient
+            colors={["#ffb32f", ACCENT, "#ee7800"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.tabIndicatorGloss} />
+        </Animated.View>
+
         <Pressable
           onPress={() => handleTabChange("reservations")}
           style={({ pressed }) => [
@@ -192,9 +206,11 @@ export default function ProfileScreen() {
           ]}
         >
           <Ionicons
-            name={activeTab === "reservations" ? "calendar" : "calendar-outline"}
-            size={16}
-            color={activeTab === "reservations" ? "#0f172a" : "#e5e7eb"}
+            name={
+              activeTab === "reservations" ? "calendar" : "calendar-outline"
+            }
+            size={15}
+            color={activeTab === "reservations" ? "#101827" : "#9aa5b6"}
           />
           <Text
             style={[
@@ -216,7 +232,7 @@ export default function ProfileScreen() {
           <Ionicons
             name={activeTab === "profile" ? "person" : "person-outline"}
             size={16}
-            color={activeTab === "profile" ? "#0f172a" : "#e5e7eb"}
+            color={activeTab === "profile" ? "#101827" : "#9aa5b6"}
           />
           <Text
             style={[
@@ -230,7 +246,7 @@ export default function ProfileScreen() {
       </View>
 
       {!hasLicense && (
-        <LicenseUploadBanner onPress={() => setLicenseModalVisible(true)} />
+        <DashboardLicenseBanner onPress={() => setLicenseModalVisible(true)} />
       )}
     </>
   );
@@ -238,10 +254,7 @@ export default function ProfileScreen() {
   if (authLoading || !token) {
     return (
       <View style={styles.container}>
-        <LinearGradient
-          colors={["#fe9a00", "#0f172b"]}
-          style={StyleSheet.absoluteFill}
-        />
+        <DashboardBackground />
         <View style={styles.authGuardLoading}>
           <ActivityIndicator size="small" color={ACCENT} />
           <Text style={styles.authGuardText}>Checking account...</Text>
@@ -253,11 +266,8 @@ export default function ProfileScreen() {
   return (
     <>
       <View style={styles.container}>
-        <LinearGradient
-          colors={["#fe9a00", "#0f172b"]}
-          style={StyleSheet.absoluteFill}
-        />
-        {/* محتوا */}
+        <DashboardBackground />
+
         {activeTab === "profile" ? (
           <ScrollView
             style={styles.tabContent}
@@ -310,11 +320,11 @@ export default function ProfileScreen() {
           style={styles.modalOverlay}
           onPress={() => setLogoutModalVisible(false)}
         >
-          <GlassView intensity={70} tint="dark" style={styles.modalBlur}>
-            <Pressable onPress={(e) => e.stopPropagation()}>
+          <GlassView intensity={78} tint="dark" style={styles.modalBlur}>
+            <Pressable onPress={(event) => event.stopPropagation()}>
               <View style={styles.modalContent}>
                 <View style={styles.modalIcon}>
-                  <Ionicons name="log-out-outline" size={32} color="#ef4444" />
+                  <Ionicons name="log-out-outline" size={25} color="#fb7185" />
                 </View>
                 <Text style={styles.modalTitle}>Logout</Text>
                 <Text style={styles.modalMessage}>
@@ -326,13 +336,19 @@ export default function ProfileScreen() {
                       Haptics.selectionAsync();
                       setLogoutModalVisible(false);
                     }}
-                    style={styles.modalButtonCancel}
+                    style={({ pressed }) => [
+                      styles.modalButtonCancel,
+                      pressed && styles.modalButtonPressed,
+                    ]}
                   >
                     <Text style={styles.modalButtonCancelText}>Cancel</Text>
                   </Pressable>
                   <Pressable
                     onPress={handleLogout}
-                    style={styles.modalButtonConfirm}
+                    style={({ pressed }) => [
+                      styles.modalButtonConfirm,
+                      pressed && styles.modalButtonPressed,
+                    ]}
                   >
                     <Text style={styles.modalButtonConfirmText}>Logout</Text>
                   </Pressable>
@@ -355,6 +371,21 @@ export default function ProfileScreen() {
   );
 }
 
+function DashboardBackground() {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <LinearGradient
+        colors={["#070b13", "#080d18", "#050811"]}
+        locations={[0, 0.54, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.backgroundTopGlow} />
+      <View style={styles.backgroundSideGlow} />
+      <View style={styles.backgroundVignette} />
+    </View>
+  );
+}
+
 function DashboardFloatingHeader({
   opacity,
   translateY,
@@ -369,30 +400,21 @@ function DashboardFloatingHeader({
   return (
     <Animated.View
       pointerEvents="box-none"
-      style={[
-        styles.floatingHeader,
-        {
-          opacity,
-          transform: [{ translateY }],
-        },
-      ]}
+      style={[styles.floatingHeader, { opacity, transform: [{ translateY }] }]}
     >
       <GlassView
         pointerEvents="box-none"
-        intensity={88}
+        intensity={92}
         tint="dark"
         style={styles.floatingHeaderBlur}
       >
-        <Pressable
+        <HeaderBackButton
           onPress={onBack}
           style={({ pressed }) => [
             styles.floatingIconButton,
             pressed && styles.floatingIconButtonPressed,
           ]}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="chevron-back" size={20} color="#f8fafc" />
-        </Pressable>
+        />
 
         <Text style={styles.floatingHeaderTitle}>Dashboard</Text>
 
@@ -403,9 +425,9 @@ function DashboardFloatingHeader({
             styles.floatingLogoutButton,
             pressed && styles.floatingIconButtonPressed,
           ]}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          hitSlop={10}
         >
-          <Ionicons name="log-out-outline" size={18} color="#fb7185" />
+          <Ionicons name="log-out-outline" size={17} color="#ff705f" />
         </Pressable>
       </GlassView>
     </Animated.View>
@@ -425,36 +447,58 @@ function DashboardHeader({
 
   return (
     <View style={styles.headerWrap}>
-      <GlassView intensity={34} tint="dark" style={styles.headerCard}>
-        <View style={styles.headerTop}>
-          <Pressable onPress={onBack} style={styles.headerIconButton}>
-            <Ionicons name="chevron-back" size={21} color="#f8fafc" />
-          </Pressable>
-          <Text style={styles.headerCenterText}>Dashboard</Text>
-          <Pressable
-            onPress={onLogout}
-            style={[styles.headerIconButton, styles.logoutButton]}
-          >
-            <Ionicons name="log-out-outline" size={18} color="#fb7185" />
-          </Pressable>
-        </View>
+      <View style={styles.headerTop}>
+        <HeaderBackButton onPress={onBack} style={styles.headerIconButton} />
+        <Text style={styles.headerCenterText}>Dashboard</Text>
+        <Pressable
+          onPress={onLogout}
+          style={({ pressed }) => [
+            styles.headerIconButton,
+            styles.logoutButton,
+            pressed && styles.headerIconButtonPressed,
+          ]}
+        >
+          <Ionicons name="log-out-outline" size={17} color="#ff6b57" />
+        </Pressable>
+      </View>
 
-        <View style={styles.accountRow}>
-          <View style={styles.avatar}>
+      <View style={styles.accountCard}>
+        <LinearGradient
+          colors={[
+            "rgba(255,155,20,0.42)",
+            "rgba(74,47,33,0.76)",
+            "rgba(22,28,47,0.97)",
+          ]}
+          locations={[0, 0.29, 1]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.accountCardGlow} />
+        <View style={styles.accountCardTopLine} />
+
+        <View style={styles.avatarOuter}>
+          <LinearGradient
+            colors={["#ffd06b", "#ff9c12", "#e77700"]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.avatarInner}>
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
-          <View style={styles.accountCopy}>
-            <Text style={styles.accountKicker}>Welcome back</Text>
-            <Text style={styles.accountName} numberOfLines={1}>
-              {name}
-            </Text>
-          </View>
-          <View style={styles.accountBadge}>
-            <Ionicons name="shield-checkmark-outline" size={13} color={ACCENT} />
-            <Text style={styles.accountBadgeText}>Secure</Text>
-          </View>
         </View>
-      </GlassView>
+
+        <View style={styles.accountCopy}>
+          <Text style={styles.accountKicker}>WELCOME BACK</Text>
+          <Text style={styles.accountName} numberOfLines={1}>
+            {name}
+          </Text>
+        </View>
+
+        <View style={styles.accountBadge}>
+          <Ionicons name="shield-checkmark-outline" size={12} color={ACCENT} />
+          <Text style={styles.accountBadgeText}>Secure</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -498,9 +542,16 @@ function SummaryTile({
   warning?: boolean;
 }) {
   return (
-    <GlassView intensity={28} tint="dark" style={styles.summaryTile}>
+    <View style={styles.summaryTile}>
+      <LinearGradient
+        colors={["rgba(22,32,54,0.98)", "rgba(12,20,36,0.98)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.summaryTileEdge} />
       <View style={[styles.summaryIcon, warning && styles.summaryIconWarning]}>
-        <Ionicons name={icon} size={16} color={warning ? "#fbbf24" : ACCENT} />
+        <Ionicons name={icon} size={15} color={warning ? "#f7b528" : ACCENT} />
       </View>
       <Text style={styles.summaryValue} numberOfLines={1}>
         {value}
@@ -508,17 +559,71 @@ function SummaryTile({
       <Text style={styles.summaryLabel} numberOfLines={1}>
         {label}
       </Text>
-    </GlassView>
+      {warning && <View style={styles.summaryWarningDot} />}
+    </View>
+  );
+}
+
+function DashboardLicenseBanner({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.licenseBanner,
+        pressed && styles.licenseBannerPressed,
+      ]}
+    >
+      <LinearGradient
+        colors={["rgba(107,53,14,0.76)", "rgba(30,28,32,0.97)"]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.licenseBannerGlow} />
+      <View style={styles.licenseBannerIcon}>
+        <Ionicons name="card-outline" size={17} color={ACCENT} />
+      </View>
+      <View style={styles.licenseBannerCopy}>
+        <Text style={styles.licenseBannerTitle}>Driving licence needed</Text>
+        <Text style={styles.licenseBannerSubtitle} numberOfLines={1}>
+          Upload it once to complete bookings.
+        </Text>
+      </View>
+      <View style={styles.uploadButton}>
+        <Text style={styles.uploadButtonText}>Upload</Text>
+        <Ionicons name="cloud-upload-outline" size={13} color="#121927" />
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  // safe: {
-  //   // flex: 1,
-  //   // backgroundColor: "#020617",
-  // },
   container: {
     flex: 1,
+    backgroundColor: INK,
+  },
+  backgroundTopGlow: {
+    position: "absolute",
+    width: 230,
+    height: 160,
+    borderRadius: 120,
+    top: 54,
+    left: -104,
+    backgroundColor: "rgba(254,154,0,0.07)",
+  },
+  backgroundSideGlow: {
+    position: "absolute",
+    width: 190,
+    height: 260,
+    borderRadius: 140,
+    right: -122,
+    top: 244,
+    backgroundColor: "rgba(29,78,216,0.035)",
+  },
+  backgroundVignette: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.015)",
   },
   authGuardLoading: {
     flex: 1,
@@ -528,258 +633,379 @@ const styles = StyleSheet.create({
   },
   authGuardText: {
     color: "#f8fafc",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
-  tabContent: {
-    flex: 1,
-  },
-  profileScrollContent: {
-    paddingBottom: 30,
-  },
+  tabContent: { flex: 1 },
+  profileScrollContent: { paddingBottom: 132 },
   profileCardWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingTop: 0,
   },
-  chromeInList: {
-    marginHorizontal: -20,
-  },
+  chromeInList: { marginHorizontal: -16 },
+
   floatingHeader: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 20,
+    zIndex: 30,
   },
   floatingHeaderBlur: {
-    minHeight: 88,
-    paddingTop: 42,
-    paddingHorizontal: 16,
+    minHeight: 91,
+    paddingTop: 47,
+    paddingHorizontal: 18,
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(15,23,42,0.64)",
+    borderBottomColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "rgba(5,9,20,0.82)",
   },
   floatingHeaderTitle: {
     position: "absolute",
     left: 76,
     right: 76,
-    bottom: 19,
-    color: "#f8fafc",
-    fontSize: 16,
-    fontWeight: "900",
+    bottom: 20,
+    color: "#f6f7fb",
+    fontSize: 14,
+    fontWeight: "800",
     textAlign: "center",
   },
   floatingIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.055)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.11)",
+    borderColor: "rgba(255,255,255,0.07)",
     zIndex: 1,
   },
   floatingLogoutButton: {
-    backgroundColor: "rgba(127,29,29,0.16)",
-    borderColor: "rgba(251,113,133,0.18)",
+    backgroundColor: "rgba(101,31,24,0.14)",
+    borderColor: "rgba(255,112,95,0.13)",
   },
-  floatingIconButtonPressed: {
-    opacity: 0.72,
-    transform: [{ scale: 0.96 }],
-  },
+  floatingIconButtonPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
+
   headerWrap: {
     paddingHorizontal: 16,
-    paddingTop: 42,
-    paddingBottom: 12,
-  },
-  headerCard: {
-    borderRadius: 24,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(15,23,42,0.42)",
-    padding: 12,
+    paddingTop: 48,
+    paddingBottom: 9,
   },
   headerTop: {
     minHeight: 38,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginBottom: 10,
   },
   headerIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(20,30,49,0.86)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.09)",
+    borderColor: "rgba(139,164,194,0.11)",
+  },
+  headerIconButtonPressed: { opacity: 0.75, transform: [{ scale: 0.95 }] },
+  logoutButton: {
+    backgroundColor: "rgba(90,28,23,0.13)",
+    borderColor: "rgba(255,103,84,0.13)",
   },
   headerCenterText: {
-    color: "rgba(248,250,252,0.76)",
-    fontSize: 13,
-    fontWeight: "900",
+    color: "#f5f6f9",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: -0.15,
   },
-  accountRow: {
+
+  accountCard: {
+    minHeight: 72,
+    borderRadius: 16,
+    overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingTop: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,170,61,0.24)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#f28a00",
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 7 },
+      },
+      android: { elevation: 5 },
+    }),
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  accountCardGlow: {
+    position: "absolute",
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    left: -34,
+    top: -20,
+    backgroundColor: "rgba(255,161,34,0.19)",
+  },
+  accountCardTopLine: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    top: 0,
+    height: 1,
+    backgroundColor: "rgba(255,220,157,0.22)",
+  },
+  avatarOuter: {
+    width: 49,
+    height: 49,
+    borderRadius: 25,
+    padding: 2,
+    overflow: "hidden",
+    marginRight: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOpacity: 0.45,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 1 },
+      },
+      android: { elevation: 7 },
+    }),
+  },
+  avatarInner: {
+    flex: 1,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: ACCENT,
+    backgroundColor: "#ffae25",
+    borderWidth: 1,
+    borderColor: "rgba(255,239,199,0.65)",
   },
   avatarText: {
-    color: "#0f172a",
-    fontSize: 20,
+    color: "#111827",
+    fontSize: 21,
     fontWeight: "900",
   },
-  accountCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
+  accountCopy: { flex: 1, minWidth: 0 },
   accountKicker: {
-    color: "rgba(248,250,252,0.54)",
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
+    color: ACCENT,
+    fontSize: 8.5,
+    fontWeight: "900",
+    letterSpacing: 0.3,
   },
   accountName: {
-    color: "#f8fafc",
-    fontSize: 20,
+    color: "#f7f8fb",
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: "900",
     marginTop: 2,
+    letterSpacing: -0.3,
   },
   accountBadge: {
-    minHeight: 30,
+    minHeight: 27,
     paddingHorizontal: 9,
-    borderRadius: 15,
+    borderRadius: 9,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(254,154,0,0.12)",
+    gap: 4,
+    backgroundColor: "rgba(23,25,36,0.52)",
     borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.24)",
+    borderColor: "rgba(254,154,0,0.19)",
   },
   accountBadgeText: {
     color: ACCENT,
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: 9,
+    fontWeight: "800",
   },
-  headerTitle: {
-    color: "#f9fafb",
-    fontSize: 20,
-    fontWeight: "700",
-    position: "absolute",
-    left: 0,
-    right: 0,
-    textAlign: "center",
-    zIndex: 1,
-    marginBottom: 12,
-  },
-  logoutButton: {
-    backgroundColor: "rgba(127,29,29,0.16)",
-    borderColor: "rgba(251,113,133,0.16)",
-  },
+
   summaryRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 7,
     paddingHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   summaryTile: {
     flex: 1,
-    minHeight: 76,
-    borderRadius: 18,
+    minHeight: 91,
+    borderRadius: 14,
     overflow: "hidden",
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(15,23,42,0.42)",
+    borderColor: "rgba(114,143,182,0.12)",
+  },
+  summaryTileEdge: {
+    position: "absolute",
+    left: 10,
+    right: 10,
+    top: 0,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   summaryIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 29,
+    height: 29,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(254,154,0,0.14)",
-    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.22)",
+    marginBottom: 9,
   },
-  summaryIconWarning: {
-    backgroundColor: "rgba(251,191,36,0.13)",
-  },
+  summaryIconWarning: { backgroundColor: "rgba(251,191,36,0.11)" },
   summaryValue: {
-    color: "#f8fafc",
+    color: "#f5f6f9",
     fontSize: 15,
+    lineHeight: 18,
     fontWeight: "900",
   },
   summaryLabel: {
-    color: "rgba(248,250,252,0.58)",
-    fontSize: 11,
-    fontWeight: "800",
-    marginTop: 2,
+    color: "rgba(214,222,234,0.56)",
+    fontSize: 9.5,
+    fontWeight: "700",
+    marginTop: 3,
   },
+  summaryWarningDot: {
+    position: "absolute",
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    bottom: 8,
+    left: 11,
+    backgroundColor: "#ff334f",
+  },
+
   tabsRow: {
+    minHeight: 42,
     flexDirection: "row",
-    backgroundColor: "rgba(15,23,42,0.72)",
+    backgroundColor: "rgba(12,19,34,0.94)",
     marginHorizontal: 16,
     borderRadius: 22,
-    padding: 5,
+    padding: 4,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(108,137,174,0.18)",
     position: "relative",
+    overflow: "hidden",
     marginBottom: 10,
   },
   tabIndicator: {
     position: "absolute",
-    top: 5,
-    left: 5,
-    bottom: 5,
-    width: "50%", // Each tab takes half the width
-    backgroundColor: ACCENT,
-    borderRadius: 17,
-    // Remove right: "50%" — it was causing issues
+    top: 4,
+    left: 4,
+    bottom: 4,
+    width: "50%",
+    borderRadius: 18,
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOpacity: 0.32,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      android: { elevation: 5 },
+    }),
+  },
+  tabIndicatorGloss: {
+    position: "absolute",
+    top: 1,
+    left: 12,
+    right: 12,
+    height: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.14)",
   },
   tabButton: {
     flex: 1,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    columnGap: 6,
-    minHeight: 42,
-    paddingVertical: 9,
-    borderRadius: 17,
+    gap: 7,
+    minHeight: 34,
+    borderRadius: 18,
     zIndex: 1,
   },
-  tabButtonActive: {},
-  tabButtonPressed: {
-    opacity: 0.8,
-  },
+  tabButtonPressed: { opacity: 0.76 },
   tabText: {
-    color: "#e5e7eb",
-    fontSize: 13,
+    color: "#a6afbd",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  tabTextActive: { color: "#111827" },
+
+  licenseBanner: {
+    minHeight: 58,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 14,
+    overflow: "hidden",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,154,0,0.22)",
+  },
+  licenseBannerPressed: { opacity: 0.83, transform: [{ scale: 0.99 }] },
+  licenseBannerGlow: {
+    position: "absolute",
+    left: -34,
+    top: -44,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(254,154,0,0.14)",
+  },
+  licenseBannerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.18)",
+    marginRight: 9,
+  },
+  licenseBannerCopy: { flex: 1, minWidth: 0 },
+  licenseBannerTitle: {
+    color: "#f4f5f8",
+    fontSize: 11.5,
     fontWeight: "900",
   },
-  tabTextActive: {
-    color: "#0f172a",
+  licenseBannerSubtitle: {
+    color: "rgba(218,225,235,0.52)",
+    fontSize: 8.5,
+    fontWeight: "600",
+    marginTop: 3,
   },
+  uploadButton: {
+    minHeight: 31,
+    minWidth: 72,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: ACCENT,
+  },
+  uploadButtonText: {
+    color: "#111827",
+    fontSize: 9.5,
+    fontWeight: "900",
+  },
+
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.1)",
+    backgroundColor: "rgba(0,0,0,0.36)",
   },
   modalBlur: {
     width: "100%",
@@ -788,59 +1014,62 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalContent: {
-    backgroundColor: "#1e293b5e",
-    borderRadius: 20,
-    padding: 24,
-    width: 300,
+    width: 292,
+    borderRadius: 22,
+    padding: 22,
     alignItems: "center",
+    backgroundColor: "rgba(12,20,35,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
   },
   modalIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: "rgba(239,68,68,0.1)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 13,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "900",
     color: "#f9fafb",
-    marginBottom: 8,
+    marginBottom: 7,
   },
   modalMessage: {
-    fontSize: 14,
+    fontSize: 12,
+    lineHeight: 18,
     color: "#94a3b8",
     textAlign: "center",
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  modalButtons: {
-    flexDirection: "row",
-    gap: 12,
-    width: "100%",
-  },
+  modalButtons: { flexDirection: "row", gap: 10, width: "100%" },
   modalButtonCancel: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: 12,
     backgroundColor: "rgba(148,163,184,0.1)",
   },
-  modalButtonCancelText: {
-    color: "#e5e7eb",
-    fontSize: 15,
-    fontWeight: "600",
-    textAlign: "center",
-  },
   modalButtonConfirm: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: 12,
+    backgroundColor: "rgba(239,68,68,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.22)",
+  },
+  modalButtonPressed: { opacity: 0.72 },
+  modalButtonCancelText: {
+    color: "#e5e7eb",
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "center",
   },
   modalButtonConfirmText: {
-    color: "#ef4444",
-    fontSize: 15,
-    fontWeight: "800",
+    color: "#fb7185",
+    fontSize: 13,
+    fontWeight: "900",
     textAlign: "center",
   },
 });

@@ -16,6 +16,7 @@ import {
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import GlassView from "@/components/global/GlassView";
+import HeaderBackButton from "@/components/global/HeaderBackButton";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -56,6 +57,8 @@ export type Van = {
   selloffer?: number;
   cargo?: string;
   properties?: { key: string; value: string; _id: string }[];
+  rules?: { key?: string; value?: string; _id?: string }[];
+  requiredLicense?: string;
 };
 
 type VanListProps = {
@@ -197,18 +200,13 @@ export default function VanList({
           tint="dark"
           style={styles.blurHeader}
         >
-          <Pressable
+          <HeaderBackButton
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
             }}
             style={styles.floatingBackButton}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <View style={styles.backButtonInner}>
-              <Ionicons name="chevron-back" size={22} color="#f9fafb" />
-            </View>
-          </Pressable>
+          />
           <Text style={styles.floatingTitle}>
             Choose Your{" "}
             <Text style={styles.floatingTitleAccent}>Perfect Van</Text>
@@ -221,18 +219,13 @@ export default function VanList({
         style={[styles.staticHeader, { opacity: staticHeaderOpacity }]}
         pointerEvents="box-none"
       >
-        <Pressable
+        <HeaderBackButton
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             router.back();
           }}
           style={styles.backButton}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <View style={styles.backButtonInner}>
-            <Ionicons name="chevron-back" size={22} color="#f9fafb" />
-          </View>
-        </Pressable>
+        />
         <View style={styles.headerTextBlock}>
           <Text style={styles.title}>Choose Your Van</Text>
           <Text style={styles.subtitle}>
@@ -1658,17 +1651,9 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: "absolute",
-    left: -6,
+    left: 0,
     top: 0,
     zIndex: 999,
-  },
-  backButtonInner: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
   },
   headerTextBlock: {
     alignItems: "center",

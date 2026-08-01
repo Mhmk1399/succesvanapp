@@ -1,7 +1,11 @@
 import * as Notifications from "expo-notifications";
 import { Audio } from "expo-av";
 import { Van } from "../vanlist";
-import { Office, SpecialDay, WorkingTime } from "@/types/type";
+import { Office } from "@/types/type";
+import {
+  getAvailableTimeSlots as getSharedAvailableTimeSlots,
+  isDateDisabled as isSharedDateDisabled,
+} from "@/utils/bookingSchedule";
 
 export const formatDate = (date: Date | null) => {
   if (!date) return "DD/MM/YYYY";
@@ -23,31 +27,7 @@ export const getSelectedOffice = (offices: Office[], selectedOffice: string) =>
   offices.find((o) => o._id === selectedOffice);
 
 export const isDateDisabled = (date: Date, office: Office | undefined) => {
-  if (!office) return false;
-
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const dayName = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ][date.getDay()];
-
-  const specialDay = office.specialDays?.find(
-    (sd: SpecialDay) => sd.month === month && sd.day === day
-  );
-  if (specialDay && !specialDay.isOpen) return true;
-
-  const workingDay = office.workingTime?.find(
-    (w: WorkingTime) => w.day === dayName
-  );
-  if (workingDay && !workingDay.isOpen) return true;
-
-  return false;
+  return isSharedDateDisabled(date, office);
 };
 
 export const getAvailableTimeSlots = (
@@ -55,82 +35,11 @@ export const getAvailableTimeSlots = (
   office: Office | undefined,
   isPickup: boolean = true
 ) => {
-  if (!office || !date)
-    return {
-      start: "00:00",
-      end: "23:59",
-      normalStart: "00:00",
-      normalEnd: "23:59",
-    };
-
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const dayName = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ][date.getDay()];
-
-  const specialDay = office.specialDays?.find(
-    (sd: SpecialDay) => sd.month === month && sd.day === day
+  return getSharedAvailableTimeSlots(
+    date,
+    office,
+    isPickup ? "pickup" : "return",
   );
-  if (specialDay && specialDay.isOpen) {
-    return {
-      start: specialDay.startTime,
-      end: specialDay.endTime,
-      normalStart: specialDay.startTime,
-      normalEnd: specialDay.endTime,
-    };
-  }
-
-  const workingDay = office.workingTime?.find(
-    (w: WorkingTime) => w.day === dayName
-  );
-  if (workingDay && workingDay.isOpen && workingDay.startTime && workingDay.endTime) {
-    let start = workingDay.startTime;
-    let end = workingDay.endTime;
-    const normalStart = start;
-    const normalEnd = end;
-
-    const extension = isPickup
-      ? workingDay.pickupExtension
-      : workingDay.returnExtension;
-    if (extension) {
-      const [startH, startM] = start.split(":").map(Number);
-      const [endH, endM] = end.split(":").map(Number);
-      const extendedStartMin = Math.max(
-        0,
-        startH * 60 + startM - extension.hoursBefore * 60
-      );
-      const extendedEndMin = Math.min(
-        1439,
-        endH * 60 + endM + extension.hoursAfter * 60
-      );
-      start = `${Math.floor(extendedStartMin / 60)
-        .toString()
-        .padStart(2, "0")}:${(extendedStartMin % 60)
-        .toString()
-        .padStart(2, "0")}`;
-      end = `${Math.floor(extendedEndMin / 60)
-        .toString()
-        .padStart(2, "0")}:${(extendedEndMin % 60)
-        .toString()
-        .padStart(2, "0")}`;
-    }
-
-    return { start, end, normalStart, normalEnd };
-  }
-
-  return {
-    start: "00:00",
-    end: "23:59",
-    normalStart: "00:00",
-    normalEnd: "23:59",
-  };
 };
 
 export const playSuccessSound = async () => {

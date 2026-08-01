@@ -242,8 +242,6 @@ export default function UserReservations({
           type === "start" ? "startDate" : "endDate"
         }=${dateStr}&type=${type}`;
 
-       
-
         const response = await fetch(url);
         const data = await response.json();
 
@@ -262,7 +260,7 @@ export default function UserReservations({
               }
             },
           );
-           setReservedSlots(filteredSlots);
+          setReservedSlots(filteredSlots);
         } else {
           setReservedSlots([]);
         }
@@ -625,9 +623,14 @@ export default function UserReservations({
         }
       >
         {ListHeaderComponent}
-        <View style={styles.emptyState}>
-          <ActivityIndicator size="large" color={"#fff"} />
-          <Text style={styles.emptySubtitle}>Loading reservations...</Text>
+        <View style={[styles.emptyState, styles.loadingState]}>
+          <View style={styles.loadingRing}>
+            <ActivityIndicator size="small" color={ACCENT} />
+          </View>
+          <Text style={styles.emptyTitle}>Loading reservations</Text>
+          <Text style={styles.emptySubtitle}>
+            Checking your latest bookings...
+          </Text>
         </View>
       </ScrollView>
     );
@@ -651,14 +654,13 @@ export default function UserReservations({
       >
         {ListHeaderComponent}
         <View style={styles.emptyState}>
-          <Ionicons
-            name="calendar-outline"
-            size={40}
-            color="rgba(255, 255, 255, 0.9)"
-          />
+          <EmptyReservationArtwork />
           <Text style={styles.emptyTitle}>No reservations yet</Text>
           <Text style={styles.emptySubtitle}>
-            When you book a van, your reservations will appear here.
+            When you book a van, your
+            {`
+`}
+            reservations will appear here.
           </Text>
         </View>
       </ScrollView>
@@ -762,7 +764,7 @@ export default function UserReservations({
                     <>
                       <Pressable
                         onPress={() => {
-                           setSelectingDate("pickup");
+                          setSelectingDate("pickup");
                           setTempPickupDate(null);
                           setDateModalVisible(true);
                         }}
@@ -780,7 +782,6 @@ export default function UserReservations({
                       >
                         <Pressable
                           onPress={() => {
-                            
                             setTimeModalField("pickup");
                             setTimeModalVisible(true);
                           }}
@@ -794,7 +795,6 @@ export default function UserReservations({
                         </Pressable>
                         <Pressable
                           onPress={() => {
-                           
                             setTimeModalField("return");
                             setTimeModalVisible(true);
                           }}
@@ -976,7 +976,7 @@ export default function UserReservations({
                         returnTime,
                         quantity,
                       );
-                      
+
                       addOnsPrice += price;
 
                       addonItems.push(
@@ -1476,123 +1476,334 @@ export default function UserReservations({
   );
 }
 
+function EmptyReservationArtwork() {
+  return (
+    <View style={styles.emptyArtwork}>
+      <View style={styles.emptyArtworkGlow} />
+      <View style={[styles.emptySpark, styles.emptySparkOne]} />
+      <View style={[styles.emptySpark, styles.emptySparkTwo]} />
+      <View style={[styles.emptySpark, styles.emptySparkThree]} />
+
+      <View style={styles.emptyLeafLeft}>
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "-34deg" }] }]}
+        />
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "-12deg" }] }]}
+        />
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "18deg" }] }]}
+        />
+      </View>
+      <View style={styles.emptyLeafRight}>
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "34deg" }] }]}
+        />
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "12deg" }] }]}
+        />
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "-18deg" }] }]}
+        />
+      </View>
+
+      <View style={styles.calendarTopRingLeft} />
+      <View style={styles.calendarTopRingRight} />
+      <View style={styles.calendarIconBody}>
+        <LinearGradient
+          colors={["#526389", "#273551"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.calendarIconHeader} />
+        <View style={styles.calendarGrid}>
+          {[0, 1, 2, 3, 4, 5].map((item) => (
+            <View
+              key={item}
+              style={[
+                styles.calendarGridDot,
+                item === 5 && styles.calendarGridDotActive,
+              ]}
+            />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingBottom: 132,
   },
   card: {
-    backgroundColor: "rgba(15,23,42,0.7)",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 14,
+    backgroundColor: "rgba(12,20,35,0.96)",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(111,142,180,0.13)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 4,
   },
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    gap: 10,
   },
   vanName: {
-    color: "#f9fafb",
-    fontSize: 16,
-    fontWeight: "700",
+    color: "#f7f8fb",
+    fontSize: 15,
+    fontWeight: "900",
+    letterSpacing: -0.2,
   },
   locationText: {
-    color: "#9ca3af",
-    fontSize: 13,
+    color: "rgba(208,217,230,0.6)",
+    fontSize: 10.5,
+    fontWeight: "600",
     marginTop: 4,
   },
   reservedDate: {
-    color: "#9ca3af",
-    fontSize: 11,
+    color: "rgba(190,201,217,0.45)",
+    fontSize: 9.5,
     marginTop: 4,
   },
   datesRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 14,
+    gap: 8,
+    marginTop: 12,
   },
   dateBlock: {
     flex: 1,
+    minHeight: 54,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.055)",
   },
   dateLabel: {
-    color: "#9ca3af",
-    fontSize: 11,
+    color: "rgba(197,207,220,0.48)",
+    fontSize: 8.5,
     textTransform: "uppercase",
-    letterSpacing: 0.8,
+    letterSpacing: 0.65,
     marginBottom: 4,
+    fontWeight: "800",
   },
   dateValue: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    fontWeight: "600",
+    color: "#e9edf4",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "700",
   },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: 999,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 9.5,
+    fontWeight: "800",
   },
   emptyState: {
+    minHeight: 178,
+    borderRadius: 16,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 40,
     paddingHorizontal: 20,
+    paddingTop: 19,
+    paddingBottom: 18,
+    backgroundColor: "rgba(13,22,39,0.97)",
+    borderWidth: 1,
+    borderColor: "rgba(105,136,174,0.13)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  loadingState: {
+    minHeight: 170,
+  },
+  loadingRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.16)",
+  },
+  emptyArtwork: {
+    width: 128,
+    height: 91,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 7,
+  },
+  emptyArtworkGlow: {
+    position: "absolute",
+    width: 88,
+    height: 72,
+    borderRadius: 44,
+    top: 7,
+    backgroundColor: "rgba(254,154,0,0.11)",
+  },
+  emptySpark: {
+    position: "absolute",
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: ACCENT,
+  },
+  emptySparkOne: { top: 7, right: 34 },
+  emptySparkTwo: { top: 25, left: 18, opacity: 0.55 },
+  emptySparkThree: { bottom: 15, right: 13, opacity: 0.45 },
+  emptyLeafLeft: {
+    position: "absolute",
+    left: 12,
+    bottom: 10,
+    width: 36,
+    height: 44,
+    justifyContent: "space-around",
+    alignItems: "flex-end",
+    transform: [{ rotate: "-18deg" }],
+  },
+  emptyLeafRight: {
+    position: "absolute",
+    right: 12,
+    bottom: 10,
+    width: 36,
+    height: 44,
+    justifyContent: "space-around",
+    alignItems: "flex-start",
+    transform: [{ rotate: "18deg" }],
+  },
+  emptyLeaf: {
+    width: 18,
+    height: 7,
+    borderRadius: 8,
+    backgroundColor: "rgba(58,76,112,0.72)",
+  },
+  calendarTopRingLeft: {
+    position: "absolute",
+    zIndex: 4,
+    width: 5,
+    height: 18,
+    borderRadius: 3,
+    top: 12,
+    left: 49,
+    backgroundColor: "#ffab23",
+  },
+  calendarTopRingRight: {
+    position: "absolute",
+    zIndex: 4,
+    width: 5,
+    height: 18,
+    borderRadius: 3,
+    top: 12,
+    right: 49,
+    backgroundColor: "#ffab23",
+  },
+  calendarIconBody: {
+    width: 64,
+    height: 59,
+    marginTop: 15,
+    borderRadius: 12,
+    overflow: "hidden",
+    transform: [{ rotate: "6deg" }],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.38,
+    shadowRadius: 9,
+    elevation: 8,
+  },
+  calendarIconHeader: {
+    height: 14,
+    backgroundColor: "#ff9f18",
+  },
+  calendarGrid: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 8,
+  },
+  calendarGridDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 2,
+    backgroundColor: "rgba(191,204,229,0.3)",
+  },
+  calendarGridDotActive: {
+    backgroundColor: ACCENT,
   },
   emptyTitle: {
-    color: "#e5e7eb",
-    fontSize: 16,
-    fontWeight: "700",
-    marginTop: 12,
+    color: "#f0f2f7",
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 1,
+    letterSpacing: -0.15,
   },
   emptySubtitle: {
-    color: "#ffffffd4",
-    fontSize: 13,
+    color: "rgba(190,200,216,0.54)",
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "600",
     textAlign: "center",
-    marginTop: 6,
+    marginTop: 5,
   },
   priceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 11,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "rgba(148,163,184,0.2)",
+    borderTopColor: "rgba(148,163,184,0.12)",
   },
   priceLabel: {
-    color: "#e0e8deff",
-    fontSize: 14,
-    fontWeight: "900",
+    color: "rgba(231,236,243,0.72)",
+    fontSize: 11,
+    fontWeight: "800",
   },
   priceValue: {
     color: ACCENT,
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 17,
+    fontWeight: "900",
   },
   addonsSection: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "rgba(148,163,184,0.2)",
+    borderTopColor: "rgba(148,163,184,0.12)",
   },
   addonsLabel: {
-    color: "#9ca3af",
-    fontSize: 11,
+    color: "rgba(190,201,216,0.5)",
+    fontSize: 8.5,
     textTransform: "uppercase",
-    letterSpacing: 0.8,
+    letterSpacing: 0.7,
     marginBottom: 6,
+    fontWeight: "800",
   },
   addonItem: {
     flexDirection: "row",
@@ -1601,12 +1812,12 @@ const styles = StyleSheet.create({
   },
   addonName: {
     color: "#e5e7eb",
-    fontSize: 10,
-    fontWeight: "500",
+    fontSize: 9.5,
+    fontWeight: "600",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.72)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1615,98 +1826,87 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: height * 0.85,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    height: height * 0.86,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     overflow: "hidden",
   },
   modalContent: {
     flex: 1,
-    backgroundColor: "rgba(15,23,42,0.95)",
+    backgroundColor: "rgba(7,13,24,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   handleArea: {
-    paddingVertical: 12,
+    paddingVertical: 11,
     alignItems: "center",
   },
   handle: {
-    width: 40,
+    width: 38,
     height: 4,
-    backgroundColor: "rgba(148,163,184,0.7)",
+    backgroundColor: "rgba(148,163,184,0.58)",
     borderRadius: 999,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "900",
     color: "#f9fafb",
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
   },
   vanImageContainer: {
-    height: 180,
-    marginHorizontal: 20,
+    height: 186,
+    marginHorizontal: 18,
     borderRadius: 16,
     overflow: "hidden",
-    marginBottom: 20,
+    marginBottom: 18,
+    backgroundColor: "#0d1728",
   },
-  vanImage: {
-    width: "100%",
-    height: "100%",
-  },
-  imageGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  detailSection: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
+  vanImage: { width: "100%", height: "100%" },
+  imageGradient: { ...StyleSheet.absoluteFillObject },
+  detailSection: { paddingHorizontal: 18, marginBottom: 18 },
   vanNameLarge: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900",
     color: "#f9fafb",
-    marginBottom: 8,
+    marginBottom: 7,
   },
-  officeText: {
-    fontSize: 14,
-    color: "#9ca3af",
-  },
+  officeText: { fontSize: 12, color: "#94a3b8" },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#9ca3af",
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#94a3b8",
     textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 12,
+    letterSpacing: 0.9,
+    marginBottom: 10,
   },
-  dateRow: {
-    flexDirection: "row",
-    gap: 16,
-  },
+  dateRow: { flexDirection: "row", gap: 10 },
   dateCol: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
   },
-  dateIcon: {
-    marginBottom: 8,
-  },
+  dateIcon: { marginBottom: 7 },
   dateText: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: "700",
     color: "#f9fafb",
     marginTop: 4,
@@ -1714,209 +1914,162 @@ const styles = StyleSheet.create({
   addonRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
+    gap: 7,
+    marginBottom: 7,
   },
-  addonText: {
-    fontSize: 10,
-    color: "#e5e7eb",
-    fontWeight: "500",
-  },
+  addonText: { fontSize: 9.5, color: "#e5e7eb", fontWeight: "600" },
   priceBreakdownRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 9,
   },
-  breakdownLabel: {
-    fontSize: 14,
-    color: "#9ca3af",
-  },
-  breakdownValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#e5e7eb",
-  },
+  breakdownLabel: { fontSize: 12, color: "#9ca3af" },
+  breakdownValue: { fontSize: 12, fontWeight: "700", color: "#e5e7eb" },
   totalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingTop: 12,
+    paddingTop: 11,
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: "rgba(254,154,0,0.3)",
+    borderTopColor: "rgba(254,154,0,0.22)",
   },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#f9fafb",
-  },
-  totalValue: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#22c55e",
-  },
-  statusSection: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
+  totalLabel: { fontSize: 14, fontWeight: "800", color: "#f9fafb" },
+  totalValue: { fontSize: 21, fontWeight: "900", color: "#22c55e" },
+  statusSection: { paddingHorizontal: 18, marginBottom: 18 },
   infoRow: {
     flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    gap: 10,
+    paddingHorizontal: 18,
+    marginBottom: 18,
   },
   infoBox: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 14,
-    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
   },
   editBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(254,154,0,0.2)",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(254,154,0,0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
   editField: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    gap: 7,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
   },
-  editFieldLabel: {
-    fontSize: 12,
-    color: "#9ca3af",
-    fontWeight: "600",
-  },
+  editFieldLabel: { fontSize: 10.5, color: "#9ca3af", fontWeight: "600" },
   editFieldValue: {
-    fontSize: 13,
+    fontSize: 11.5,
     color: "#f9fafb",
     fontWeight: "700",
     flex: 1,
   },
-  saveBtn: {
-    borderRadius: 16,
-    overflow: "hidden",
-    marginTop: 12,
-  },
+  saveBtn: { borderRadius: 15, overflow: "hidden", marginTop: 11 },
   saveBtnGradient: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
-  saveBtnText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#0f172a",
-  },
+  saveBtnText: { fontSize: 14, fontWeight: "900", color: "#0f172a" },
   calendarBox: {
-    backgroundColor: "rgba(15,23,42,0.98)",
-    borderRadius: 24,
-    padding: 20,
+    backgroundColor: "rgba(8,14,26,0.99)",
+    borderRadius: 22,
+    padding: 18,
     width: "90%",
     maxHeight: height * 0.7,
     zIndex: 10000,
     elevation: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   calendarHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   timeBox: {
-    backgroundColor: "rgba(15,23,42,0.98)",
-    borderRadius: 24,
-    padding: 20,
+    backgroundColor: "rgba(8,14,26,0.99)",
+    borderRadius: 22,
+    padding: 18,
     width: "90%",
     maxHeight: height * 0.6,
     zIndex: 10000,
     elevation: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   timeSlot: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.1)",
+    paddingVertical: 11,
+    paddingHorizontal: 9,
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
-  timeSlotActive: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
-  },
-  timeSlotText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#e5e7eb",
-  },
-  timeSlotTextActive: {
-    color: "#0f172a",
-  },
+  timeSlotActive: { backgroundColor: ACCENT, borderColor: ACCENT },
+  timeSlotText: { fontSize: 11, fontWeight: "700", color: "#e5e7eb" },
+  timeSlotTextActive: { color: "#0f172a" },
   messageBox: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
   },
-  messageText: {
-    fontSize: 14,
-    color: "#e5e7eb",
-    lineHeight: 20,
-  },
+  messageText: { fontSize: 12, color: "#e5e7eb", lineHeight: 18 },
   messageInput: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
     color: "#f9fafb",
-    fontSize: 14,
+    fontSize: 12,
     minHeight: 80,
   },
   addonEditRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     marginBottom: 8,
   },
   addonEditName: {
     color: "#f9fafb",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
     flex: 1,
   },
-  addonEditControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
+  addonEditControls: { flexDirection: "row", alignItems: "center", gap: 10 },
   addonEditBtn: {
-    backgroundColor: "rgba(254,154,0,0.2)",
+    backgroundColor: "rgba(254,154,0,0.16)",
     borderRadius: 8,
     padding: 6,
   },
   addonEditQty: {
     color: "#f9fafb",
-    fontSize: 16,
-    fontWeight: "700",
-    minWidth: 30,
+    fontSize: 14,
+    fontWeight: "800",
+    minWidth: 28,
     textAlign: "center",
   },
 });

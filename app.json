@@ -36,10 +36,10 @@
         "RECORD_AUDIO"
       ]
     },
-   "web": {
-  "output": "static",
-  "favicon": "./assets/images/apple.png"
-},
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/apple.png"
+    },
     "plugins": [
       "expo-router",
       [
@@ -57,7 +57,8 @@
           "icon": "./assets/images/icon.png",
           "color": "#fe9a00"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

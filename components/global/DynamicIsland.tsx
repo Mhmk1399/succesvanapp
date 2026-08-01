@@ -1,19 +1,30 @@
 import React, { useEffect, useRef, useCallback, useState } from "react";
 import {
   View,
+  Text,
   StyleSheet,
   Pressable,
   Platform,
   Animated,
+  Easing,
 } from "react-native";
-import GlassView from "@/components/global/GlassView";
 import { useRouter, usePathname, Href } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Svg, { Path } from "react-native-svg";
+import Svg, {
+  Path,
+  Defs,
+  RadialGradient as SvgRadialGradient,
+  Stop,
+  LinearGradient as SvgLinearGradient,
+  Rect,
+  Circle,
+  G,
+} from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+ 
 /* ═══════════════════  ICONS  ═══════════════════ */
 
 const VanIcon = ({ size = 24, color = "#fff", filled = false }) => (
@@ -55,26 +66,27 @@ const ProfileIcon = ({ size = 24, color = "#fff", filled = false }) => (
   </Svg>
 );
 
-const LoginIcon = ({ size = 24, color = "#fff", filled = false }) => (
-  <Svg width={size} height={size} viewBox="0 0 8.4666667 8.4666667">
-    <Path
-      d="m2.9102882-.0000016c-.441363 0-.792717.35755-.792717.79270997v2.11718993c0 .3607801.5291671.3607801.5291671 0v-2.11718993c0-.15114998.1196279-.26354998.2635499-.26354998h4.76405c.1511551 0 .2635498.12273.2635498.26354998v6.88123993c0 .1428901-.1123947.2635501-.2635498.2635501h-4.76405c-.1511559 0-.2635499-.12066-.2635499-.2635501v-2.11719c0-.3502898-.5291671-.35545-.5291671 0v2.11719c0 .4403299.357556.79272.792717.79272h4.76405c.435161 0 .792716-.3523901.792716-.79272v-6.88123993c0-.43515997-.352388-.79270997-.792716-.79270997zm1.136881 3.0995498.869198.8692002h-4.65242994c-.352433 0-.352433.5291601 0 .5291601h4.65397994l-.870748.8691999c-.2501141.2501098.1250569.62529.375171.3751699l1.3223999-1.3224c.1029031-.1028999.1029031-.2701999 0-.3731l-1.3223999-1.3224c-.265198-.2415599-.6109431.11845-.375171.3751699z"
-      fill={filled ? color : "none"}
-      stroke={filled ? "none" : color}
-      strokeWidth={filled ? 0 : 0.5}
-    />
-  </Svg>
-);
-
 /* ═══════════════════  CONSTANTS  ═══════════════════ */
 
 const ACCENT = "#fe9a00";
-const ACTIVE_ICON = "#111827";
-const INACTIVE = "rgba(255,255,255,0.58)";
-const ITEM_SIZE = 52;
-const GAP = 6;
-const PAD = 5;
-const RADIUS = 30;
+const ACCENT_LIGHT = "#ffc257";
+const ACCENT_DEEP = "#c96c00";
+const ACTIVE_ICON = "#1a1206";
+const INACTIVE = "rgba(210,213,222,0.75)";
+const INACTIVE_LABEL = "rgba(200,205,215,0.55)";
+
+const ITEM_WIDTH = 80;
+const ITEM_HEIGHT = 70;
+const ACTIVE_SIZE = 70; // قطر دایره نارنجی
+const ACTIVE_RADIUS = ACTIVE_SIZE / 2;
+const BUMP_GAP = 6; // فاصله حاشیه جزیره از دایره فعال
+const BUMP_R = ACTIVE_RADIUS + BUMP_GAP; // شعاع برآمدگی دور دایره
+const GAP = 2;
+const PAD_H = 30; // فضای کافی برای برآمدگی آیتم اول و آخر
+const PAD_V = 10;
+const RADIUS = 34;
+const ACTIVE_LIFT = 16; // چقدر دایره از بالای نوار بیرون می‌زند
+const SVG_EXTRA_TOP = 40; // فضای بالای SVG برای برآمدگی
 
 type NavItem = {
   label: string;
@@ -84,10 +96,10 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Vans", icon: "van", activeIcon: "van-filled", route: "/vans" },
+  { label: "Bookings", icon: "van", activeIcon: "van-filled", route: "/vans" },
   { label: "Home", icon: "home-outline", activeIcon: "home", route: "/" },
   {
-    label: "Profile",
+    label: "Account",
     icon: "person-outline",
     activeIcon: "person",
     route: "/dashboard",
@@ -95,7 +107,45 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const ISLAND_W =
-  NAV_ITEMS.length * ITEM_SIZE + (NAV_ITEMS.length - 1) * GAP + PAD * 2;
+  NAV_ITEMS.length * ITEM_WIDTH + (NAV_ITEMS.length - 1) * GAP + PAD_H * 2;
+const ISLAND_H = ITEM_HEIGHT + PAD_V * 2;
+
+/* ═══════════════════
+   شکل نوار با برآمدگی دایره‌ای واقعی
+   حاشیه جزیره با همان مرکز دایره فعال حرکت می‌کند
+   ═══════════════════ */
+const buildBarPath = (
+  w: number,
+  h: number,
+  r: number,
+  bumpCx: number, // مرکز افقی برآمدگی، دقیقاً برابر مرکز دایره فعال
+  bumpR: number, // شعاع بیرونی برآمدگی
+  topY: number,
+) => {
+  // مرکز عمودی برآمدگی با مرکز دایره نارنجی یکی است.
+  const bumpCenterY = topY - ACTIVE_LIFT + ACTIVE_RADIUS;
+
+  // محل برخورد دایره بیرونی برآمدگی با خط بالای نوار.
+  const dy = topY - bumpCenterY;
+  const halfChord = Math.sqrt(Math.max(0, bumpR * bumpR - dy * dy));
+  const startX = bumpCx - halfChord;
+  const endX = bumpCx + halfChord;
+
+  return `
+    M ${r} ${topY}
+    L ${startX} ${topY}
+    A ${bumpR} ${bumpR} 0 0 1 ${endX} ${topY}
+    L ${w - r} ${topY}
+    Q ${w} ${topY}, ${w} ${topY + r}
+    L ${w} ${h - r + topY}
+    Q ${w} ${h + topY}, ${w - r} ${h + topY}
+    L ${r} ${h + topY}
+    Q 0 ${h + topY}, 0 ${h - r + topY}
+    L 0 ${topY + r}
+    Q 0 ${topY}, ${r} ${topY}
+    Z
+  `;
+};
 
 /* ═══════════════════  COMPONENT  ═══════════════════ */
 
@@ -124,25 +174,58 @@ export default function DynamicIsland() {
 
   const entranceY = useRef(new Animated.Value(60)).current;
   const entranceOpacity = useRef(new Animated.Value(0)).current;
-  const indicatorX = useRef(new Animated.Value(0)).current;
   const indicatorScale = useRef(new Animated.Value(0)).current;
+  const glowPulse = useRef(new Animated.Value(0.85)).current;
+
+  // مرکز آیکون فعال (یک Animated.Value مرکزی برای سینک همه چیز)
+  const activeCenterX = useRef(
+    new Animated.Value(
+      activeIndex >= 0
+        ? PAD_H + activeIndex * (ITEM_WIDTH + GAP) + ITEM_WIDTH / 2
+        : ISLAND_W / 2,
+    ),
+  ).current;
+  const activeCenterXVisual = useRef(
+    new Animated.Value(
+      activeIndex >= 0
+        ? PAD_H + activeIndex * (ITEM_WIDTH + GAP) + ITEM_WIDTH / 2
+        : ISLAND_W / 2,
+    ),
+  ).current;
+
+  // برای مسیر SVG نیاز به مقدار عددی مرکز برآمدگی داریم (چون AnimatedPath.d از rn-svg رو باگ داره روی بعضی نسخه‌ها)
+  // پس با listener سینک می‌کنیم
+  const [bumpCx, setBumpCx] = useState<number>(
+    activeIndex >= 0
+      ? PAD_H + activeIndex * (ITEM_WIDTH + GAP) + ITEM_WIDTH / 2
+      : ISLAND_W / 2,
+  );
 
   const itemAnims = useRef(
-    NAV_ITEMS.map((_, i) => ({
+    NAV_ITEMS.map(() => ({
       scale: new Animated.Value(1),
-      iconY: new Animated.Value(i === activeIndex ? -1 : 0),
-      iconScale: new Animated.Value(i === activeIndex ? 1.02 : 1),
     })),
   ).current;
 
   const prevIndex = useRef(activeIndex);
 
-  const getX = (i: number) => PAD + i * (ITEM_SIZE + GAP);
+  const getItemCenter = (i: number) =>
+    PAD_H + i * (ITEM_WIDTH + GAP) + ITEM_WIDTH / 2;
+
+  /* مرکز برآمدگی و دایره فعال با یک Animated.Value سینک هستند */
+  useEffect(() => {
+    const id = activeCenterX.addListener(({ value }) => {
+      setBumpCx(value);
+    });
+    return () => activeCenterX.removeListener(id);
+  }, []);
 
   /* entrance */
   useEffect(() => {
     if (activeIndex >= 0) {
-      indicatorX.setValue(getX(activeIndex));
+      activeCenterX.setValue(getItemCenter(activeIndex));
+      activeCenterXVisual.setValue(getItemCenter(activeIndex));
+      setBumpCx(getItemCenter(activeIndex));
     }
 
     Animated.parallel([
@@ -165,6 +248,28 @@ export default function DynamicIsland() {
         useNativeDriver: true,
       }).start();
     });
+
+    const glowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowPulse, {
+          toValue: 1,
+          duration: 1800,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowPulse, {
+          toValue: 0.75,
+          duration: 1800,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    glowLoop.start();
+
+    return () => {
+      glowLoop.stop();
+    };
   }, []);
 
   /* tab change */
@@ -175,57 +280,31 @@ export default function DynamicIsland() {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // slide indicator
-    Animated.spring(indicatorX, {
-      toValue: getX(activeIndex),
-      tension: 200,
-      friction: 16,
-      useNativeDriver: true,
-    }).start();
+    const nextCenter = getItemCenter(activeIndex);
 
-    // deactivate prev
-    if (prev >= 0) {
-      const p = itemAnims[prev];
-      Animated.parallel([
-        Animated.spring(p.iconY, {
-          toValue: 0,
-          tension: 180,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-        Animated.spring(p.iconScale, {
-          toValue: 1,
-          tension: 180,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-
-    // activate current
-    const c = itemAnims[activeIndex];
+    // activeCenterX feeds SVG/listeners, activeCenterXVisual feeds native transforms.
     Animated.parallel([
-      Animated.spring(c.iconY, {
-        toValue: -1,
-        tension: 200,
-        friction: 8,
-        useNativeDriver: true,
+      Animated.spring(activeCenterX, {
+        toValue: nextCenter,
+        tension: 130,
+        friction: 14,
+        useNativeDriver: false,
       }),
-      Animated.spring(c.iconScale, {
-        toValue: 1.02,
-        tension: 200,
-        friction: 8,
+      Animated.spring(activeCenterXVisual, {
+        toValue: nextCenter,
+        tension: 130,
+        friction: 14,
         useNativeDriver: true,
       }),
     ]).start();
   }, [activeIndex]);
 
-  /* press handlers */
+  /* press */
   const onPressIn = useCallback(
     (i: number) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       Animated.spring(itemAnims[i].scale, {
-        toValue: 0.92,
+        toValue: 0.9,
         tension: 400,
         friction: 10,
         useNativeDriver: true,
@@ -261,79 +340,149 @@ export default function DynamicIsland() {
     [router],
   );
 
-  /* icon render */
-  const getIcon = (item: NavItem, active: boolean, login: boolean) => {
+  /* icon */
+  const getIcon = (item: NavItem, active: boolean) => {
     const color = active ? ACTIVE_ICON : INACTIVE;
-    const s = active ? 21 : 20;
+    const s = active ? 28 : 22;
     if (item.icon === "van")
       return <VanIcon size={s + 4} color={color} filled={active} />;
     if (item.icon === "home-outline")
       return <HomeIcon size={s} color={color} filled={active} />;
-    if (login) return <LoginIcon size={s} color={color} filled={active} />;
     return <ProfileIcon size={s} color={color} filled={active} />;
   };
 
-  /* render */
+  // ابعاد SVG
+  const SVG_W = ISLAND_W;
+  const SVG_H = ISLAND_H + SVG_EXTRA_TOP;
+  const BAR_TOP_Y = SVG_EXTRA_TOP; // Y نوار در SVG
+  const ACTIVE_CENTER_Y = BAR_TOP_Y - ACTIVE_LIFT + ACTIVE_RADIUS;
+
+  const barPath = buildBarPath(
+    SVG_W,
+    ISLAND_H,
+    RADIUS,
+    bumpCx,
+    BUMP_R,
+    BAR_TOP_Y,
+  );
+
+  // موقعیت دایره فعال (translateX): مرکز - شعاع
+  const circleTranslateX = Animated.subtract(
+    activeCenterXVisual,
+    new Animated.Value(ACTIVE_SIZE / 2),
+  );
+
+  // موقعیت گلو (translateX): مرکز - نصف عرض glow
+  const GLOW_SIZE = 180;
+  const glowTranslateX = Animated.subtract(
+    activeCenterXVisual,
+    new Animated.Value(GLOW_SIZE / 2),
+  );
+
   return (
     <Animated.View
       style={[
         st.container,
-        { bottom: Math.max(insets.bottom + 10, Platform.OS === "ios" ? 22 : 16) },
+        {
+          bottom: Math.max(insets.bottom + 12, Platform.OS === "ios" ? 22 : 18),
+        },
         {
           opacity: entranceOpacity,
           transform: [{ translateY: entranceY }],
         },
       ]}
     >
-      {/* ambient shadow */}
-      <View style={st.ambient} />
-
-      <View style={st.outer}>
-        <LinearGradient
-          colors={[
-            "rgba(255,255,255,0.16)",
-            "rgba(254,154,0,0.22)",
-            "rgba(255,255,255,0.08)",
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <GlassView
-          intensity={Platform.OS === "ios" ? 72 : 78}
-          tint="dark"
-          overlayStyle={st.glassOverlay}
-          style={st.glass}
-        >
-          <View style={st.row}>
-            {/* indicator */}
-            <Animated.View
-              style={[
-                st.indicator,
-                {
-                  transform: [
-                    { translateX: indicatorX },
-                    { scale: indicatorScale },
-                  ],
-                },
-              ]}
-            >
-              <LinearGradient
-                colors={["#ffb84d", "#fe9a00"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
+      <View style={[st.wrapper, { width: ISLAND_W, height: SVG_H + 8 }]}>
+        {/* ═══ گلو محیطی پشت دایره (پشت‌زمینه) ═══ */}
+        {activeIndex >= 0 && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              st.bgGlow,
+              {
+                width: GLOW_SIZE,
+                height: GLOW_SIZE,
+                top: BAR_TOP_Y - ACTIVE_LIFT - GLOW_SIZE / 2 + ACTIVE_SIZE / 2,
+                opacity: glowPulse,
+                transform: [{ translateX: glowTranslateX }],
+              },
+            ]}
+          >
+            <Svg width={GLOW_SIZE} height={GLOW_SIZE}>
+              <Defs>
+                <SvgRadialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+                  <Stop offset="0%" stopColor={ACCENT} stopOpacity="0.75" />
+                  <Stop offset="35%" stopColor={ACCENT} stopOpacity="0.28" />
+                  <Stop offset="70%" stopColor={ACCENT} stopOpacity="0.06" />
+                  <Stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
+                </SvgRadialGradient>
+              </Defs>
+              <Rect
+                x="0"
+                y="0"
+                width={GLOW_SIZE}
+                height={GLOW_SIZE}
+                fill="url(#bgGlow)"
               />
-            </Animated.View>
+            </Svg>
+          </Animated.View>
+        )}
 
-            {/* nav items */}
+        {/* ═══ نوار اصلی با برآمدگی متصل به آیکون فعال ═══ */}
+        <View style={[st.barSvgContainer, { width: SVG_W, height: SVG_H }]}>
+          <Svg width={SVG_W} height={SVG_H} style={StyleSheet.absoluteFill}>
+            <Defs>
+              <SvgLinearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor="rgba(38,38,46,0.96)" />
+                <Stop offset="100%" stopColor="rgba(14,14,20,0.98)" />
+              </SvgLinearGradient>
+              <SvgLinearGradient id="barStroke" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor="rgba(255,255,255,0.28)" />
+                <Stop offset="50%" stopColor="rgba(255,255,255,0.08)" />
+                <Stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
+              </SvgLinearGradient>
+              {/* گرادیانت داخلی برای درخشش اطراف برآمدگی */}
+              <SvgRadialGradient
+                id="bumpGlow"
+                cx={`${(bumpCx / SVG_W) * 100}%`}
+                cy={`${(ACTIVE_CENTER_Y / SVG_H) * 100}%`}
+                r="18%"
+              >
+                <Stop offset="0%" stopColor={ACCENT} stopOpacity="0.35" />
+                <Stop offset="60%" stopColor={ACCENT} stopOpacity="0.06" />
+                <Stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
+              </SvgRadialGradient>
+            </Defs>
+
+            {/* بدنه اصلی نوار */}
+            <Path
+              d={barPath}
+              fill="#151515"
+              stroke="#373333"
+              strokeWidth={0.8}
+            />
+
+            {/* لایه درخشش نارنجی داخل نوار (پشت آیکون‌ها) */}
+            <Path d={barPath} fill="url(#bumpGlow)" />
+          </Svg>
+
+          {/* محتوای نوار (آیکون‌ها) */}
+          <View
+            style={[
+              st.contentRow,
+              {
+                top: BAR_TOP_Y,
+                height: ISLAND_H,
+              },
+            ]}
+          >
             {NAV_ITEMS.map((item, i) => {
               const isActive = activeIndex === i;
               const showLogin = item.route === "/dashboard" && !isAuthenticated;
               const loginActive = showLogin && pathname === "/register";
               const active = isActive || loginActive;
               const a = itemAnims[i];
+              const label = item.label;
 
               return (
                 <Animated.View
@@ -346,28 +495,78 @@ export default function DynamicIsland() {
                     onPressOut={() => onPressOut(i)}
                     style={st.pressable}
                     accessibilityRole="button"
-                    accessibilityLabel={showLogin ? "Login" : item.label}
+                    accessibilityLabel={label}
                     accessibilityState={{ selected: active }}
                   >
-                    <Animated.View
-                      style={{
-                        transform: [
-                          { translateY: a.iconY },
-                          { scale: a.iconScale },
-                        ],
-                      }}
+                    <View style={st.iconSlot}>
+                      {!active && getIcon(item, false)}
+                    </View>
+                    <Text
+                      style={[st.label, active && st.labelActive]}
+                      numberOfLines={1}
                     >
-                      {getIcon(item, active, showLogin)}
-                    </Animated.View>
+                      {label}
+                    </Text>
                   </Pressable>
                 </Animated.View>
               );
             })}
           </View>
+        </View>
 
-          {/* subtle inner border */}
-          <View style={st.innerBorder} pointerEvents="none" />
-        </GlassView>
+        {/* ═══ دایره نارنجی فعال، شناور بالای نوار ═══ */}
+        {activeIndex >= 0 && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              st.floatingActive,
+              {
+                top: BAR_TOP_Y - ACTIVE_LIFT,
+                transform: [
+                  { translateX: circleTranslateX },
+                  { scale: indicatorScale },
+                ],
+              },
+            ]}
+          >
+            {/* هاله رینگ نازک دور دایره */}
+            <View style={st.ringHalo} pointerEvents="none">
+              <Svg width={ACTIVE_SIZE + 30} height={ACTIVE_SIZE + 30}>
+                <Defs>
+                  <SvgRadialGradient id="ringG" cx="50%" cy="50%" r="50%">
+                    <Stop offset="60%" stopColor={ACCENT} stopOpacity="0" />
+                    <Stop offset="72%" stopColor={ACCENT} stopOpacity="0.28" />
+                    <Stop offset="85%" stopColor={ACCENT} stopOpacity="0.14" />
+                    <Stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
+                  </SvgRadialGradient>
+                </Defs>
+                <Circle
+                  cx={(ACTIVE_SIZE + 30) / 2}
+                  cy={(ACTIVE_SIZE + 30) / 2}
+                  r={(ACTIVE_SIZE + 30) / 2}
+                  fill="url(#ringG)"
+                />
+              </Svg>
+            </View>
+
+            {/* گرادیانت اصلی دایره */}
+            <LinearGradient
+              colors={[ACCENT_LIGHT, ACCENT, ACCENT_DEEP]}
+              start={{ x: 0.3, y: 0.05 }}
+              end={{ x: 0.7, y: 1 }}
+              style={st.circleGradient}
+            >
+              {/* highlight شیشه‌ای بالا */}
+              <View style={st.glossTop} pointerEvents="none" />
+              {/* آیکون */}
+              {getIcon(NAV_ITEMS[activeIndex], true)}
+              {/* ته‌رنگ تیره پایین */}
+              <View style={st.glossBottom} pointerEvents="none" />
+            </LinearGradient>
+
+      
+          </Animated.View>
+        )}
       </View>
     </Animated.View>
   );
@@ -383,94 +582,147 @@ const st = StyleSheet.create({
     alignItems: "center",
     zIndex: 999,
   },
-  ambient: {
+  wrapper: {
+    position: "relative",
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
+  },
+
+  /* ── GLOW پس‌زمینه ── */
+  bgGlow: {
     position: "absolute",
-    bottom: -5,
-    width: ISLAND_W * 0.54,
-    height: 14,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    opacity: 0.34,
+    left: 0,
+  },
+
+  /* ── کانتینر SVG نوار ── */
+  barSvgContainer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.45,
-        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 16 },
+        shadowOpacity: 0.5,
+        shadowRadius: 28,
       },
+      android: { elevation: 14 },
     }),
   },
-  outer: {
-    borderRadius: RADIUS,
-    padding: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.22,
-        shadowRadius: 18,
-      },
-      android: { elevation: 10 },
-    }),
-  },
-  glass: {
-    borderRadius: RADIUS - 1,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  glassOverlay: {
-    borderRadius: RADIUS - 1,
-    backgroundColor:
-      Platform.OS === "android" ? "rgba(8,13,28,0.62)" : "rgba(8,13,28,0.28)",
-  },
-  innerBorder: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: RADIUS - 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.12)",
-  },
-  row: {
+
+  /* ── ردیف آیکون‌ها ── */
+  contentRow: {
+    position: "absolute",
+    left: 0,
+    right: 0,
     flexDirection: "row",
-    paddingHorizontal: PAD,
-    paddingVertical: PAD,
+    paddingHorizontal: PAD_H,
+    paddingVertical: PAD_V,
     gap: GAP,
   },
-  indicator: {
-    position: "absolute",
-    width: ITEM_SIZE,
-    height: ITEM_SIZE,
-    top: PAD,
-    left: 0,
-    borderRadius: ITEM_SIZE / 2,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.28)",
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 9,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
+
   item: {
-    width: ITEM_SIZE,
-    height: ITEM_SIZE,
-    borderRadius: ITEM_SIZE / 2,
+    width: ITEM_WIDTH,
+    height: ITEM_HEIGHT,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
   },
   pressable: {
     flex: 1,
     width: "100%",
-    justifyContent: "center",
+    paddingTop: 12,
+    paddingBottom: 8,
+    justifyContent: "space-between",
     alignItems: "center",
+  },
+  iconSlot: {
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  label: {
+    color: INACTIVE_LABEL,
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "center",
+    letterSpacing: 0.3,
+  },
+  labelActive: {
+    color: ACCENT,
+    fontWeight: "700",
+  },
+
+  /* ── دایره نارنجی شناور ── */
+  floatingActive: {
+    position: "absolute",
+    left: 0,
+    width: ACTIVE_SIZE,
+    height: ACTIVE_SIZE,
+    borderRadius: ACTIVE_SIZE / 2,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.7,
+        shadowRadius: 20,
+      },
+      android: { elevation: 20 },
+    }),
+  },
+  ringHalo: {
+    position: "absolute",
+    top: -15,
+    left: -15,
+    width: ACTIVE_SIZE + 30,
+    height: ACTIVE_SIZE + 30,
+  },
+  circleGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: ACTIVE_SIZE / 2,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 0.5,
+    borderColor: "rgba(255,225,160,0.6)",
+    overflow: "hidden",
+  },
+  glossTop: {
+    position: "absolute",
+    top: 3,
+    left: "18%",
+    right: "18%",
+    height: ACTIVE_SIZE * 0.42,
+    borderRadius: ACTIVE_SIZE,
+    backgroundColor: "rgba(255,255,255,0.28)",
+    opacity: 0.9,
+  },
+  glossBottom: {
+    position: "absolute",
+    bottom: -ACTIVE_SIZE * 0.4,
+    left: 0,
+    right: 0,
+    height: ACTIVE_SIZE * 0.7,
+    borderRadius: ACTIVE_SIZE,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  notifDot: {
+    position: "absolute",
+    top: 3,
+    right: 5,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    backgroundColor: "rgba(15,15,20,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notifDotInner: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#ff3b30",
   },
 });

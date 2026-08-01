@@ -6,18 +6,19 @@ const { height, width } = Dimensions.get("window");
 
 export const styles = StyleSheet.create({
   mainButton: {
-    marginHorizontal: 20,
-    borderRadius: 999,
-    overflow: "hidden",
+     borderRadius: 22,
+     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,184,61,0.56)",
     ...Platform.select({
       ios: {
         shadowColor: ACCENT,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.35,
-        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.42,
+        shadowRadius: 18,
       },
       android: {
-        elevation: 6,
+        elevation: 9,
       },
     }),
   },
@@ -29,8 +30,10 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    minHeight: 62,
+    paddingVertical: 7,
+    paddingLeft: 12,
+    paddingRight: 10,
     position: "relative",
     overflow: "hidden",
   },
@@ -47,11 +50,21 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  mainButtonIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
   mainButtonText: {
     color: DARK,
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 17,
+    fontWeight: "900",
   },
   mainButtonRight: {
     flexDirection: "row",
@@ -59,13 +72,13 @@ export const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: "rgba(15,23,42,0.12)",
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 7,
     borderRadius: 999,
   },
   mainButtonSubText: {
     color: DARK,
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 10,
+    fontWeight: "800",
   },
 
   sheetContainer: {
@@ -73,9 +86,9 @@ export const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: height * 0.82,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    height: height * 0.9,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     overflow: "hidden",
     borderBottomWidth: 0,
     ...Platform.select({
@@ -92,10 +105,10 @@ export const styles = StyleSheet.create({
   },
   blurContainer: {
     flex: 1,
-    backgroundColor: "rgba(2, 10, 46, 0.9)",
+    backgroundColor: "rgba(2, 10, 46, 0.96)",
   },
   handleArea: {
-    paddingVertical: 10,
+    paddingVertical: 7,
     alignItems: "center",
   },
   sheetHandle: {
@@ -108,30 +121,30 @@ export const styles = StyleSheet.create({
 
 export const sheetStyles = StyleSheet.create({
   container: {
-    paddingHorizontal: 10,
-    paddingBottom: 32,
+    paddingHorizontal: 12,
+    paddingBottom: 26,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
-    marginTop: 4,
+    marginBottom: 10,
+    marginTop: 2,
   },
   sheetTitle: {
     color: "#f9fafb",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "900",
   },
   sheetSubtitle: {
     color: "#9ca3af",
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 2,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.15)",
@@ -152,13 +165,13 @@ export const sheetStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
     backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    marginBottom: 18,
+    marginBottom: 12,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -213,8 +226,8 @@ export const sheetStyles = StyleSheet.create({
     flex: 1,
   },
   voiceIconWrapper: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: 999,
     backgroundColor: ACCENT,
     alignItems: "center",
@@ -222,7 +235,7 @@ export const sheetStyles = StyleSheet.create({
   },
   voiceTitle: {
     color: "#f9fafb",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
   voiceSubtitle: {
@@ -243,7 +256,7 @@ export const sheetStyles = StyleSheet.create({
   },
 
   section: {
-    marginBottom: 18,
+    marginBottom: 12,
   },
   sectionLabel: {
     color: "#9ca3af",
@@ -251,7 +264,7 @@ export const sheetStyles = StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   infoText: {
     color: "#fbbf24",
@@ -260,14 +273,14 @@ export const sheetStyles = StyleSheet.create({
   },
   row: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
   },
   half: {
     flex: 1,
   },
 
   inputGroup: {
-    marginBottom: 12,
+    marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: "row",
@@ -275,10 +288,10 @@ export const sheetStyles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 8,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    gap: 7,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -306,16 +319,16 @@ export const sheetStyles = StyleSheet.create({
   input: {
     flex: 1,
     color: "#f9fafb",
-    fontSize: 14,
-    paddingVertical: 8,
+    fontSize: 13,
+    paddingVertical: 7,
     fontWeight: "500",
   },
 
   buttonsRow: {
-    marginTop: 8,
+    marginTop: 4,
   },
   submitButton: {
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: "hidden",
     ...Platform.select({
       ios: {
@@ -334,7 +347,7 @@ export const sheetStyles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   submitGradient: {
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -342,17 +355,18 @@ export const sheetStyles = StyleSheet.create({
   },
   submitText: {
     color: DARK,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
   },
 
   /* Select modals */
   selectOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(2,6,23,0.72)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 22,
   },
   selectBox: {
     width: width - 60,
@@ -393,12 +407,24 @@ export const sheetStyles = StyleSheet.create({
     borderColor: "rgba(254,154,0,0.3)",
   },
   calendarModalBox: {
-    width: width - 40,
-    backgroundColor: "rgba(15,23,42,0.98)",
-    borderRadius: 20,
-    padding: 16,
+    width: Math.min(width - 28, 430),
+    backgroundColor: "rgba(15,23,42,0.96)",
+    borderRadius: 28,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.3)",
+    borderColor: "rgba(255,255,255,0.12)",
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 18 },
+        shadowOpacity: 0.42,
+        shadowRadius: 28,
+      },
+      android: {
+        elevation: 18,
+      },
+    }),
   },
   timeModalHeader: {
     flexDirection: "row",
@@ -416,8 +442,8 @@ export const sheetStyles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-    padding: 16,
-    gap: 12,
+    borderRadius: 13,
+    padding: 12,
+    gap: 10,
   },
 });

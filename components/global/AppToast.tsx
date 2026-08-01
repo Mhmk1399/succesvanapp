@@ -122,10 +122,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         }),
       ]).start();
 
-      timerRef.current = setTimeout(
-        hideToast,
-        normalized.duration ?? 2800,
-      );
+      timerRef.current = setTimeout(hideToast, normalized.duration ?? 2800);
     },
     [clearTimer, hideToast, opacity, translateY],
   );
@@ -153,7 +150,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           ]}
         >
           <Pressable onPress={hideToast} style={styles.pressable}>
-            <GlassView intensity={82} tint="dark" style={styles.toastCard}>
+            <GlassView
+              intensity={100}
+              tint="dark"
+              blurReductionFactor={Platform.OS === "android" ? 1 : undefined}
+              overlayStyle={styles.toastGlassOverlay}
+              style={styles.toastCard}
+            >
+              <View pointerEvents="none" style={styles.toastReadableBase} />
               <View
                 style={[
                   styles.iconWrap,
@@ -170,7 +174,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
               <View style={styles.copy}>
                 {!!currentToast.title && (
-                  <Text style={styles.title} numberOfLines={1}>
+                  <Text style={styles.title} numberOfLines={2}>
                     {currentToast.title}
                   </Text>
                 )}
@@ -179,7 +183,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     styles.message,
                     !currentToast.title && styles.messageOnly,
                   ]}
-                  numberOfLines={2}
+                  numberOfLines={4}
                 >
                   {currentToast.message}
                 </Text>
@@ -222,23 +226,32 @@ const styles = StyleSheet.create({
   },
   pressable: {
     width: "100%",
-    maxWidth: 420,
+    maxWidth: 430,
   },
   toastCard: {
-    minHeight: 58,
-    borderRadius: 29,
+    minHeight: 62,
+    borderRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(15,23,42,0.68)",
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+    borderColor: "rgba(255,255,255,0.24)",
+    backgroundColor:
+      Platform.OS === "android" ? "rgba(2,6,23,0.92)" : "rgba(2,6,23,0.76)",
+    paddingVertical: 10,
+    paddingHorizontal: 11,
     flexDirection: "row",
     alignItems: "center",
     shadowColor: "#000",
-    shadowOpacity: 0.26,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.36,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 14 },
+  },
+  toastGlassOverlay: {
+    opacity: Platform.OS === "android" ? 0.96 : 0.9,
+  },
+  toastReadableBase: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor:
+      Platform.OS === "android" ? "rgba(2,6,23,0.88)" : "rgba(2,6,23,0.58)",
   },
   iconWrap: {
     width: 36,
@@ -260,20 +273,22 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    color: "#f8fafc",
+    color: "#ffffff",
     fontSize: 13,
     fontWeight: "900",
+    lineHeight: 17,
   },
   message: {
-    color: "rgba(248,250,252,0.72)",
-    fontSize: 12,
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 12.5,
     fontWeight: "700",
     marginTop: 2,
-    lineHeight: 16,
+    lineHeight: 17,
   },
   messageOnly: {
-    color: "#f8fafc",
+    color: "#ffffff",
     fontSize: 13,
     marginTop: 0,
+    lineHeight: 18,
   },
 });

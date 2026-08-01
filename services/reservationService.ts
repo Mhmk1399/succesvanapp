@@ -7,6 +7,11 @@ type ReservationCreate = {
   office: string;
   startDate: string;
   endDate: string;
+  startDateDisplay?: string;
+  endDateDisplay?: string;
+  pickupTime?: string;
+  returnTime?: string;
+  driverAge?: string | number;
   dirverAge: string | number;
   totalPrice: number;
   messege?: string;
@@ -14,7 +19,13 @@ type ReservationCreate = {
     addOn: string;
     quantity: number;
     tierId?: string;
+    selectedTierIndex?: number;
   }>;
+  discountCode?: string | null;
+  selectedGear?: "manual" | "automatic";
+  pickupExtensionPrice?: number;
+  returnExtensionPrice?: number;
+  reservationType?: "Office" | "Website";
 };
 
 export const reservationService = {

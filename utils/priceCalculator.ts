@@ -1,3 +1,5 @@
+import { calculateBookingPrice } from "@/utils/bookingPrice";
+
 interface PricingTier {
   minDays: number;
   maxDays: number;
@@ -11,47 +13,13 @@ export function calculatePrice(
   extraHoursRate: number,
   sellOffer?: number
 ): number {
-  if (!pricingTiers || pricingTiers.length === 0) return 0;
-
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
-
-  const diffTime = end.getTime() - start.getTime();
-  const totalMinutes = diffTime / (1000 * 60);
-  const totalHours = Math.floor(totalMinutes / 60);
-  const remainingMinutes = totalMinutes % 60;
-
-  const billableHours = remainingMinutes > 15 ? totalHours + 1 : totalHours;
-
-  if (billableHours <= 0) return 0;
-
-  let totalDays = Math.floor(billableHours / 24);
-  const extraHours = billableHours % 24;
-  let extraHoursPrice = 0;
-
-  if (billableHours < 24) {
-    totalDays = 1;
-  } else if (extraHours > 6) {
-    totalDays += 1;
-  } else if (extraHours > 0) {
-    extraHoursPrice = extraHours * extraHoursRate;
-  }
-
-  const tier =
-    pricingTiers.find(
-      (t) => totalDays >= t.minDays && totalDays <= t.maxDays
-    ) || pricingTiers[pricingTiers.length - 1];
-
-  let pricePerDay = tier.pricePerDay;
-  
-  // Apply discount if selloffer exists
-  if (sellOffer && sellOffer > 0) {
-    pricePerDay = pricePerDay * (1 - sellOffer / 100);
-  }
-  
-  const daysPrice = totalDays * pricePerDay;
-
-  return daysPrice + extraHoursPrice;
+  return (
+    calculateBookingPrice({
+      startDate,
+      endDate,
+      pricingTiers,
+      extraHoursRate,
+      sellOffer,
+    })?.totalPrice || 0
+  );
 }

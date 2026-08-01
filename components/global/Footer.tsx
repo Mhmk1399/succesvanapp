@@ -65,7 +65,6 @@ export default function Footer() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Entrance animations
@@ -99,21 +98,6 @@ export default function Footer() {
       ])
     ).start();
 
-    // Shimmer animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmerAnim, {
-          toValue: 0,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
   }, []);
 
   const handleCall = async () => {
@@ -133,22 +117,6 @@ export default function Footer() {
 
   return (
     <View style={styles.container}>
-      {/* Background Glow Effects */}
-      <View style={styles.backgroundDecor}>
-        <Animated.View
-          style={[
-            styles.glowOrb,
-            styles.glowOrb2,
-            {
-              opacity: shimmerAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0.15, 0.3, 0.15],
-              }),
-            },
-          ]}
-        />
-      </View>
-
       <Animated.View
         style={[
           styles.content,
@@ -159,7 +127,7 @@ export default function Footer() {
         ]}
       >
         {/* Main Footer Card */}
-        <GlassView intensity={30} tint="dark" style={styles.mainCard}>
+        <GlassView intensity={14} tint="dark" style={styles.mainCard}>
           <LinearGradient
             colors={[
               "rgba(255,149,0,0.1)",
@@ -197,7 +165,7 @@ export default function Footer() {
 
             {/* Contact Actions */}
             <View style={styles.contactSection}>
-              <Text style={styles.sectionTitle}>Get in Touch</Text>
+              <Text style={styles.sectionTitle}>Need help?</Text>
               <View style={styles.actionsRow}>
                 <ActionButton
                   icon="call"
@@ -215,18 +183,9 @@ export default function Footer() {
               </View>
             </View>
 
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <View style={styles.dividerIcon}>
-                <Ionicons name="car-sport" size={16} color={COLORS.accent} />
-              </View>
-              <View style={styles.dividerLine} />
-            </View>
-
             {/* Social Links */}
             <View style={styles.socialSection}>
-              <Text style={styles.socialTitle}>Follow Us</Text>
+              <Text style={styles.socialTitle}>Follow Success Van Hire</Text>
               <View style={styles.socialRow}>
                 {SOCIAL_LINKS.map((social, index) => (
                   <SocialButton
@@ -246,13 +205,17 @@ export default function Footer() {
           <GlassView intensity={20} tint="dark" style={styles.bottomBlur}>
             <View style={styles.bottomContent}>
               <View style={styles.copyrightRow}>
-                <Ionicons name="heart" size={12} color={COLORS.accent} />
+                <Ionicons
+                  name="checkmark-circle"
+                  size={12}
+                  color={COLORS.accent}
+                />
                 <Text style={styles.copyright}>
-                  © {currentYear} Success Van Hire
+                  (c) {currentYear} Success Van Hire
                 </Text>
               </View>
 
-              <Text style={styles.madeWith}>Made with ❤️ in London</Text>
+              <Text style={styles.madeWith}>Made in London</Text>
             </View>
           </GlassView>
         </View>
@@ -421,9 +384,9 @@ function SocialButton({ social, index, onPress }: SocialButtonProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 40,
-    paddingBottom: 40,
+    paddingHorizontal: 14,
+    paddingTop: 18,
+    paddingBottom: 26,
     position: "relative",
   },
   backgroundDecor: {
@@ -469,31 +432,32 @@ const styles = StyleSheet.create({
     }),
   },
   content: {
-    gap: 16,
+    gap: 10,
   },
   mainCard: {
-    borderRadius: 28,
+    borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(15,23,42,0.86)",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 20 },
-        shadowOpacity: 0.3,
-        shadowRadius: 30,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.18,
+        shadowRadius: 16,
       },
       android: {
-        elevation: 15,
+        elevation: 6,
       },
     }),
   },
   mainGradient: {
-    padding: 24,
+    padding: 14,
   },
   logoSection: {
     alignItems: "center",
-    marginBottom: 28,
+    marginBottom: 16,
   },
   logoWrapper: {
     position: "relative",
@@ -507,24 +471,24 @@ const styles = StyleSheet.create({
     bottom: -10,
     backgroundColor: COLORS.accentGlow,
     borderRadius: 100,
-    opacity: 0.3,
+    opacity: 0.12,
   },
   logo: {
-    width: 140,
-    height: 100,
+    width: 108,
+    height: 68,
   },
   tagline: {
     color: COLORS.textSecondary,
-    fontSize: 15,
-    fontWeight: "600",
-    marginBottom: 12,
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 9,
   },
   ratingBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
     borderRadius: 100,
     backgroundColor: COLORS.glass,
     borderWidth: 1,
@@ -541,54 +505,54 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   contactSection: {
-    marginBottom: 28,
+    marginBottom: 16,
   },
   sectionTitle: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 14,
-    letterSpacing: -0.3,
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 10,
+    letterSpacing: 0,
   },
   actionsRow: {
-    gap: 12,
+    gap: 9,
   },
   actionWrapper: {
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: "hidden",
   },
   actionPressable: {
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: "hidden",
   },
   actionGradient: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    gap: 14,
+    padding: 12,
+    gap: 11,
   },
   actionOutline: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    gap: 14,
+    padding: 12,
+    gap: 11,
     backgroundColor: COLORS.glass,
     borderWidth: 1,
     borderColor: COLORS.glassBorder,
-    borderRadius: 18,
+    borderRadius: 16,
   },
   actionIconPrimary: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     backgroundColor: "rgba(0,0,0,0.15)",
     justifyContent: "center",
     alignItems: "center",
   },
   actionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     backgroundColor: COLORS.accentLight,
     justifyContent: "center",
     alignItems: "center",
@@ -598,24 +562,24 @@ const styles = StyleSheet.create({
   },
   actionTitlePrimary: {
     color: COLORS.dark,
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
   },
   actionSubtitlePrimary: {
     color: "rgba(0,0,0,0.6)",
-    fontSize: 13,
-    fontWeight: "500",
+    fontSize: 12,
+    fontWeight: "700",
     marginTop: 2,
   },
   actionTitle: {
     color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
   },
   actionSubtitle: {
     color: COLORS.textTertiary,
-    fontSize: 13,
-    fontWeight: "500",
+    fontSize: 12,
+    fontWeight: "700",
     marginTop: 2,
   },
   linksSection: {
@@ -671,23 +635,23 @@ const styles = StyleSheet.create({
   },
   socialSection: {
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 4,
   },
   socialTitle: {
     color: COLORS.textSecondary,
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 16,
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 10,
   },
   socialRow: {
     flexDirection: "row",
-    gap: 14,
+    gap: 9,
   },
   socialWrapper: {},
   socialButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
@@ -739,17 +703,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   bottomBar: {
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: "hidden",
   },
   bottomBlur: {
-    borderRadius: 20,
+    borderRadius: 16,
+    backgroundColor: "rgba(15,23,42,0.62)",
     overflow: "hidden",
   },
   bottomContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     alignItems: "center",
-    gap: 12,
+    gap: 5,
   },
   legalLinks: {
     flexDirection: "row",
@@ -781,8 +747,8 @@ const styles = StyleSheet.create({
   },
   copyright: {
     color: COLORS.textTertiary,
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
   },
   madeWith: {
     color: COLORS.textTertiary,

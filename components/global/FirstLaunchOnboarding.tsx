@@ -6,217 +6,340 @@ import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  Easing,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const ACCENT = "#ff9f1c";
+const ACCENT = "#ff9f0a";
+const NAVY = "#081523";
+
+const VAN_IMAGES = [
+  "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/louton.png",
+  "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/14seater.png",
+  "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/shortee.png",
+];
 
 type Props = {
   onFinish: () => void;
 };
 
 type Slide = {
-  title: string;
+  eyebrow: string;
+  titleTop: string;
+  titleAccent: string;
+  titleBottom: string;
   description: string;
-  image: number;
+  image: string;
 };
 
 const SLIDES: Slide[] = [
   {
-    title: "Take control with flexible self-drive vans",
+    eyebrow: "London van booking",
+    titleTop: "Fast &",
+    titleAccent: "Reliable",
+    titleBottom: "Van Hire",
     description:
-      "Modern, reliable vehicles ready for moving, deliveries and business needs.",
-    image: require("@/assets/images/screen1.png"),
+      "Vans across London for moves, deliveries and business trips. Book in under 1 minute.",
+    image: VAN_IMAGES[0],
   },
   {
-    title: "From a day to months",
+    eyebrow: "Choose your perfect size",
+    titleTop: "Room for",
+    titleAccent: "Every",
+    titleBottom: "Journey",
     description:
-      "Daily, weekly or monthly hire on your schedule, with simple booking from your phone.",
-    image: require("@/assets/images/screen3.png"),
+      "From compact vans to 14 seaters, pick the right vehicle for your route and schedule.",
+    image: VAN_IMAGES[1],
   },
   {
-    title: "Save more across the UK",
+    eyebrow: "Ready when you are",
+    titleTop: "Simple",
+    titleAccent: "Flexible",
+    titleBottom: "Booking",
     description:
-      "Great value long-term rates and UK-wide service for customers who need more time.",
-    image: require("@/assets/images/screen2.png"),
+      "Daily, weekly and longer hire options with clear pricing and support across London.",
+    image: VAN_IMAGES[2],
   },
 ];
 
 export default function FirstLaunchOnboarding({ onFinish }: Props) {
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
   const [index, setIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const imageScale = useRef(new Animated.Value(1)).current;
-  const progressAnim = useRef(new Animated.Value(1 / SLIDES.length)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const isTransitioning = useRef(false);
 
   const activeSlide = SLIDES[index];
   const isLast = index === SLIDES.length - 1;
-
+  const compactHeight = height < 720;
+  const panelWidth = Math.min(width - 26, 390);
+  const panelHeight = Math.min(
+    Math.max(height - Math.max(insets.top + insets.bottom, 20) - 24, 620),
+    780,
+  );
+  const vanHeight = compactHeight ? 235 : 300;
   useEffect(() => {
-    imageScale.setValue(1.04);
-    Animated.parallel([
-      Animated.spring(progressAnim, {
-        toValue: (index + 1) / SLIDES.length,
-        tension: 90,
-        friction: 14,
-        useNativeDriver: false,
-      }),
-      Animated.timing(imageScale, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [imageScale, index, progressAnim]);
+    void Image.prefetch(
+      SLIDES.map((slide) => slide.image),
+      "memory-disk",
+    ).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    imageScale.setValue(1.045);
+    Animated.timing(imageScale, {
+      toValue: 1,
+      duration: 760,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [imageScale, index]);
 
-  const animateToNext = (nextIndex: number) => {
+  const animateToSlide = (nextIndex: number) => {
+    if (isTransitioning.current) return;
+
+    isTransitioning.current = true;
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 170,
+        duration: 160,
+        easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: -18,
-        duration: 170,
+        duration: 160,
+        easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setIndex(nextIndex);
+    ]).start(({ finished }) => {
+      if (!finished) {
+        isTransitioning.current = false;
+        return;
+      }
+
+      // ابتدا مقادیر انیمیشن را برای اسلاید جدید آماده می‌کنیم
+      fadeAnim.setValue(0);
       slideAnim.setValue(22);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 280,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 90,
-          friction: 12,
-          useNativeDriver: true,
-        }),
-      ]).start();
+
+      // سپس محتوای اسلاید عوض می‌شود
+      setIndex(nextIndex);
+
+      // صبر می‌کنیم React اسلاید جدید را رندر کند
+      requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 260,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            tension: 90,
+            friction: 12,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          isTransitioning.current = false;
+        });
+      });
     });
   };
 
-  const handleNext = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handleNext = () => {
+    if (isTransitioning.current) return;
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     if (isLast) {
       onFinish();
       return;
     }
 
-    animateToNext(index + 1);
+    animateToSlide(index + 1);
   };
-
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0%", "100%"],
-  });
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" />
-
-      <Animated.View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: imageScale }],
-          },
-        ]}
-      >
-        <Image
-          source={activeSlide.image}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={220}
-          cachePolicy="memory-disk"
-        />
-      </Animated.View>
-
+      <StatusBar style="dark" />
       <LinearGradient
-        colors={[
-          "rgba(3,7,18,0.76)",
-          "rgba(3,7,18,0.42)",
-          "rgba(3,7,18,0.08)",
-          "rgba(3,7,18,0.46)",
-          "rgba(3,7,18,0.86)",
-        ]}
-        locations={[0, 0.22, 0.5, 0.74, 1]}
+        colors={["#ffe6b4", "#ffd085", "#fff3d3"]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
 
       <View
         style={[
-          styles.content,
+          styles.panel,
           {
-            paddingTop: Math.max(insets.top, 18) + 18,
-            paddingBottom: Math.max(insets.bottom, 18) + 18,
+            minHeight: panelHeight,
           },
         ]}
       >
-        <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
-        </View>
+        <LinearGradient
+          colors={[NAVY, "#07101d", "#0b1724", "#7d500f", "#d88313"]}
+          locations={[0, 0.38, 0.62, 0.86, 1]}
+          style={StyleSheet.absoluteFill}
+        />
 
-        <Animated.View
+        <View style={styles.orbitLarge} pointerEvents="none" />
+        <View style={styles.orbitSmall} pointerEvents="none" />
+        <View style={styles.swoosh} pointerEvents="none" />
+        <Ionicons
+          name="star"
+          size={10}
+          color="rgba(255,159,10,0.48)"
+          style={styles.starTop}
+        />
+        <Ionicons
+          name="star"
+          size={13}
+          color="rgba(255,159,10,0.45)"
+          style={styles.starMid}
+        />
+        <View style={styles.sparkDot} />
+
+        <View
           style={[
-            styles.copyBlock,
+            styles.panelContent,
             {
-              opacity: fadeAnim,
-              transform: [{ translateX: slideAnim }],
+              paddingTop: compactHeight ? 24 : 38,
+              paddingBottom: compactHeight ? 18 : 24,
             },
           ]}
         >
-          <Text style={styles.title}>{activeSlide.title}</Text>
-          <Text style={styles.description}>{activeSlide.description}</Text>
-        </Animated.View>
-
-        <View style={styles.footer}>
-          <View style={styles.dots}>
-            {SLIDES.map((slide, slideIndex) => (
-              <View
-                key={slide.title}
-                style={[
-                  styles.dot,
-                  slideIndex === index && styles.dotActive,
-                ]}
-              />
-            ))}
+          <View style={styles.brand}>
+            <Image
+              source={
+                "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png"
+              }
+              style={styles.logo}
+              contentFit="fill"
+            />
           </View>
 
-          <Pressable
-            onPress={handleNext}
-            style={({ pressed }) => [
-              styles.button,
-              pressed && styles.buttonPressed,
+          <Animated.View
+            style={[
+              styles.copyBlock,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateX: slideAnim }],
+              },
             ]}
           >
-            <LinearGradient
-              colors={["#ffbf5b", "#ff9500"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.buttonGradient}
+            <Text style={styles.eyebrow}>{activeSlide.eyebrow}</Text>
+            <Text style={[styles.title, compactHeight && styles.titleCompact]}>
+              {activeSlide.titleTop}
+              {"\n"}
+              <Text style={styles.titleAccent}>{activeSlide.titleAccent}</Text>
+              {"\n"}
+              {activeSlide.titleBottom}
+            </Text>
+            <View style={styles.titleRule} />
+            <Text
+              style={[
+                styles.description,
+                compactHeight && styles.descriptionCompact,
+              ]}
             >
-              <Text style={styles.buttonText}>
-                {isLast ? "Start booking" : "Next"}
-              </Text>
-              <Ionicons
-                name={isLast ? "checkmark" : "arrow-forward"}
-                size={20}
-                color="#111827"
+              {activeSlide.description}
+            </Text>
+          </Animated.View>
+
+          <View style={styles.visualArea}>
+            <Animated.View
+              style={[
+                styles.vanWrap,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateX: slideAnim }, { scale: imageScale }],
+                },
+              ]}
+            >
+              <Image
+                key={activeSlide.image}
+                source={{ uri: activeSlide.image }}
+                style={[styles.vanImage, { height: vanHeight }]}
+                contentFit="contain"
+                transition={0}
+                cachePolicy="memory-disk"
               />
-            </LinearGradient>
-          </Pressable>
+            </Animated.View>
+          </View>
+
+          <View style={styles.footer}>
+            <View style={styles.dots}>
+              {SLIDES.map((slide, slideIndex) => (
+                <View
+                  key={slide.titleBottom}
+                  style={[styles.dot, slideIndex === index && styles.dotActive]}
+                />
+              ))}
+            </View>
+
+            <Pressable
+              onPress={handleNext}
+              onPressIn={() => {
+                Animated.spring(buttonScale, {
+                  toValue: 0.98,
+                  useNativeDriver: true,
+                }).start();
+              }}
+              onPressOut={() => {
+                Animated.spring(buttonScale, {
+                  toValue: 1,
+                  friction: 5,
+                  tension: 120,
+                  useNativeDriver: true,
+                }).start();
+              }}
+              style={styles.buttonHit}
+            >
+              <Animated.View
+                style={[styles.button, { transform: [{ scale: buttonScale }] }]}
+              >
+                <LinearGradient
+                  colors={["#ffbd45", "#ff9700"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.buttonGradient}
+                >
+                  <Text style={styles.buttonText}>
+                    {isLast ? "Start Booking" : "Get Started"}
+                  </Text>
+                  <View style={styles.buttonIcon}>
+                    <Ionicons
+                      name={isLast ? "checkmark" : "arrow-forward"}
+                      size={23}
+                      color="#ffffff"
+                    />
+                  </View>
+                </LinearGradient>
+              </Animated.View>
+            </Pressable>
+
+            <View style={styles.trustRow}>
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={17}
+                color="rgba(255,255,255,0.68)"
+              />
+              <Text style={styles.trustText}>
+                Trusted by thousands in London
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
     </View>
@@ -226,88 +349,232 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#030712",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffd790",
   },
-  content: {
+  panel: {
     flex: 1,
-    paddingHorizontal: 22,
-    justifyContent: "space-between",
+    borderRadius: 34,
+    overflow: "hidden",
+    backgroundColor: NAVY,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#271604",
+        shadowOpacity: 0.28,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 14 },
+      },
+      android: {
+        elevation: 14,
+      },
+    }),
   },
-  progressTrack: {
+  panelContent: {
+    flex: 1,
+    paddingHorizontal: 34,
+  },
+  orbitLarge: {
     position: "absolute",
-    top: 8,
-    left: 22,
-    right: 22,
+    width: 230,
+    height: 230,
+    borderRadius: 115,
+    borderWidth: 54,
+    borderColor: "rgba(255,159,10,0.12)",
+    top: 98,
+    right: -122,
+  },
+  orbitSmall: {
+    position: "absolute",
+    width: 94,
+    height: 94,
+    borderRadius: 47,
+    backgroundColor: "rgba(7,20,35,0.88)",
+    top: 184,
+    right: -32,
+  },
+  swoosh: {
+    position: "absolute",
+    width: 460,
+    height: 310,
+    borderRadius: 230,
+    backgroundColor: "rgba(255,167,23,0.38)",
+    left: -118,
+    bottom: -112,
+    transform: [{ rotate: "-17deg" }],
+  },
+  starTop: {
+    position: "absolute",
+    top: 66,
+    left: 36,
+  },
+  starMid: {
+    position: "absolute",
+    top: 232,
+    right: 76,
+  },
+  sparkDot: {
+    position: "absolute",
+    width: 4,
     height: 4,
     borderRadius: 2,
-    overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "#ff2f3d",
+    top: 306,
+    right: 118,
   },
-  progressFill: {
-    height: "100%",
-    borderRadius: 2,
-    backgroundColor: ACCENT,
+  brand: {
+    alignItems: "center",
+  },
+  logo: {
+    width: 100,
+    height: 100,
+  },
+  brandText: {
+    color: "#f8fafc",
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: -4,
+    letterSpacing: 0,
   },
   copyBlock: {
-    alignItems: "center",
-    paddingTop: 62,
+    alignItems: "flex-start",
+    marginTop: 32,
+  },
+  eyebrow: {
+    color: "rgba(255,255,255,0.42)",
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 8,
   },
   title: {
     color: "#ffffff",
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 42,
+    lineHeight: 50,
     fontWeight: "900",
-    textAlign: "center",
-    maxWidth: 350,
+    letterSpacing: 0,
+  },
+  titleCompact: {
+    fontSize: 37,
+    lineHeight: 43,
+  },
+  titleAccent: {
+    color: ACCENT,
+  },
+  titleRule: {
+    width: 43,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: ACCENT,
+    marginTop: 18,
+    marginBottom: 18,
   },
   description: {
-    color: "rgba(255,255,255,0.82)",
+    width: "82%",
+    color: "rgba(255,255,255,0.72)",
     fontSize: 15,
-    lineHeight: 23,
-    fontWeight: "700",
-    textAlign: "center",
-    marginTop: 14,
-    maxWidth: 342,
+    lineHeight: 24,
+    fontWeight: "600",
+  },
+  descriptionCompact: {
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  visualArea: {
+    flex: 1,
+    justifyContent: "flex-end",
+    minHeight: 220,
+    marginHorizontal: -34,
+  },
+  vanWrap: {
+    justifyContent: "flex-end",
+    marginBottom: -10,
+  },
+  vanShadow: {
+    position: "absolute",
+    alignSelf: "center",
+    width: "78%",
+    height: 32,
+    borderRadius: 80,
+    bottom: 24,
+    backgroundColor: "rgba(0,0,0,0.26)",
+    transform: [{ scaleX: 1.05 }],
+  },
+  vanImage: {
+    width: "108%",
+    alignSelf: "center",
   },
   footer: {
-    gap: 18,
+    paddingTop: 8,
   },
   dots: {
-    height: 10,
+    height: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+    marginBottom: 24,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.28)",
+  },
+  dotActive: {
+    backgroundColor: "#ffad19",
+  },
+  buttonHit: {
+    borderRadius: 30,
+  },
+  button: {
+    borderRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#ff9700",
+        shadowOpacity: 0.4,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 7,
+      },
+    }),
+  },
+  buttonGradient: {
+    minHeight: 61,
+    borderRadius: 30,
+    paddingLeft: 22,
+    paddingRight: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonText: {
+    flex: 1,
+    color: "#07111f",
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  buttonIcon: {
+    width: 51,
+    height: 51,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#071523",
+  },
+  trustRow: {
+    minHeight: 35,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
+    marginTop: 12,
   },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.32)",
-  },
-  dotActive: {
-    width: 25,
-    backgroundColor: ACCENT,
-  },
-  button: {
-    borderRadius: 25,
-    overflow: "hidden",
-  },
-  buttonPressed: {
-    transform: [{ scale: 0.985 }],
-    opacity: 0.92,
-  },
-  buttonGradient: {
-    minHeight: 64,
-    borderRadius: 25,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  buttonText: {
-    color: "#111827",
-    fontSize: 18,
-    fontWeight: "900",
+  trustText: {
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

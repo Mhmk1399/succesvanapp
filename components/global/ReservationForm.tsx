@@ -1,11 +1,25 @@
-// components/ReservationForm.tsx
 import { useAlert } from "@/components/global/CustomAlert";
 import { useToast } from "@/components/global/AppToast";
 import LoginRequiredModal from "@/components/global/LoginRequiredModal";
+import BookingCalendarChrome, {
+  BOOKING_CALENDAR_THEME,
+} from "@/components/global/BookingCalendarChrome";
 import { useAuth } from "@/contexts/AuthContext";
 import { officeService } from "@/services/officeService";
 import { typeService } from "@/services/typeService";
 import { Category, Type, Office, WorkingTime } from "@/types/type";
+import {
+  calculateOfficeExtensionPrices,
+  getAvailableTimeSlots as getSharedAvailableTimeSlots,
+  isDateDisabled as isSharedDateDisabled,
+} from "@/utils/bookingSchedule";
+import { getMinDriverAge } from "@/utils/bookingPrice";
+import {
+  createLondonDateTime,
+  formatDateForStorage,
+  getLondonTime as getSharedLondonTime,
+  syncServerClock,
+} from "@/utils/londonTime";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import GlassView from "@/components/global/GlassView";
@@ -13,7 +27,7 @@ import { appTheme } from "@/constants/appTheme";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -40,33 +54,27 @@ const DARK = "#0f172a";
 const { height } = Dimensions.get("window");
 
 const getLondonTime = (): Date => {
-  const now = new Date();
-  const londonStr = now.toLocaleString("en-US", {
-    timeZone: "Europe/London",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  const [datePart, timePart] = londonStr.split(", ");
-  if (!datePart || !timePart) {
-    console.log("Failed to split London time string");
-    return new Date();
-  }
-  const [monthStr, dayStr, yearStr] = datePart.split("/");
-  const [hourStr, minuteStr, secondStr] = timePart.split(":");
-  const year = parseInt(yearStr, 10);
-  const month = parseInt(monthStr, 10) - 1;
-  const day = parseInt(dayStr, 10);
-  const hour = parseInt(hourStr, 10);
-  const minute = parseInt(minuteStr, 10);
-  const second = parseInt(secondStr, 10);
-  const londonDate = new Date(Date.UTC(year, month, day, hour, minute, second));
-  return londonDate;
+  return getSharedLondonTime();
 };
+
+const parseStoredDate = (displayDate?: string, isoDate?: string) => {
+  const source = displayDate || isoDate;
+  if (!source) return null;
+  const datePart = source.split("T")[0];
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const formatCalendarLabel = (date: Date | null) =>
+  date
+    ? date.toLocaleDateString("en-GB", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "No date selected yet";
 
 type PickerField =
   | "pickupDate"
@@ -201,8 +209,10 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
             />
           </Animated.View>
           <View style={[styles.mainButtonLeft, { zIndex: 2 }]}>
-            <Ionicons name="flash-outline" size={22} color={DARK} />
-            <Text style={styles.mainButtonText}>Quick Reservation</Text>
+            <View style={styles.mainButtonIcon}>
+              <Ionicons name="flash" size={19} color="#ffffff" />
+            </View>
+            <Text style={styles.mainButtonText}>Reserve a Van</Text>
           </View>
           <View style={[styles.mainButtonRight, { zIndex: 2 }]}>
             <Ionicons name="calendar-outline" size={16} color={DARK} />
@@ -230,14 +240,33 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
         <Animated.View
           style={[
             styles.sheetContainer,
+            reservationUi.sheetContainer,
             {
               transform: [{ translateY }],
             },
           ]}
         >
-          <GlassView intensity={80} tint="dark" style={styles.blurContainer}>
-            <View {...panResponder.panHandlers} style={styles.handleArea}>
-              <View style={styles.sheetHandle} />
+          <GlassView
+            intensity={100}
+            tint="dark"
+            style={[styles.blurContainer, reservationUi.sheetSurface]}
+          >
+            <LinearGradient
+              pointerEvents="none"
+              colors={[
+                "rgba(29,34,40,0.98)",
+                "rgba(13,19,27,0.99)",
+                "rgba(7,13,21,1)",
+              ]}
+              locations={[0, 0.42, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View pointerEvents="none" style={reservationUi.sheetTopGlow} />
+            <View
+              {...panResponder.panHandlers}
+              style={reservationUi.handleArea}
+            >
+              <View style={reservationUi.sheetHandle} />
             </View>
 
             <ReservationSheetContent
@@ -296,6 +325,14 @@ function ReservationSheetContent({
 
   const [selectedOffice, setSelectedOffice] = useState<string>("");
   const [selectedType, setSelectedType] = useState<string>("");
+  const selectedTypeName = useMemo(
+    () => type.find((item) => item._id === selectedType)?.name,
+    [selectedType, type],
+  );
+  const minDriverAge = useMemo(
+    () => getMinDriverAge(selectedTypeName),
+    [selectedTypeName],
+  );
 
   const [pickupDate, setPickupDate] = useState<Date | null>(new Date());
   const [pickupTime, setPickupTime] = useState<string>("");
@@ -373,14 +410,24 @@ function ReservationSheetContent({
       extraHoursRate?: number;
       cargo?: string;
       selloffer?: number;
+      rules?: { key?: string; value?: string; _id?: string }[];
+      requiredLicense?: string;
     }[]
   >([]);
   const [loadingVans, setLoadingVans] = useState(false);
 
+  useEffect(() => {
+    if (isSheetOpen) {
+      syncServerClock().catch((error) => {
+        console.log("Failed to sync server clock:", error);
+      });
+    }
+  }, [isSheetOpen]);
+
   // Sync dateRange with pickupDate and returnDate
   useEffect(() => {
     if (pickupDate && returnDate) {
-       setDateRange([
+      setDateRange([
         {
           startDate: pickupDate,
           endDate: returnDate,
@@ -388,7 +435,7 @@ function ReservationSheetContent({
         },
       ]);
     } else if (pickupDate) {
-       setDateRange([
+      setDateRange([
         {
           startDate: pickupDate,
           endDate: pickupDate,
@@ -419,13 +466,13 @@ function ReservationSheetContent({
           setSelectedOffice(data.office || "");
           setSelectedType(data.type || "");
           setPickupDate(
-            data.pickupDate ? new Date(data.pickupDate) : new Date(),
+            parseStoredDate(data.startDateDisplay, data.pickupDate) ||
+              new Date(),
           );
           setPickupTime(data.pickupTime || "");
           setReturnDate(
-            data.returnDate
-              ? new Date(data.returnDate)
-              : new Date(Date.now() + 24 * 60 * 60 * 1000),
+            parseStoredDate(data.endDateDisplay, data.returnDate) ||
+              new Date(Date.now() + 24 * 60 * 60 * 1000),
           );
           setReturnTime(data.returnTime || "");
           setDriverAge(data.driverAge || "");
@@ -525,7 +572,7 @@ function ReservationSheetContent({
       )
         .then((res) => res.json())
         .then((data) => {
-           if (data.data?.reservedSlots) {
+          if (data.data?.reservedSlots) {
             // Only keep slots that END on this return date
             const filteredSlots = data.data.reservedSlots.filter(
               (slot: {
@@ -538,7 +585,7 @@ function ReservationSheetContent({
                 return slot.endDate === endDateStr;
               },
             );
-             setEndDateReservedSlots(filteredSlots);
+            setEndDateReservedSlots(filteredSlots);
           }
         })
         .catch((err) => {
@@ -548,36 +595,14 @@ function ReservationSheetContent({
     }
   }, [selectedOffice, returnDate]);
 
-    const getSelectedOffice = (): Office | undefined =>
+  const getSelectedOffice = (): Office | undefined =>
     offices.find((o) => o._id === selectedOffice);
 
   // ---- DATE/TIME HELPERS (ported from web) ----
 
   const isDateDisabled = (date: Date) => {
     const office = getSelectedOffice();
-    if (!office) return false;
-
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const dayName = [
-      "sunday",
-      "monday",
-      "tuesday",
-      "wednesday",
-      "thursday",
-      "friday",
-      "saturday",
-    ][date.getDay()];
-
-    const specialDay = office.specialDays?.find(
-      (sd) => sd.month === month && sd.day === day,
-    );
-    if (specialDay && !specialDay.isOpen) return true;
-
-    const workingDay = office.workingTime?.find((w) => w.day === dayName);
-    if (workingDay && !workingDay.isOpen) return true;
-
-    return false;
+    return isSharedDateDisabled(date, office);
   };
 
   const getAvailableTimeSlots = (
@@ -585,80 +610,11 @@ function ReservationSheetContent({
     isPickup: boolean = true,
   ) => {
     const office = getSelectedOffice();
-    if (!office || !date)
-      return {
-        start: "00:00",
-        end: "23:59",
-        normalStart: "00:00",
-        normalEnd: "23:59",
-      };
-
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const dayName = [
-      "sunday",
-      "monday",
-      "tuesday",
-      "wednesday",
-      "thursday",
-      "friday",
-      "saturday",
-    ][date.getDay()];
-
-    const specialDay = office.specialDays?.find(
-      (sd) => sd.month === month && sd.day === day,
+    return getSharedAvailableTimeSlots(
+      date,
+      office,
+      isPickup ? "pickup" : "return",
     );
-    if (specialDay && specialDay.isOpen) {
-      return {
-        start: specialDay.startTime || "00:00",
-        end: specialDay.endTime || "23:59",
-        normalStart: specialDay.startTime || "00:00",
-        normalEnd: specialDay.endTime || "23:59",
-      };
-    }
-
-    const workingDay = office.workingTime?.find((w) => w.day === dayName);
-    if (workingDay && workingDay.isOpen) {
-      let start = workingDay.startTime || "00:00";
-      let end = workingDay.endTime || "23:59";
-      const normalStart = start;
-      const normalEnd = end;
-
-      const extension = isPickup
-        ? workingDay.pickupExtension
-        : workingDay.returnExtension;
-      if (extension) {
-        const [startH, startM] = start.split(":").map(Number);
-        const [endH, endM] = end.split(":").map(Number);
-        const extendedStartMin = Math.max(
-          0,
-          startH * 60 + startM - extension.hoursBefore * 60,
-        );
-        const extendedEndMin = Math.min(
-          1439,
-          endH * 60 + endM + extension.hoursAfter * 60,
-        );
-        start = `${Math.floor(extendedStartMin / 60)
-          .toString()
-          .padStart(2, "0")}:${(extendedStartMin % 60)
-          .toString()
-          .padStart(2, "0")}`;
-        end = `${Math.floor(extendedEndMin / 60)
-          .toString()
-          .padStart(2, "0")}:${(extendedEndMin % 60)
-          .toString()
-          .padStart(2, "0")}`;
-      }
-
-      return { start, end, normalStart, normalEnd };
-    }
-
-    return {
-      start: "00:00",
-      end: "23:59",
-      normalStart: "00:00",
-      normalEnd: "23:59",
-    };
   };
 
   // ---- FORMATTERS ----
@@ -704,8 +660,6 @@ function ReservationSheetContent({
   };
 
   const selectDate = (date: Date) => {
-   
-
     if (isDateDisabled(date)) {
       showEitherAlert("Office Closed", "This date is not available.");
       return;
@@ -713,7 +667,7 @@ function ReservationSheetContent({
 
     Haptics.selectionAsync();
     if (selectingDate === "pickup") {
-       setTempPickupDate(date);
+      setTempPickupDate(date);
       setPickupDate(date);
       setReturnDate(null);
       setSelectingDate("return");
@@ -726,7 +680,7 @@ function ReservationSheetContent({
         );
         return;
       }
-       setReturnDate(date);
+      setReturnDate(date);
       setDateRangeModalVisible(false);
       setSelectingDate("pickup");
       setTempPickupDate(null);
@@ -744,8 +698,6 @@ function ReservationSheetContent({
   };
 
   const selectTime = (time: string) => {
-   
-
     if (timeModalField === "pickupTime") {
       console.log("[selectTime] Setting pickupTime to:", time);
       setPickupTime(time);
@@ -813,8 +765,6 @@ function ReservationSheetContent({
   const handleBlur = () => setFocusedInput(null);
 
   const handleSubmit = async () => {
-     
-
     if (!selectedOffice || !selectedType) {
       showEitherAlert("Missing details", "Please select office and category.");
       return;
@@ -834,8 +784,11 @@ function ReservationSheetContent({
       return;
     }
     const age = Number(driverAge);
-    if (!driverAge || age < 23 || age > 80) {
-      showEitherAlert("Driver age", "Driver age must be between 23 and 80.");
+    if (!driverAge || age < minDriverAge || age > 80) {
+      showEitherAlert(
+        "Driver age",
+        `Driver age must be between ${minDriverAge} and 80.`,
+      );
       return;
     }
 
@@ -864,8 +817,10 @@ function ReservationSheetContent({
         JSON.stringify({
           office: selectedOffice,
           type: selectedType,
-          pickupDate: pickupDate?.toISOString(),
-          returnDate: returnDate?.toISOString(),
+          pickupDate: createLondonDateTime(pickupDate!, pickupTime),
+          returnDate: createLondonDateTime(returnDate!, returnTime),
+          startDateDisplay: formatDateForStorage(pickupDate!),
+          endDateDisplay: formatDateForStorage(returnDate!),
           pickupTime,
           returnTime,
           driverAge,
@@ -880,78 +835,34 @@ function ReservationSheetContent({
 
     const officeObj = getSelectedOffice();
 
-    const [pickupHour, pickupMinute] = pickupTime.split(":").map(Number);
-    const [returnHour, returnMinute] = returnTime.split(":").map(Number);
+    const { pickupExtension, returnExtension } = officeObj
+      ? calculateOfficeExtensionPrices({
+          office: officeObj,
+          pickupDate,
+          pickupTime,
+          returnDate,
+          returnTime,
+        })
+      : { pickupExtension: 0, returnExtension: 0 };
 
-    const startDateTime = new Date(pickupDate || new Date());
-    startDateTime.setHours(pickupHour, pickupMinute, 0, 0);
-
-    const endDateTime = new Date(returnDate || new Date());
-    endDateTime.setHours(returnHour, returnMinute, 0, 0);
-
-    // Calculate extension fees
-    let pickupExtensionFee = 0;
-    let returnExtensionFee = 0;
-
-    if (pickupDate && pickupTime) {
-      const dayName = [
-        "sunday",
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-      ][pickupDate.getDay()];
-      const workingDay = officeObj?.workingTime?.find(
-        (w: WorkingTime) => w.day === dayName,
-      );
-      if (workingDay?.pickupExtension) {
-        const slots = getAvailableTimeSlots(pickupDate, true);
-        const isExtension =
-          pickupTime < slots.normalStart || pickupTime > slots.normalEnd;
-        if (isExtension) {
-          pickupExtensionFee = workingDay.pickupExtension.flatPrice;
-        }
-      }
-    }
-
-    if (returnDate && returnTime) {
-      const dayName = [
-        "sunday",
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-      ][returnDate.getDay()];
-      const workingDay = officeObj?.workingTime?.find(
-        (w: WorkingTime) => w.day === dayName,
-      );
-      if (workingDay?.returnExtension) {
-        const slots = getAvailableTimeSlots(returnDate, false);
-        const isExtension =
-          returnTime < slots.normalStart || returnTime > slots.normalEnd;
-        if (isExtension) {
-          returnExtensionFee = workingDay.returnExtension.flatPrice;
-        }
-      }
-    }
+    const startDateIso = createLondonDateTime(pickupDate!, pickupTime);
+    const endDateIso = createLondonDateTime(returnDate!, returnTime);
 
     const reservationPayload = {
       office: selectedOffice,
       officeName: officeObj?.name ?? "",
       type: selectedType,
-      pickupDate: startDateTime.toISOString(),
-      returnDate: endDateTime.toISOString(),
+      pickupDate: startDateIso,
+      returnDate: endDateIso,
+      startDateDisplay: formatDateForStorage(pickupDate!),
+      endDateDisplay: formatDateForStorage(returnDate!),
       pickupTime: pickupTime,
       returnTime: returnTime,
       driverAge,
-      pickupExtensionFee,
-      returnExtensionFee,
+      pickupExtensionFee: pickupExtension,
+      returnExtensionFee: returnExtension,
     };
- 
+
     setIsSubmitting(false);
     setLoadingVans(true);
 
@@ -1006,9 +917,10 @@ function ReservationSheetContent({
             extraHoursRate: cat.extrahoursRate || 0,
             expert: cat.expert || "",
             selloffer: cat.selloffer || 0,
+            rules: Array.isArray(cat.rules) ? cat.rules : [],
+            requiredLicense: cat.requiredLicense,
           }));
 
- 
         setAvailableVans(filteredVans);
       }
     } catch (error) {
@@ -1089,6 +1001,17 @@ function ReservationSheetContent({
 
     return { minimumDate: minTime, maximumDate: maxTime };
   };
+
+  // Presentation-only presets. They continue to write into the original
+  // driverAge state, so validation and reservation payload logic remain intact.
+  const driverAgeOptions = [
+    { label: "18–21", min: 18, max: 21 },
+    { label: "22–24", min: 22, max: 24 },
+    { label: "25–29", min: 25, max: 29 },
+    { label: "30–69", min: 30, max: 69 },
+    { label: "70+", min: 70, max: 80 },
+  ];
+  const numericDriverAge = Number(driverAge);
 
   return (
     <>
@@ -1314,147 +1237,121 @@ function ReservationSheetContent({
             onPress={(e) => e.stopPropagation()}
             style={sheetStyles.calendarModalBox}
           >
-            <View style={sheetStyles.timeModalHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={sheetStyles.selectTitle}>
-                  {selectingDate === "pickup"
-                    ? "📅 Pickup Date"
-                    : "📅 Return Date"}
-                </Text>
-                <Text style={{ color: "#9ca3af", fontSize: 11, marginTop: 4 }}>
-                  {selectingDate === "pickup"
-                    ? pickupDate
-                      ? `Selected: ${formatDate(pickupDate)}`
-                      : "Choose your pickup date"
-                    : returnDate
-                      ? `Selected: ${formatDate(returnDate)}`
-                      : "Choose your return date"}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => {
-                  setDateRangeModalVisible(false);
-                  setSelectingDate("pickup");
-                }}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "rgba(255,255,255,0.1)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="close" size={20} color="#e5e7eb" />
-              </Pressable>
-            </View>
-            <Calendar
-              minDate={
-                selectingDate === "pickup"
-                  ? (() => {
-                      const londonTime = getLondonTime();
-                      const londonHour = londonTime.getUTCHours();
-                      const minDate = new Date();
-
-                      if (londonHour < 16) {
-                        minDate.setDate(minDate.getDate() + 1);
-                      } else {
-                        minDate.setDate(minDate.getDate() + 2);
-                      }
-                      return minDate.toISOString().split("T")[0];
-                    })()
-                  : pickupDate?.toISOString().split("T")[0]
-              }
-              maxDate={
-                selectingDate === "return" && pickupDate
-                  ? (() => {
-                      const maxDate = new Date(pickupDate);
-                      maxDate.setDate(maxDate.getDate() + 30);
-                      return maxDate.toISOString().split("T")[0];
-                    })()
-                  : undefined
-              }
-              onDayPress={(day) => selectDate(new Date(day.timestamp))}
-              markedDates={(() => {
-                const marked: any = {};
-                const office = getSelectedOffice();
-                const currentPickup = tempPickupDate || pickupDate;
-
-                // Mark range between pickup and return
-                if (currentPickup && returnDate && selectingDate === "pickup") {
-                  const start = new Date(currentPickup);
-                  const end = new Date(returnDate);
-                  const current = new Date(start);
-
-                  while (current <= end) {
-                    const dateStr = current.toISOString().split("T")[0];
-                    const isStart = current.getTime() === start.getTime();
-                    const isEnd = current.getTime() === end.getTime();
-
-                    marked[dateStr] = {
-                      color: isStart || isEnd ? ACCENT : "rgba(254,154,0,0.3)",
-                      textColor: isStart || isEnd ? "#fff" : "#f9fafb",
-                      startingDay: isStart,
-                      endingDay: isEnd,
-                    };
-
-                    current.setDate(current.getDate() + 1);
-                  }
-                } else if (currentPickup) {
-                  const pickupStr = currentPickup.toISOString().split("T")[0];
-                  marked[pickupStr] = {
-                    selected: true,
-                    selectedColor: ACCENT,
-                    selectedTextColor: "#ffffff",
-                  };
-                }
-
-                // Mark disabled dates (48-hour restriction + office closed days)
-                const londonTime = getLondonTime();
-                const londonHour = londonTime.getUTCHours();
-                const today = new Date();
-                const minAllowedDate = new Date(today);
-
-                if (londonHour < 16) {
-                  minAllowedDate.setDate(today.getDate() + 1);
-                } else {
-                  minAllowedDate.setDate(today.getDate() + 2);
-                }
-
-                for (let i = 0; i < 60; i++) {
-                  const checkDate = new Date(today);
-                  checkDate.setDate(today.getDate() + i);
-                  const dateStr = checkDate.toISOString().split("T")[0];
-
-                  if (checkDate < minAllowedDate) {
-                    marked[dateStr] = {
-                      disabled: true,
-                      disableTouchEvent: true,
-                    };
-                  } else if (office && isDateDisabled(checkDate)) {
-                    marked[dateStr] = {
-                      disabled: true,
-                      disableTouchEvent: true,
-                    };
-                  }
-                }
-
-                return marked;
-              })()}
-              markingType="period"
-              theme={{
-                calendarBackground: "transparent",
-                textSectionTitleColor: "#9ca3af",
-                selectedDayBackgroundColor: ACCENT,
-                selectedDayTextColor: ACCENT,
-
-                todayTextColor: "#06cb48ff",
-                dayTextColor: "#f9fafb",
-                textDisabledColor: "#4b5563",
-                monthTextColor: "#f9fafb",
-                arrowColor: ACCENT,
+            <BookingCalendarChrome
+              phase={selectingDate}
+              selectedLabel={formatCalendarLabel(
+                selectingDate === "pickup" ? pickupDate : returnDate,
+              )}
+              onClose={() => {
+                setDateRangeModalVisible(false);
+                setSelectingDate("pickup");
               }}
-            />
+            >
+              <Calendar
+                hideExtraDays
+                enableSwipeMonths
+                minDate={
+                  selectingDate === "pickup"
+                    ? (() => {
+                        const londonTime = getLondonTime();
+                        const londonHour = londonTime.getUTCHours();
+                        const minDate = new Date();
+
+                        if (londonHour < 16) {
+                          minDate.setDate(minDate.getDate() + 1);
+                        } else {
+                          minDate.setDate(minDate.getDate() + 2);
+                        }
+                        return minDate.toISOString().split("T")[0];
+                      })()
+                    : pickupDate?.toISOString().split("T")[0]
+                }
+                maxDate={
+                  selectingDate === "return" && pickupDate
+                    ? (() => {
+                        const maxDate = new Date(pickupDate);
+                        maxDate.setDate(maxDate.getDate() + 30);
+                        return maxDate.toISOString().split("T")[0];
+                      })()
+                    : undefined
+                }
+                onDayPress={(day) => selectDate(new Date(day.timestamp))}
+                markedDates={(() => {
+                  const marked: any = {};
+                  const office = getSelectedOffice();
+                  const currentPickup = tempPickupDate || pickupDate;
+
+                  // Mark range between pickup and return
+                  if (
+                    currentPickup &&
+                    returnDate &&
+                    selectingDate === "pickup"
+                  ) {
+                    const start = new Date(currentPickup);
+                    const end = new Date(returnDate);
+                    const current = new Date(start);
+
+                    while (current <= end) {
+                      const dateStr = current.toISOString().split("T")[0];
+                      const isStart = current.getTime() === start.getTime();
+                      const isEnd = current.getTime() === end.getTime();
+
+                      marked[dateStr] = {
+                        color:
+                          isStart || isEnd ? ACCENT : "rgba(254,154,0,0.3)",
+                        textColor: isStart || isEnd ? "#fff" : "#f9fafb",
+                        startingDay: isStart,
+                        endingDay: isEnd,
+                      };
+
+                      current.setDate(current.getDate() + 1);
+                    }
+                  } else if (currentPickup) {
+                    const pickupStr = currentPickup.toISOString().split("T")[0];
+                    marked[pickupStr] = {
+                      color: ACCENT,
+                      textColor: "#ffffff",
+                      startingDay: true,
+                      endingDay: true,
+                    };
+                  }
+
+                  // Mark disabled dates (48-hour restriction + office closed days)
+                  const londonTime = getLondonTime();
+                  const londonHour = londonTime.getUTCHours();
+                  const today = new Date();
+                  const minAllowedDate = new Date(today);
+
+                  if (londonHour < 16) {
+                    minAllowedDate.setDate(today.getDate() + 1);
+                  } else {
+                    minAllowedDate.setDate(today.getDate() + 2);
+                  }
+
+                  for (let i = 0; i < 60; i++) {
+                    const checkDate = new Date(today);
+                    checkDate.setDate(today.getDate() + i);
+                    const dateStr = checkDate.toISOString().split("T")[0];
+
+                    if (checkDate < minAllowedDate) {
+                      marked[dateStr] = {
+                        disabled: true,
+                        disableTouchEvent: true,
+                      };
+                    } else if (office && isDateDisabled(checkDate)) {
+                      marked[dateStr] = {
+                        disabled: true,
+                        disableTouchEvent: true,
+                      };
+                    }
+                  }
+
+                  return marked;
+                })()}
+                markingType="period"
+                theme={BOOKING_CALENDAR_THEME}
+              />
+            </BookingCalendarChrome>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1520,7 +1417,7 @@ function ReservationSheetContent({
                 const isPickup = timeModalField === "pickupTime";
                 const dateToCheck = isPickup ? pickupDate : returnDate;
                 const slots = getAvailableTimeSlots(dateToCheck, isPickup);
-                let timeSlots = generateTimeSlots(slots.start, slots.end);
+                let timeSlots = slots.slots;
                 const selectedTime = formatTime(
                   isPickup ? pickupTime : returnTime,
                 );
@@ -1590,11 +1487,17 @@ function ReservationSheetContent({
                         });
                         const isAvailable = !isReserved;
                         const isExtension =
+                          Boolean(slots.specialDay?.extraPrice) ||
                           is24Hours ||
                           time < slots.normalStart ||
                           time > slots.normalEnd;
                         const extensionPrice =
-                          isExtension && extension ? extension.flatPrice : 0;
+                          slots.specialDay?.extraPrice ||
+                          slots.extensionRanges.find(
+                            (range) =>
+                              time >= range.startTime && time <= range.endTime,
+                          )?.flatPrice ||
+                          (isExtension && extension ? extension.flatPrice : 0);
 
                         return (
                           <View
@@ -1680,77 +1583,57 @@ function ReservationSheetContent({
         <ScrollView
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={sheetStyles.container}
+          contentContainerStyle={[sheetStyles.container, reservationUi.content]}
         >
           {/* Header */}
-          <View style={sheetStyles.headerRow}>
-            <View>
-              <Text style={sheetStyles.sheetTitle}>Quick Reservation</Text>
-              <Text style={sheetStyles.sheetSubtitle}>
+          <View style={reservationUi.headerRow}>
+            <View style={reservationUi.headerCopy}>
+              <Text style={reservationUi.sheetTitle}>Quick Reservation</Text>
+              <Text style={reservationUi.sheetSubtitle}>
                 Just a few details to get started
               </Text>
             </View>
-            <Pressable onPress={onClose} style={sheetStyles.closeBtn}>
-              <Ionicons name="close" size={22} color="#e5e7eb" />
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              style={({ pressed }) => [
+                reservationUi.closeBtn,
+                pressed && reservationUi.pressed,
+              ]}
+            >
+              <Ionicons name="close" size={20} color="#cbd5e1" />
             </Pressable>
           </View>
 
-          {/* Voice + AI button (kept) */}
+          {/* Voice + AI button — same action, refreshed presentation */}
           <VoiceAIButton />
 
-          {/* <BookingProgress
-            steps={[
-              {
-                label: "Office",
-                done: !!selectedOffice,
-                icon: "location-outline",
-              },
-              {
-                label: "Van type",
-                done: !!selectedType,
-                icon: "car-sport-outline",
-              },
-              {
-                label: "Dates",
-                done: !!pickupDate && !!returnDate,
-                icon: "calendar-outline",
-              },
-              {
-                label: "Times",
-                done: !!pickupTime && !!returnTime,
-                icon: "time-outline",
-              },
-            ]}
-          /> */}
-
-          {/* Office + Category */}
-          <View style={[sheetStyles.section, { marginTop: 4 }]}>
-            <View style={sheetStyles.row}>
-              <View style={sheetStyles.half}>
-                <Text style={sheetStyles.sectionLabel}>Office</Text>
+          {/* Office + Van type */}
+          <View style={reservationUi.section}>
+            <View style={reservationUi.twoColumnRow}>
+              <View style={reservationUi.column}>
+                <Text style={reservationUi.fieldLabel}>OFFICE</Text>
                 <Pressable
                   onPress={() => setOfficeModalVisible(true)}
                   style={({ pressed }) => [
-                    sheetStyles.inputWrapper,
-                    selectedOffice && selectionStyles.selectedField,
-                    pressed && sheetStyles.inputWrapperFocused,
+                    reservationUi.selectField,
+                    selectedOffice && reservationUi.fieldSelected,
+                    pressed && reservationUi.fieldPressed,
                   ]}
                 >
-                  <Ionicons
-                    name="location-outline"
-                    size={18}
-                    color={selectedOffice ? ACCENT : "rgba(255,255,255,0.4)"}
-                    style={sheetStyles.inputIcon}
-                  />
+                  <View style={reservationUi.fieldIconCircle}>
+                    <Ionicons
+                      name="location-outline"
+                      size={16}
+                      color={selectedOffice ? ACCENT : "#94a3b8"}
+                    />
+                  </View>
                   <Text
                     style={[
-                      sheetStyles.input,
-                      !selectedOffice && {
-                        color: "rgba(255,255,255,0.35)",
-                      },
+                      reservationUi.fieldValue,
+                      !selectedOffice && reservationUi.placeholder,
                     ]}
                     numberOfLines={1}
-                    ellipsizeMode="tail"
                   >
                     {selectedOffice
                       ? (getSelectedOffice()?.name ?? "Selected office")
@@ -1759,253 +1642,278 @@ function ReservationSheetContent({
                   <Ionicons
                     name={selectedOffice ? "checkmark-circle" : "chevron-down"}
                     size={16}
-                    color={selectedOffice ? ACCENT : "rgba(255,255,255,0.5)"}
+                    color={selectedOffice ? ACCENT : "#94a3b8"}
                   />
                 </Pressable>
               </View>
 
-              <View style={sheetStyles.half}>
-                <Text style={sheetStyles.sectionLabel}>Type</Text>
+              <View style={reservationUi.column}>
+                <Text style={reservationUi.fieldLabel}>VAN TYPE</Text>
                 <Pressable
                   onPress={() => setCategoryModalVisible(true)}
                   style={({ pressed }) => [
-                    sheetStyles.inputWrapper,
-                    selectedType && selectionStyles.selectedField,
-                    pressed && sheetStyles.inputWrapperFocused,
+                    reservationUi.selectField,
+                    selectedType && reservationUi.fieldSelected,
+                    pressed && reservationUi.fieldPressed,
                   ]}
                 >
-                  {/* <Ionicons
-                    name="car-sharp"
-                    size={18}
-                    color={selectedType ? ACCENT : "rgba(255,255,255,0.4)"}
-                    style={sheetStyles.inputIcon}
-                  /> */}
-                  <Svg
-                    width={18}
-                    height={18}
-                    viewBox="0 0 512 512"
-                    style={sheetStyles.inputIcon}
-                  >
-                    <Path
-                      d="m465.532 242.313-28.08-13.505-37.568-67.507c-7.415-13.323-20.945-21.277-36.193-21.277h-215.023c-22.84 0-41.421 18.581-41.421 41.42v147.86c0 4.418 3.582 8 8 8h25.785c3.757 19.716 21.114 34.671 41.908 34.671 20.793 0 38.151-14.955 41.908-34.671h140.051c3.757 19.716 21.114 34.671 41.908 34.671s38.152-14.955 41.909-34.671h32.284c4.418 0 8-3.582 8-8v-49.663c0-16.305-8.773-30.26-23.468-37.328zm-47.443-15.395h-36.313l-13.51-9.322c-1.336-.922-2.921-1.416-4.544-1.416h-32.93v-26.638h66.497zm-235.149 129.058c-14.706 0-26.671-11.965-26.671-26.671s11.965-26.671 26.671-26.671 26.671 11.965 26.671 26.671-11.965 26.671-26.671 26.671zm223.867 0c-14.706 0-26.671-11.965-26.671-26.671s11.965-26.671 26.671-26.671c14.707 0 26.672 11.965 26.672 26.671s-11.965 26.671-26.672 26.671zm66.193-34.671h-24.285c-3.757-19.716-21.115-34.671-41.909-34.671s-38.151 14.955-41.908 34.671h-140.05c-3.757-19.716-21.114-34.671-41.908-34.671s-38.151 14.955-41.908 34.671h-17.785v-139.86c0-14.017 11.403-25.42 25.421-25.42h215.022c9.498 0 17.594 4.76 22.213 13.059l2.481 4.459h-65.593c-4.418 0-8 3.582-8 8v42.638c0 4.418 3.582 8 8 8h38.438l13.51 9.322c1.336.922 2.921 1.416 4.544 1.416h50.59l28.725 13.815c9.019 4.337 14.402 12.9 14.402 22.908zm-190.991-86.387c0 4.418-3.582 8-8 8h-132.75c-4.418 0-8-3.582-8-8s3.582-8 8-8h132.75c4.418 0 8 3.582 8 8zm-191.118-81.277c0 4.418-3.582 8-8 8h-51.891c-4.418 0-8-3.582-8-8s3.582-8 8-8h51.891c4.418 0 8 3.582 8 8zm0 69.869c0 4.418-3.582 8-8 8h-38.764c-4.418 0-8-3.582-8-8s3.582-8 8-8h38.764c4.418 0 8 3.582 8 8zm0 69.869c0 4.418-3.582 8-8 8h-26.78c-4.418 0-8-3.582-8-8s3.582-8 8-8h26.779c4.419 0 8.001 3.582 8.001 8z"
-                      strokeWidth={selectedType ? 5 : 8}
-                      fill={selectedType ? ACCENT : "rgba(255,255,255,0.4)"}
+                  <View style={reservationUi.fieldIconCircle}>
+                    <Ionicons
+                      name="car-sport-outline"
+                      size={16}
+                      color={selectedType ? ACCENT : "#94a3b8"}
                     />
-                  </Svg>
+                  </View>
                   <Text
                     style={[
-                      sheetStyles.input,
-                      !selectedType && {
-                        color: "rgba(255,255,255,0.35)",
-                      },
+                      reservationUi.fieldValue,
+                      !selectedType && reservationUi.placeholder,
                     ]}
                     numberOfLines={1}
-                    ellipsizeMode="tail"
                   >
                     {selectedType
-                      ? (type.find((c) => c._id === selectedType)?.name ??
-                        "Selected type")
-                      : "Select type"}
+                      ? (type.find((item) => item._id === selectedType)?.name ??
+                        "Selected van type")
+                      : "Select van type"}
                   </Text>
                   <Ionicons
                     name={selectedType ? "checkmark-circle" : "chevron-down"}
                     size={16}
-                    color={selectedType ? ACCENT : "rgba(255,255,255,0.5)"}
+                    color={selectedType ? ACCENT : "#94a3b8"}
                   />
                 </Pressable>
               </View>
             </View>
           </View>
 
-          {/* DATE RANGE */}
-          <View style={sheetStyles.section}>
-            <Text style={sheetStyles.sectionLabel}>Rental Period</Text>
+          {/* Rental period */}
+          <View style={reservationUi.section}>
+            <Text style={reservationUi.fieldLabel}>RENTAL PERIOD</Text>
             <Pressable
               onPress={() => {
                 Haptics.selectionAsync();
                 openDateRangePicker();
               }}
               style={({ pressed }) => [
-                sheetStyles.dateRangeButton,
-                pickupDate && returnDate && selectionStyles.selectedField,
-                pressed && sheetStyles.inputWrapperFocused,
+                reservationUi.dateRangeCard,
+                pickupDate && returnDate && reservationUi.dateRangeSelected,
+                pressed && reservationUi.fieldPressed,
               ]}
             >
-              <View style={{ flex: 1 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 8,
-                  }}
-                >
-                  <Ionicons name="calendar" size={16} color={ACCENT} />
-                  <Text
-                    style={{
-                      color: "#9ca3af",
-                      fontSize: 11,
-                      fontWeight: "700",
-                    }}
-                  >
-                    PICKUP
-                  </Text>
+              <View style={reservationUi.dateColumn}>
+                <View style={reservationUi.dateLabelRow}>
+                  <Ionicons name="calendar-outline" size={15} color={ACCENT} />
+                  <Text style={reservationUi.dateEyebrow}>PICKUP</Text>
                 </View>
-                <Text
-                  style={{ color: "#f9fafb", fontSize: 15, fontWeight: "700" }}
-                >
+                <Text style={reservationUi.dateValue}>
                   {formatDate(pickupDate)}
                 </Text>
+                <Text style={reservationUi.dateMeta}>
+                  {pickupDate
+                    ? pickupDate.toLocaleDateString("en-GB", {
+                        weekday: "long",
+                      })
+                    : "Select date"}
+                </Text>
               </View>
-              <Ionicons name="arrow-forward" size={20} color={ACCENT} />
-              <View style={{ flex: 1 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 8,
-                  }}
-                >
-                  <Ionicons name="calendar" size={16} color={ACCENT} />
-                  <Text
-                    style={{
-                      color: "#9ca3af",
-                      fontSize: 11,
-                      fontWeight: "700",
-                    }}
-                  >
-                    RETURN
-                  </Text>
+
+              <View style={reservationUi.dateArrowCircle}>
+                <Ionicons name="arrow-forward" size={18} color={ACCENT} />
+              </View>
+
+              <View style={reservationUi.dateColumn}>
+                <View style={reservationUi.dateLabelRow}>
+                  <Ionicons name="calendar-outline" size={15} color={ACCENT} />
+                  <Text style={reservationUi.dateEyebrow}>RETURN</Text>
                 </View>
-                <Text
-                  style={{ color: "#f9fafb", fontSize: 15, fontWeight: "700" }}
-                >
+                <Text style={reservationUi.dateValue}>
                   {formatDate(returnDate)}
+                </Text>
+                <Text style={reservationUi.dateMeta}>
+                  {returnDate
+                    ? returnDate.toLocaleDateString("en-GB", {
+                        weekday: "long",
+                      })
+                    : "Select date"}
                 </Text>
               </View>
             </Pressable>
           </View>
 
-          {/* TIME SELECTION */}
-          <View style={sheetStyles.section}>
-            <Text style={sheetStyles.sectionLabel}>Time</Text>
-            <View style={sheetStyles.row}>
-              <View style={sheetStyles.half}>
-                <Text style={[sheetStyles.sectionLabel, { marginBottom: 8 }]}>
-                  Pickup
-                </Text>
+          {/* Times */}
+          <View style={reservationUi.section}>
+            <View style={reservationUi.twoColumnRow}>
+              <View style={reservationUi.column}>
+                <Text style={reservationUi.fieldLabel}>PICKUP TIME</Text>
                 <Pressable
                   onPress={() => openTimeModal("pickupTime")}
                   style={({ pressed }) => [
-                    sheetStyles.inputWrapper,
-                    pickupTime && selectionStyles.selectedField,
-                    pressed && sheetStyles.inputWrapperFocused,
+                    reservationUi.selectField,
+                    pickupTime && reservationUi.fieldSelected,
+                    pressed && reservationUi.fieldPressed,
                   ]}
                 >
                   <Ionicons
                     name="time-outline"
-                    size={18}
-                    color={pickupTime ? ACCENT : "rgba(255,255,255,0.4)"}
-                    style={sheetStyles.inputIcon}
+                    size={17}
+                    color={pickupTime ? ACCENT : "#94a3b8"}
                   />
                   <Text
                     style={[
-                      sheetStyles.input,
-                      !pickupTime && { color: "rgba(255,255,255,0.35)" },
+                      reservationUi.fieldValue,
+                      !pickupTime && reservationUi.placeholder,
                     ]}
                   >
-                    {formatTime(pickupTime)}
+                    {pickupTime || "Select time"}
                   </Text>
-                  <Ionicons
-                    name={pickupTime ? "checkmark-circle" : "chevron-down"}
-                    size={16}
-                    color={pickupTime ? ACCENT : "rgba(255,255,255,0.5)"}
-                  />
+                  <Ionicons name="chevron-down" size={16} color="#94a3b8" />
                 </Pressable>
               </View>
-              <View style={sheetStyles.half}>
-                <Text style={[sheetStyles.sectionLabel, { marginBottom: 8 }]}>
-                  Return
-                </Text>
+
+              <View style={reservationUi.column}>
+                <Text style={reservationUi.fieldLabel}>RETURN TIME</Text>
                 <Pressable
                   onPress={() => openTimeModal("returnTime")}
                   style={({ pressed }) => [
-                    sheetStyles.inputWrapper,
-                    returnTime && selectionStyles.selectedField,
-                    pressed && sheetStyles.inputWrapperFocused,
+                    reservationUi.selectField,
+                    returnTime && reservationUi.fieldSelected,
+                    pressed && reservationUi.fieldPressed,
                   ]}
                 >
                   <Ionicons
                     name="time-outline"
-                    size={18}
-                    color={returnTime ? ACCENT : "rgba(255,255,255,0.4)"}
-                    style={sheetStyles.inputIcon}
+                    size={17}
+                    color={returnTime ? ACCENT : "#94a3b8"}
                   />
                   <Text
                     style={[
-                      sheetStyles.input,
-                      !returnTime && { color: "rgba(255,255,255,0.35)" },
+                      reservationUi.fieldValue,
+                      !returnTime && reservationUi.placeholder,
                     ]}
                   >
-                    {formatTime(returnTime)}
+                    {returnTime || "Select time"}
                   </Text>
-                  <Ionicons
-                    name={returnTime ? "checkmark-circle" : "chevron-down"}
-                    size={16}
-                    color={returnTime ? ACCENT : "rgba(255,255,255,0.5)"}
-                  />
+                  <Ionicons name="chevron-down" size={16} color="#94a3b8" />
                 </Pressable>
               </View>
             </View>
           </View>
 
-          {/* Driver age & message */}
-          <View style={sheetStyles.row}>
-            <View style={sheetStyles.half}>
-              {renderInput(
-                "Driver age (23-80)",
-                driverAge,
-                (text) => setDriverAge(text.replace(/\D/g, "").slice(0, 2)),
-                "person-outline",
-                "driverAge",
-                "numeric",
-              )}
+          {/* Driver age — presets write to the original driverAge state */}
+          <View style={reservationUi.section}>
+            <Text style={reservationUi.fieldLabel}>DRIVER AGE</Text>
+            <View style={reservationUi.ageRow}>
+              {driverAgeOptions.map((option) => {
+                const disabled = option.max < minDriverAge;
+                const active =
+                  numericDriverAge >= option.min &&
+                  numericDriverAge <= option.max;
+                const ageToStore = Math.max(option.min, minDriverAge);
+
+                return (
+                  <Pressable
+                    key={option.label}
+                    disabled={disabled}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setDriverAge(String(ageToStore));
+                    }}
+                    style={({ pressed }) => [
+                      reservationUi.ageOption,
+                      active && reservationUi.ageOptionActive,
+                      disabled && reservationUi.ageOptionDisabled,
+                      pressed && !disabled && reservationUi.pressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        reservationUi.ageOptionText,
+                        active && reservationUi.ageOptionTextActive,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                    {active && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={14}
+                        color="#fff4d6"
+                      />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={reservationUi.ageNotice}>
+              <View style={reservationUi.ageNoticeIcon}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={17}
+                  color={ACCENT}
+                />
+              </View>
+              <View style={reservationUi.ageNoticeCopy}>
+                <Text style={reservationUi.ageNoticeTitle}>
+                  Drivers must meet the minimum age requirement
+                </Text>
+                <Text style={reservationUi.ageNoticeText}>
+                  Minimum age for this selection: {minDriverAge}. Additional
+                  terms may apply.
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* SUBMIT */}
-          <View style={sheetStyles.buttonsRow}>
+          {/* Submit — same handleSubmit and loading state */}
+          <View style={reservationUi.submitWrap}>
             <Pressable
               onPress={handleSubmit}
               disabled={isSubmitting || loadingVans}
               style={({ pressed }) => [
-                sheetStyles.submitButton,
-                pressed && sheetStyles.submitButtonPressed,
-                (isSubmitting || loadingVans) && { opacity: 0.7 },
+                reservationUi.submitButton,
+                pressed && reservationUi.submitPressed,
+                (isSubmitting || loadingVans) && reservationUi.submitDisabled,
               ]}
             >
               <LinearGradient
-                colors={[ACCENT, "#ff8c00"]}
+                colors={["#ffb11f", ACCENT, "#f48200"]}
+                locations={[0, 0.48, 1]}
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={sheetStyles.submitGradient}
+                end={{ x: 1, y: 1 }}
+                style={reservationUi.submitGradient}
               >
-                {loadingVans ? (
-                  <>
-                    <ActivityIndicator size="small" color={DARK} />
-                    <Text style={sheetStyles.submitText}>Loading Vans...</Text>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="checkmark-circle" size={20} color={DARK} />
-                    <Text style={sheetStyles.submitText}>
-                      {isSubmitting ? "Validating..." : "Show Available Vans"}
-                    </Text>
-                  </>
-                )}
+                <View style={reservationUi.submitIcon}>
+                  {loadingVans ? (
+                    <ActivityIndicator size="small" color={ACCENT} />
+                  ) : (
+                    <Ionicons name="car-sport" size={19} color={ACCENT} />
+                  )}
+                </View>
+
+                <View style={reservationUi.submitCopy}>
+                  <Text style={reservationUi.submitTitle}>
+                    {loadingVans
+                      ? "Loading Vans..."
+                      : isSubmitting
+                        ? "Validating..."
+                        : "Show Available Vans"}
+                  </Text>
+                  <Text style={reservationUi.submitSubtitle}>
+                    Find the perfect van for your trip
+                  </Text>
+                </View>
+
+                <Ionicons name="chevron-forward" size={20} color={DARK} />
               </LinearGradient>
             </Pressable>
+
+            <View style={reservationUi.securityRow}>
+              <Ionicons name="lock-closed-outline" size={12} color="#64748b" />
+              <Text style={reservationUi.securityText}>
+                Secure booking • No payment required
+              </Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -2018,66 +1926,37 @@ function ReservationSheetContent({
         onClose={() => setVansModalVisible(false)}
         onEditForm={() => setVansModalVisible(false)}
         prefilledData={(() => {
-          let pickupExtensionFee = 0;
-          let returnExtensionFee = 0;
           const officeObj = getSelectedOffice();
-
-          if (pickupDate && pickupTime && officeObj) {
-            const dayName = [
-              "sunday",
-              "monday",
-              "tuesday",
-              "wednesday",
-              "thursday",
-              "friday",
-              "saturday",
-            ][pickupDate.getDay()];
-            const workingDay = officeObj.workingTime?.find(
-              (w: WorkingTime) => w.day === dayName,
-            );
-            if (workingDay?.pickupExtension) {
-              const slots = getAvailableTimeSlots(pickupDate, true);
-              const isExtension =
-                pickupTime < slots.normalStart || pickupTime > slots.normalEnd;
-              if (isExtension) {
-                pickupExtensionFee = workingDay.pickupExtension.flatPrice;
-              }
-            }
-          }
-
-          if (returnDate && returnTime && officeObj) {
-            const dayName = [
-              "sunday",
-              "monday",
-              "tuesday",
-              "wednesday",
-              "thursday",
-              "friday",
-              "saturday",
-            ][returnDate.getDay()];
-            const workingDay = officeObj.workingTime?.find(
-              (w: WorkingTime) => w.day === dayName,
-            );
-            if (workingDay?.returnExtension) {
-              const slots = getAvailableTimeSlots(returnDate, false);
-              const isExtension =
-                returnTime < slots.normalStart || returnTime > slots.normalEnd;
-              if (isExtension) {
-                returnExtensionFee = workingDay.returnExtension.flatPrice;
-              }
-            }
-          }
+          const { pickupExtension, returnExtension } = officeObj
+            ? calculateOfficeExtensionPrices({
+                office: officeObj,
+                pickupDate,
+                pickupTime,
+                returnDate,
+                returnTime,
+              })
+            : { pickupExtension: 0, returnExtension: 0 };
 
           return {
             office: selectedOffice,
             category: selectedType,
-            pickupDate: pickupDate?.toISOString() || "",
-            returnDate: returnDate?.toISOString() || "",
+            pickupDate:
+              pickupDate && pickupTime
+                ? createLondonDateTime(pickupDate, pickupTime)
+                : "",
+            returnDate:
+              returnDate && returnTime
+                ? createLondonDateTime(returnDate, returnTime)
+                : "",
+            startDateDisplay: pickupDate
+              ? formatDateForStorage(pickupDate)
+              : "",
+            endDateDisplay: returnDate ? formatDateForStorage(returnDate) : "",
             pickupTime,
             returnTime,
             driverAge,
-            pickupExtensionFee,
-            returnExtensionFee,
+            pickupExtensionFee: pickupExtension,
+            returnExtensionFee: returnExtension,
           };
         })()}
         onReservationComplete={onClose}
@@ -2096,7 +1975,6 @@ function ReservationSheetContent({
 /* ===================== VOICE + AI BUTTON (AI Integration) ===================== */
 
 import AIBookingFlow from "./AIBookingFlow";
-import Svg, { Path } from "react-native-svg";
 
 type BookingProgressStep = {
   label: string;
@@ -2104,7 +1982,13 @@ type BookingProgressStep = {
   icon: keyof typeof Ionicons.glyphMap;
 };
 
-function BookingProgress({ steps }: { steps: BookingProgressStep[] }) {
+function BookingProgress({
+  steps,
+  title,
+}: {
+  steps: BookingProgressStep[];
+  title: string;
+}) {
   const completed = steps.filter((step) => step.done).length;
 
   return (
@@ -2112,11 +1996,7 @@ function BookingProgress({ steps }: { steps: BookingProgressStep[] }) {
       <View style={progressStyles.header}>
         <View>
           <Text style={progressStyles.eyebrow}>Booking progress</Text>
-          <Text style={progressStyles.title}>
-            {completed === steps.length
-              ? "Ready to search"
-              : `${completed}/${steps.length} details completed`}
-          </Text>
+          <Text style={progressStyles.title}>{title}</Text>
         </View>
         <View style={progressStyles.badge}>
           <Text style={progressStyles.badgeText}>{completed}</Text>
@@ -2206,24 +2086,26 @@ function VoiceAIButton() {
       <Pressable
         onPress={handlePress}
         style={({ pressed }) => [
-          sheetStyles.voiceButton,
-          pressed && { transform: [{ scale: 0.97 }] },
-          recording && sheetStyles.voiceButtonActive,
+          reservationUi.aiCard,
+          pressed && reservationUi.aiCardPressed,
+          recording && reservationUi.aiCardActive,
         ]}
       >
-        <View style={sheetStyles.voiceLeft}>
-          <View style={sheetStyles.voiceIconWrapper}>
-            <Ionicons name="sparkles" size={26} color={DARK} />
+        <View style={reservationUi.aiLeft}>
+          <View style={reservationUi.aiIconOuter}>
+            <View style={reservationUi.aiIconInner}>
+              <Ionicons name="sparkles" size={22} color={ACCENT} />
+            </View>
           </View>
-          <View>
-            <Text style={sheetStyles.voiceTitle}>Book with AI Assistant</Text>
-            <Text style={sheetStyles.voiceSubtitle}>
+          <View style={reservationUi.aiCopy}>
+            <Text style={reservationUi.aiTitle}>Book with AI Assistant</Text>
+            <Text style={reservationUi.aiSubtitle}>
               Voice or text - complete in ~1 minute
             </Text>
           </View>
         </View>
 
-        <View style={sheetStyles.waveWrapper}>
+        <View style={reservationUi.waveWrapper}>
           {bars.map((_, index) => {
             const h = barAnims[index].interpolate({
               inputRange: [0, 1],
@@ -2233,7 +2115,7 @@ function VoiceAIButton() {
               <Animated.View
                 key={index}
                 style={[
-                  sheetStyles.waveBar,
+                  reservationUi.waveBar,
                   {
                     height: h,
                     opacity: recording ? 1 : 0.4,
@@ -2261,6 +2143,390 @@ function VoiceAIButton() {
     </>
   );
 }
+
+const reservationUi = StyleSheet.create({
+  sheetContainer: {
+    left: 10,
+    right: 10,
+    bottom: 0,
+    height: Math.min(height * 0.86, 760),
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255,255,255,0.11)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.58,
+        shadowRadius: 30,
+        shadowOffset: { width: 0, height: -12 },
+      },
+      android: { elevation: 24 },
+    }),
+  },
+  sheetSurface: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: "hidden",
+    backgroundColor: "#0c121a",
+  },
+  sheetTopGlow: {
+    position: "absolute",
+    top: -70,
+    left: -30,
+    width: 260,
+    height: 160,
+    borderRadius: 130,
+    backgroundColor: "rgba(254,154,0,0.055)",
+  },
+  handleArea: {
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 4,
+  },
+  sheetHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(203,213,225,0.58)",
+  },
+  content: {
+    paddingHorizontal: 15,
+    paddingTop: 4,
+    paddingBottom: 22,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 14,
+  },
+  headerCopy: { flex: 1, minWidth: 0 },
+  sheetTitle: {
+    color: "#f8fafc",
+    fontSize: 21,
+    lineHeight: 25,
+    fontWeight: "900",
+    letterSpacing: -0.55,
+  },
+  sheetSubtitle: {
+    color: "rgba(203,213,225,0.56)",
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+  closeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.075)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  pressed: { opacity: 0.76, transform: [{ scale: 0.975 }] },
+  section: { marginTop: 13 },
+  twoColumnRow: { flexDirection: "row", gap: 9 },
+  column: { flex: 1, minWidth: 0 },
+  fieldLabel: {
+    color: "rgba(203,213,225,0.58)",
+    fontSize: 8.5,
+    fontWeight: "900",
+    letterSpacing: 0.45,
+    marginBottom: 6,
+  },
+  selectField: {
+    minHeight: 44,
+    paddingHorizontal: 9,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.16)",
+  },
+  fieldSelected: {
+    backgroundColor: "rgba(254,154,0,0.055)",
+    borderColor: "rgba(254,154,0,0.42)",
+  },
+  fieldPressed: { opacity: 0.82, transform: [{ scale: 0.992 }] },
+  fieldIconCircle: {
+    width: 23,
+    height: 23,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.035)",
+  },
+  fieldValue: {
+    flex: 1,
+    minWidth: 0,
+    color: "#f1f5f9",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  placeholder: { color: "rgba(203,213,225,0.48)", fontWeight: "600" },
+  dateRangeCard: {
+    minHeight: 76,
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(28,24,17,0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.48)",
+    overflow: "hidden",
+  },
+  dateRangeSelected: {
+    borderColor: "rgba(254,154,0,0.72)",
+    backgroundColor: "rgba(254,154,0,0.075)",
+  },
+  dateColumn: { flex: 1, minWidth: 0 },
+  dateLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 5,
+  },
+  dateEyebrow: {
+    color: "rgba(203,213,225,0.58)",
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+  },
+  dateValue: {
+    color: "#f8fafc",
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  dateMeta: {
+    color: "rgba(203,213,225,0.5)",
+    fontSize: 8.5,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  dateArrowCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.48)",
+  },
+  ageRow: {
+    flexDirection: "row",
+    gap: 5,
+  },
+  ageOption: {
+    flex: 1,
+    minWidth: 0,
+    height: 35,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.15)",
+  },
+  ageOptionActive: {
+    backgroundColor: "rgba(254,154,0,0.18)",
+    borderColor: ACCENT,
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOpacity: 0.22,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  ageOptionDisabled: { opacity: 0.28 },
+  ageOptionText: {
+    color: "rgba(226,232,240,0.62)",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  ageOptionTextActive: { color: ACCENT, fontWeight: "900" },
+  ageNotice: {
+    minHeight: 45,
+    marginTop: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.14)",
+  },
+  ageNoticeIcon: {
+    width: 27,
+    height: 27,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.09)",
+  },
+  ageNoticeCopy: { flex: 1, minWidth: 0 },
+  ageNoticeTitle: {
+    color: "rgba(241,245,249,0.8)",
+    fontSize: 8.8,
+    fontWeight: "800",
+  },
+  ageNoticeText: {
+    color: "rgba(148,163,184,0.62)",
+    fontSize: 7.5,
+    lineHeight: 10,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  submitWrap: { marginTop: 12 },
+  submitButton: {
+    minHeight: 56,
+    borderRadius: 11,
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOpacity: 0.34,
+        shadowRadius: 13,
+        shadowOffset: { width: 0, height: 7 },
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  submitPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+  submitDisabled: { opacity: 0.64 },
+  submitGradient: {
+    flex: 1,
+    minHeight: 56,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  submitIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(7,17,31,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  submitCopy: { flex: 1, minWidth: 0 },
+  submitTitle: {
+    color: DARK,
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "900",
+    letterSpacing: -0.15,
+  },
+  submitSubtitle: {
+    color: "rgba(15,23,42,0.68)",
+    fontSize: 8.5,
+    lineHeight: 11,
+    fontWeight: "700",
+    marginTop: 1,
+  },
+  securityRow: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  securityText: {
+    color: "rgba(148,163,184,0.56)",
+    fontSize: 8,
+    fontWeight: "600",
+  },
+  aiCard: {
+    minHeight: 61,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 9,
+    backgroundColor: "rgba(28,24,17,0.64)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.48)",
+    overflow: "hidden",
+  },
+  aiCardPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+  aiCardActive: { borderColor: ACCENT },
+  aiLeft: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+  aiIconOuter: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.42)",
+  },
+  aiIconInner: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#07111f",
+  },
+  aiCopy: { flex: 1, minWidth: 0 },
+  aiTitle: {
+    color: "#f8fafc",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  aiSubtitle: {
+    color: "rgba(203,213,225,0.5)",
+    fontSize: 8.2,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  waveWrapper: {
+    width: 38,
+    height: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 2,
+  },
+  waveBar: {
+    width: 3,
+    minHeight: 4,
+    borderRadius: 2,
+    backgroundColor: ACCENT,
+  },
+});
 
 const selectionStyles = StyleSheet.create({
   selectedField: {

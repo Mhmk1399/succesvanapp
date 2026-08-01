@@ -18,10 +18,10 @@ import { ACCENT } from "../global/BookingModal/constants";
 import { appTheme } from "@/constants/appTheme";
 
 const { width, height } = Dimensions.get("window");
-const CARD_WIDTH = width * 0.85;
-const CARD_HEIGHT = height * 0.52;
-const CARD_SPACING = 12;
-const SIDE_PADDING = (width - CARD_WIDTH) / 2;
+const CARD_WIDTH = Math.min(width * 0.5, 210);
+const CARD_HEIGHT = 184;
+const CARD_SPACING = 10;
+const SIDE_PADDING = 18;
 
 // Premium color palette
 const COLORS = {
@@ -78,14 +78,14 @@ export default function HorizontalVanList({
   const onMomentumScrollEnd = useCallback(
     (e: { nativeEvent: { contentOffset: { x: number } } }) => {
       const newIndex = Math.round(
-        e.nativeEvent.contentOffset.x / (CARD_WIDTH + CARD_SPACING)
+        e.nativeEvent.contentOffset.x / (CARD_WIDTH + CARD_SPACING),
       );
       if (newIndex !== activeIndex && newIndex >= 0 && newIndex < vans.length) {
         setActiveIndex(newIndex);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     },
-    [activeIndex, vans.length]
+    [activeIndex, vans.length],
   );
 
   const renderItem = useCallback(
@@ -136,14 +136,14 @@ export default function HorizontalVanList({
         />
       );
     },
-    [scrollX, onSelectVan]
+    [scrollX, onSelectVan],
   );
 
   return (
     <View style={styles.container}>
       {/* Header with Glass Effect */}
       <View style={styles.headerWrapper}>
-        <GlassView intensity={20} tint="dark" style={styles.headerBlur}>
+        <GlassView intensity={14} tint="dark" style={styles.headerBlur}>
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.titleRow}>
@@ -204,7 +204,7 @@ export default function HorizontalVanList({
             overScrollMode="never"
             contentContainerStyle={{
               paddingHorizontal: SIDE_PADDING,
-              paddingVertical: 16,
+              paddingVertical: 10,
             }}
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { x: scrollX } } }],
@@ -345,7 +345,7 @@ function VanCard({
           duration: 2000,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, []);
 
@@ -376,8 +376,8 @@ function VanCard({
         ? "Auto"
         : "Manual"
       : van.gear === "automatic"
-      ? "Auto"
-      : "Manual";
+        ? "Auto"
+        : "Manual";
 
   // Parallax effect for image
   const imageTranslateX = scrollX.interpolate({
@@ -399,7 +399,7 @@ function VanCard({
             {
               scale: Animated.multiply(
                 scale,
-                Animated.multiply(pressAnim, entranceAnim)
+                Animated.multiply(pressAnim, entranceAnim),
               ),
             },
             { translateY },
@@ -439,16 +439,10 @@ function VanCard({
               locations={[0.35, 1]}
               style={styles.imageShade}
             />
-            <View style={styles.badgeRow}>
-              <GlassView intensity={18} tint="dark" style={styles.featuredBadge}>
-                <Ionicons name="sparkles" size={12} color={COLORS.accent} />
-                <Text style={styles.featuredText}>Featured</Text>
-              </GlassView>
-            </View>
           </View>
 
           {/* Content Section with Glass Effect */}
-          <GlassView intensity={25} tint="dark" style={styles.contentBlur}>
+          <GlassView intensity={14} tint="dark" style={styles.contentBlur}>
             <View style={styles.content}>
               {/* Van Name */}
               <View style={styles.nameRow}>
@@ -533,26 +527,29 @@ function VanCard({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 20,
+    marginTop: 0,
+    marginBottom: 8,
   },
   headerWrapper: {
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderRadius: 20,
+    display: "none",
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 18,
     overflow: "hidden",
   },
   headerBlur: {
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(15,23,42,0.78)",
     overflow: "hidden",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   headerLeft: {
     flex: 1,
@@ -563,30 +560,30 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   titleAccent: {
-    width: 4,
-    height: 24,
-    borderRadius: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: COLORS.accent,
   },
   title: {
     color: COLORS.text,
-    fontSize: 24,
-    fontWeight: "800",
+    fontSize: 15,
+    fontWeight: "900",
     letterSpacing: 0,
   },
   subtitle: {
     color: COLORS.textSecondary,
-    fontSize: 14,
+    fontSize: 11,
     marginTop: 4,
-    marginLeft: 14,
+    marginLeft: 18,
   },
   viewAllButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 10,
-    paddingLeft: 16,
-    paddingRight: 10,
+    paddingVertical: 7,
+    paddingLeft: 12,
+    paddingRight: 7,
     borderRadius: 100,
     backgroundColor: COLORS.glass,
     borderWidth: 1,
@@ -598,13 +595,13 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "800",
   },
   viewAllIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: COLORS.accent,
     justifyContent: "center",
     alignItems: "center",
@@ -615,15 +612,15 @@ const styles = StyleSheet.create({
   },
   stateRow: {
     flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
   },
   skeletonCard: {
     flex: 1,
-    minHeight: 240,
-    borderRadius: 24,
-    padding: 16,
+    minHeight: 156,
+    borderRadius: 20,
+    padding: 14,
     justifyContent: "flex-end",
     backgroundColor: appTheme.color.panelSoft,
     borderWidth: 1,
@@ -655,8 +652,8 @@ const styles = StyleSheet.create({
     backgroundColor: appTheme.color.accentSoft,
   },
   emptyWrap: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
   emptyGlass: {
     borderRadius: 24,
@@ -711,20 +708,20 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    borderRadius: 28,
+    borderRadius: 22,
     overflow: "hidden",
-    backgroundColor: COLORS.card,
+    backgroundColor: "rgba(15,23,42,0.92)",
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: "rgba(255,255,255,0.1)",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 20 },
-        shadowOpacity: 0.4,
-        shadowRadius: 30,
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.24,
+        shadowRadius: 18,
       },
       android: {
-        elevation: 15,
+        elevation: 8,
       },
     }),
   },
@@ -747,7 +744,7 @@ const styles = StyleSheet.create({
     }),
   },
   imageWrapper: {
-    flex: 1.2,
+    flex: 0.9,
     overflow: "hidden",
   },
   imageContainer: {
@@ -808,23 +805,24 @@ const styles = StyleSheet.create({
   },
   contentBlur: {
     borderTopWidth: 1,
-    borderTopColor: COLORS.glassBorder,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(8,12,22,0.9)",
     overflow: "hidden",
   },
   content: {
-    padding: 20,
+    padding: 12,
   },
   nameRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 10,
   },
   vanName: {
     flex: 1,
     color: COLORS.text,
-    fontSize: 22,
-    fontWeight: "800",
+    fontSize: 15,
+    fontWeight: "900",
     letterSpacing: 0,
   },
   bookmarkButton: {
@@ -838,17 +836,18 @@ const styles = StyleSheet.create({
     borderColor: COLORS.glassBorder,
   },
   specsContainer: {
+    display: "none",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 16,
+    gap: 6,
+    marginBottom: 12,
   },
   specPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
     borderRadius: 100,
     backgroundColor: COLORS.glass,
     borderWidth: 1,
@@ -856,33 +855,35 @@ const styles = StyleSheet.create({
   },
   specValue: {
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "800",
   },
   specLabel: {
-    color: COLORS.text,
-    fontSize: 12,
-    fontWeight: "500",
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
   },
   divider: {
+    display: "none",
     height: 1,
     backgroundColor: COLORS.glassBorder,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 12,
+    gap: 8,
   },
   priceContainer: {
     flex: 1,
   },
   priceLabel: {
+    display: "none",
     color: COLORS.textTertiary,
-    fontSize: 12,
-    fontWeight: "500",
-    marginBottom: 4,
+    fontSize: 10,
+    fontWeight: "800",
+    marginBottom: 2,
   },
   priceRow: {
     flexDirection: "row",
@@ -890,23 +891,23 @@ const styles = StyleSheet.create({
   },
   currency: {
     color: COLORS.accent,
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "800",
   },
   price: {
     color: COLORS.text,
-    fontSize: 28,
-    fontWeight: "800",
+    fontSize: 20,
+    fontWeight: "900",
     letterSpacing: 0,
   },
   priceUnit: {
     color: COLORS.textSecondary,
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 10,
+    fontWeight: "700",
     marginLeft: 2,
   },
   bookButton: {
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: "hidden",
   },
   bookButtonPressed: {
@@ -915,21 +916,21 @@ const styles = StyleSheet.create({
   bookButtonGradient: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: 4,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
   },
   bookButtonText: {
     color: COLORS.dark,
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "900",
   },
   pagination: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    marginTop: 4,
+    marginTop: 0,
   },
   dot: {
     width: 6,

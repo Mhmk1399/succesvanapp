@@ -195,8 +195,8 @@ export default function ReservationHero() {
 
   // Van image dimensions
   const VAN_IMAGE_ASPECT = 220 / 120;
-  const vanImageWidth = Math.min(380, width * 0.9);
-  const vanOuterHeight = vanImageWidth / VAN_IMAGE_ASPECT + 50;
+  const vanImageWidth = Math.min(295, width * 0.6);
+  const vanOuterHeight = Math.min(200, vanImageWidth / VAN_IMAGE_ASPECT + 24);
 
   useEffect(() => {
     // Staggered entrance animations
@@ -433,59 +433,40 @@ export default function ReservationHero() {
           },
         ]}
       >
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoGlow} />
-          <Image
-            source={
-              "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/new-c.png"
-            }
-            contentFit="contain"
-            style={styles.logo}
-          />
+        <View style={styles.heroCopy}>
+          {/* Title */}
+          <Animated.View
+            style={{
+              opacity: titleOpacity,
+              transform: [{ scale: titleScale }],
+            }}
+          >
+            <Text style={styles.title}>Success Van Hire</Text>
+            <View style={styles.titleUnderline} />
+          </Animated.View>
+
+          {/* Description */}
+          <Animated.Text style={[styles.description, { opacity: descFade }]}>
+            Reliable vans across London for moves, deliveries and business trips.
+            Pick a vehicle, choose your time and get moving.
+          </Animated.Text>
         </View>
-{/* 
-        <Animated.View
-          style={[
-            styles.statusRail,
-            {
-              opacity: badgeFade,
-              transform: [{ translateY: badgeSlide }],
-            },
-          ]}
-        >
-          <StatusPill icon="time" text="Fast booking" />
-          <StatusPill icon="shield-checkmark" text="Verified fleet" />
-        </Animated.View> */}
 
-        {/* Title */}
-        <Animated.View
-          style={{
-            opacity: titleOpacity,
-            transform: [{ scale: titleScale }],
-          }}
-        >
-          <Text style={styles.title}>Success Van Hire</Text>
-          <View style={styles.titleUnderline} />
-        </Animated.View>
-
-        {/* Description */}
-        <Animated.Text style={[styles.description, { opacity: descFade }]}>
-          Reliable vans across London for moves, deliveries and business trips.
-          Pick a vehicle, choose your time and get moving.
-        </Animated.Text>
-
-        {/* Van Carousel */}
-        <View style={[styles.vanOuter, { height: vanOuterHeight }]}>
-          <VanCarousel
-            images={VAN_IMAGES}
-            imageWidth={vanImageWidth}
-            aspectRatio={VAN_IMAGE_ASPECT}
-          />
+        <View style={styles.heroVisual}>
+          <View style={styles.visualRingLarge} />
+          <View style={styles.visualRingSmall} />
+          {/* Van Carousel */}
+          <View style={[styles.vanOuter, { height: vanOuterHeight }]}>
+            <VanCarousel
+              images={VAN_IMAGES}
+              imageWidth={vanImageWidth}
+              aspectRatio={VAN_IMAGE_ASPECT}
+            />
+          </View>
         </View>
 
         {/* Stats Row */}
-        <Animated.View
+        {/* <Animated.View
           style={[
             styles.statsRow,
             {
@@ -499,7 +480,7 @@ export default function ReservationHero() {
           <StatItem number="+10K" label="Happy Clients" icon="people" />
           <View style={styles.statDivider} />
           <StatItem number="24/7" label="Support" icon="headset" />
-        </Animated.View>
+        </Animated.View> */}
       </Animated.View>
     </View>
   );
@@ -548,13 +529,13 @@ function StatusPill({
 // ─────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
-    paddingTop: 30,
-    paddingBottom: 26,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 20,
     alignItems: "center",
     position: "relative",
     overflow: "hidden",
-    minHeight: height * 0.62,
+    minHeight: 292,
   },
   bgPattern: {
     ...StyleSheet.absoluteFillObject,
@@ -563,39 +544,72 @@ const styles = StyleSheet.create({
   bgCircle: {
     position: "absolute",
     borderRadius: 999,
-    backgroundColor: "rgba(254,154,0,0.08)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   bgCircle1: {
-    width: 300,
-    height: 300,
-    top: -100,
-    right: -100,
+    width: 340,
+    height: 340,
+    top: -128,
+    right: -118,
   },
   bgCircle2: {
-    width: 200,
-    height: 200,
-    bottom: 50,
-    left: -80,
+    width: 260,
+    height: 260,
+    bottom: -116,
+    right: -42,
   },
   bgCircle3: {
-    width: 150,
-    height: 150,
-    top: "40%",
-    right: -50,
+    width: 148,
+    height: 148,
+    top: "50%",
+    right: 34,
   },
   particle: {
     position: "absolute",
     zIndex: 5,
   },
   heroInner: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    justifyContent: "space-between",
+    gap: 16,
     maxWidth: 600,
     zIndex: 10,
     width: "100%",
+    minHeight: 246,
+  },
+  heroCopy: {
+    flex: 0.92,
+    minWidth: 0,
+    alignItems: "flex-start",
+  },
+  heroVisual: {
+    flex: 1,
+    minHeight: 210,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  visualRingLarge: {
+    position: "absolute",
+    width: 242,
+    height: 242,
+    borderRadius: 121,
+    borderWidth: 34,
+    borderColor: "rgba(255,255,255,0.11)",
+    right: -48,
+  },
+  visualRingSmall: {
+    position: "absolute",
+    width: 146,
+    height: 146,
+    borderRadius: 73,
+    borderWidth: 22,
+    borderColor: "rgba(15,23,42,0.16)",
+    right: 10,
   },
   logoContainer: {
-    marginBottom: 8,
+    marginBottom: 2,
     position: "relative",
   },
   logoGlow: {
@@ -615,9 +629,9 @@ const styles = StyleSheet.create({
     }),
   },
   logo: {
-    width: 128,
-    height: 62,
-    borderRadius: 16,
+    width: 112,
+    height: 54,
+    borderRadius: 14,
   },
   statusRail: {
     flexDirection: "row",
@@ -679,20 +693,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   title: {
-    fontSize: 29,
+    fontSize: 36,
     fontWeight: "900",
-    textAlign: "center",
-    letterSpacing: 0.5,
+    textAlign: "left",
+    letterSpacing: 0,
     color: "#fff",
-    textShadowRadius: 8,
+    textShadowRadius: 4,
+    lineHeight: 42,
   },
   titleUnderline: {
-    height: 4,
-    width: 80,
+    height: 3,
+    width: 54,
     backgroundColor: ACCENT,
     borderRadius: 2,
-    alignSelf: "center",
-    marginTop: 8,
+    alignSelf: "flex-start",
+    marginTop: 6,
     ...Platform.select({
       ios: {
         shadowColor: ACCENT,
@@ -703,19 +718,21 @@ const styles = StyleSheet.create({
     }),
   },
   description: {
-    color: "rgba(255,255,255,0.85)",
-    textAlign: "center",
-    lineHeight: 20,
-    fontSize: 13,
-    maxWidth: 480,
-    paddingHorizontal: 12,
-    marginTop: 0,
+    color: "rgba(255,255,255,0.86)",
+    textAlign: "left",
+    lineHeight: 21,
+    fontSize: 14,
+    maxWidth: 240,
+    paddingHorizontal: 0,
+    marginTop: 14,
+    fontWeight: "700",
   },
   vanOuter: {
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 2,
+    marginVertical: 0,
+    zIndex: 4,
   },
   carouselContainer: {
     width: "100%",
@@ -758,7 +775,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    marginTop: 16,
+    marginTop: 8,
   },
   dot: {
     width: 8,
@@ -782,55 +799,55 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    backgroundColor: "rgba(15,23,42,0.6)",
-    borderRadius: 24,
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(15,23,42,0.82)",
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    marginTop: 8,
+    marginTop: 4,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 8,
+        elevation: 4,
       },
     }),
   },
   statItem: {
     alignItems: "center",
-    minWidth: 66,
+    minWidth: 58,
   },
   statIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: "rgba(254,154,0,0.15)",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 6,
+    marginBottom: 4,
   },
   statNumber: {
     color: ACCENT,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "900",
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   statLabel: {
     color: "rgba(255,255,255,0.6)",
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "600",
     marginTop: 2,
     textAlign: "center",
   },
   statDivider: {
     width: 1,
-    height: 45,
+    height: 36,
     backgroundColor: "rgba(255,255,255,0.15)",
   },
   featureRow: {
