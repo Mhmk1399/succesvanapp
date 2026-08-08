@@ -266,7 +266,7 @@ export const FormFields = ({
               placeholderTextColor="#6b7280"
               value={driverAge}
               onChangeText={(text) => {
-                setDriverAge(text);
+                setDriverAge(text.replace(/\D/g, "").slice(0, 2));
                 if (errors.driverAge) setErrors({ ...errors, driverAge: "" });
               }}
               onFocus={() => {

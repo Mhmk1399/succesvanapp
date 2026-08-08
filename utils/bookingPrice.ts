@@ -127,15 +127,16 @@ export const getAddonLineItems = (
       if (!addon) return null;
       const selectedTierIndex =
         selection.selectedTierIndex ?? getMatchingAddonTierIndex(addon, rentalDays);
+      const quantity = selection.quantity > 0 ? 1 : 0;
       return {
         id,
         name: addon.name,
-        quantity: selection.quantity,
+        quantity,
         ...(selectedTierIndex !== undefined ? { selectedTierIndex } : {}),
         price: getAddonPriceForDays(
           addon,
           rentalDays,
-          selection.quantity,
+          quantity,
           selectedTierIndex,
         ),
       };

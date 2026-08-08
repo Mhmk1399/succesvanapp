@@ -18,12 +18,13 @@ import * as Haptics from "expo-haptics";
 
 const ACCENT = "#fe9a00";
 const DARK = "#07111f";
-const EXPAND_THRESHOLD = 50;
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function FloatingContactButton() {
-  const translateX = useRef(new Animated.Value(0)).current;
+  const dockTranslateY = useRef(new Animated.Value(0)).current;
+  const lastDockOffsetY = useRef(0);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const gleamAnim = useRef(new Animated.Value(0)).current;
   const [modalVisible, setModalVisible] = useState(false);
   const modalScale = useRef(new Animated.Value(0)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
@@ -44,6 +45,24 @@ export default function FloatingContactButton() {
       ]),
     ).start();
   }, []);
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(gleamAnim, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+        Animated.delay(2200),
+        Animated.timing(gleamAnim, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [gleamAnim]);
 
   const openModal = () => {
     setModalVisible(true);
@@ -82,33 +101,31 @@ export default function FloatingContactButton() {
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dy) > 6 &&
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
       onPanResponderGrant: () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       },
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx > 0 && gestureState.dx < 100) {
-          translateX.setValue(gestureState.dx);
-        }
+        const nextOffset = Math.max(
+          -170,
+          Math.min(88, lastDockOffsetY.current + gestureState.dy),
+        );
+        dockTranslateY.setValue(nextOffset);
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx > EXPAND_THRESHOLD) {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 60,
-            friction: 8,
-          }).start();
-          openModal();
-        } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 60,
-            friction: 8,
-          }).start();
-        }
+        lastDockOffsetY.current = Math.max(
+          -170,
+          Math.min(88, lastDockOffsetY.current + gestureState.dy),
+        );
+        Animated.spring(dockTranslateY, {
+          toValue: lastDockOffsetY.current,
+          useNativeDriver: true,
+          tension: 70,
+          friction: 10,
+        }).start();
       },
     }),
   ).current;
@@ -119,9 +136,14 @@ export default function FloatingContactButton() {
   };
 
   const sendEmail = () => {
-    Linking.openURL("mailto:support@successvanhire.com");
+    Linking.openURL("mailto:successvanhire.tech@gmail.com");
     closeModal();
   };
+
+  const gleamTranslate = gleamAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-38, 74],
+  });
 
   return (
     <>
@@ -130,24 +152,42 @@ export default function FloatingContactButton() {
           style={[
             styles.floatingButton,
             {
-              transform: [{ translateX }, { scale: pulseAnim }],
+              transform: [{ translateY: dockTranslateY }, { scale: pulseAnim }],
             },
           ]}
           {...panResponder.panHandlers}
         >
-          <Pressable onPress={openModal} style={styles.arrowTab}>
-            <GlassView intensity={80} tint="dark" style={styles.arrowBlur}>
+          <Pressable
+            onPress={openModal}
+            style={({ pressed }) => [
+              styles.supportDock,
+              pressed && styles.supportDockPressed,
+            ]}
+          >
+            <LinearGradient
+              colors={["#1b2635", "#111a27", "#0a111d"]}
+              locations={[0, 0.48, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.supportDockGradient}
+            >
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.supportGleam,
+                  { transform: [{ translateX: gleamTranslate }, { rotate: "18deg" }] },
+                ]}
+              />
+              <View pointerEvents="none" style={styles.supportGlow} />
+              <View style={styles.onlineDot} />
+
               <LinearGradient
-                colors={["rgba(254,154,0,0.2)", "rgba(255,140,0,0.3)"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.arrowGradient}
+                colors={["#ffc14a", ACCENT, "#d86f00"]}
+                style={styles.supportIconBubble}
               >
-                <View style={styles.iconWrapper}>
-                  <Ionicons name="chatbubbles" size={18} color="#fff" />
-                </View>
+                <Ionicons name="chatbubbles" size={18} color="#ffffff" />
               </LinearGradient>
-            </GlassView>
+            </LinearGradient>
           </Pressable>
         </Animated.View>
       </View>
@@ -399,58 +439,85 @@ const styles = StyleSheet.create({
   container: {
     position: "absolute",
     left: 0,
-    top: 0,
-    bottom: 0,
-    width: "100%",
+    top: "50%",
     zIndex: 850,
-    justifyContent: "center",
     pointerEvents: "box-none",
   },
   floatingButton: {
-    position: "absolute",
-    left: 0,
-    top: "50%",
-    marginTop: -2,
+    marginTop: -24,
+    ...Platform.select({
+      ios: {
+        shadowColor: ACCENT,
+        shadowOffset: { width: 8, height: 0 },
+        shadowOpacity: 0.48,
+        shadowRadius: 18,
+      },
+      android: {
+        elevation: 14,
+      },
+    }),
   },
-  arrowTab: {
+  supportDock: {
     borderTopRightRadius: 24,
     borderBottomRightRadius: 24,
     overflow: "hidden",
     borderWidth: 1.5,
     borderLeftWidth: 0,
-    borderColor: "rgba(254,154,0,0.1)",
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOffset: { width: 8, height: 0 },
-        shadowOpacity: 0.6,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 12,
-      },
-    }),
+    borderColor: "rgba(255,198,96,0.28)",
+    backgroundColor: "rgba(8,14,24,0.98)",
   },
-  arrowBlur: {
+  supportDockPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.965 }],
+  },
+  supportDockGradient: {
+    width: 46,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: 2,
+    paddingRight: 7,
     borderTopRightRadius: 24,
     borderBottomRightRadius: 24,
     overflow: "hidden",
   },
-  arrowGradient: {
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-    paddingRight: 8,
-    paddingLeft: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 4,
+  supportGlow: {
+    position: "absolute",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    left: -23,
+    top: -10,
+    backgroundColor: "rgba(254,154,0,0.2)",
   },
-  iconWrapper: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
+  supportGleam: {
+    position: "absolute",
+    width: 16,
+    top: -12,
+    bottom: -12,
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  onlineDot: {
+    position: "absolute",
+    top: 9,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    zIndex: 3,
+    backgroundColor: "#22c55e",
+    borderWidth: 1,
+    borderColor: "#0a111d",
+  },
+  supportIconBubble: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    flexShrink: 0,
     alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,236,194,0.34)",
   },
 
   modalOverlay: {

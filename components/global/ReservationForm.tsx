@@ -15,8 +15,11 @@ import {
 } from "@/utils/bookingSchedule";
 import { getMinDriverAge } from "@/utils/bookingPrice";
 import {
+  addDaysToDateInput,
   createLondonDateTime,
+  formatDateInputInLondon,
   formatDateForStorage,
+  getMinimumPickupDateInput,
   getLondonTime as getSharedLondonTime,
   syncServerClock,
 } from "@/utils/londonTime";
@@ -50,6 +53,7 @@ import VansModal from "./VansModal";
 import { sheetStyles, styles } from "./styleForm";
 
 const ACCENT = "#fe9a00";
+const RETURN_ACCENT = "#38bdf8";
 const DARK = "#0f172a";
 const { height } = Dimensions.get("window");
 
@@ -334,11 +338,9 @@ function ReservationSheetContent({
     [selectedTypeName],
   );
 
-  const [pickupDate, setPickupDate] = useState<Date | null>(new Date());
+  const [pickupDate, setPickupDate] = useState<Date | null>(null);
   const [pickupTime, setPickupTime] = useState<string>("");
-  const [returnDate, setReturnDate] = useState<Date | null>(
-    new Date(Date.now() + 24 * 60 * 60 * 1000),
-  );
+  const [returnDate, setReturnDate] = useState<Date | null>(null);
   const [returnTime, setReturnTime] = useState<string>("");
 
   const [driverAge, setDriverAge] = useState("");
@@ -358,6 +360,9 @@ function ReservationSheetContent({
   const [timeModalField, setTimeModalField] = useState<
     "pickupTime" | "returnTime" | null
   >(null);
+  const isReturnTimeModal = timeModalField === "returnTime";
+  const timePhaseAccent = isReturnTimeModal ? RETURN_ACCENT : ACCENT;
+  const timePhaseSlide = useRef(new Animated.Value(0)).current;
   const [dateRangeModalVisible, setDateRangeModalVisible] = useState(false);
   const [selectingDate, setSelectingDate] = useState<"pickup" | "return">(
     "pickup",
@@ -424,6 +429,17 @@ function ReservationSheetContent({
     }
   }, [isSheetOpen]);
 
+  useEffect(() => {
+    if (!timeModalVisible) return;
+    timePhaseSlide.setValue(isReturnTimeModal ? 26 : -26);
+    Animated.spring(timePhaseSlide, {
+      toValue: 0,
+      tension: 74,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  }, [isReturnTimeModal, timeModalVisible, timePhaseSlide]);
+
   // Sync dateRange with pickupDate and returnDate
   useEffect(() => {
     if (pickupDate && returnDate) {
@@ -466,13 +482,11 @@ function ReservationSheetContent({
           setSelectedOffice(data.office || "");
           setSelectedType(data.type || "");
           setPickupDate(
-            parseStoredDate(data.startDateDisplay, data.pickupDate) ||
-              new Date(),
+            parseStoredDate(data.startDateDisplay, data.pickupDate),
           );
           setPickupTime(data.pickupTime || "");
           setReturnDate(
-            parseStoredDate(data.endDateDisplay, data.returnDate) ||
-              new Date(Date.now() + 24 * 60 * 60 * 1000),
+            parseStoredDate(data.endDateDisplay, data.returnDate),
           );
           setReturnTime(data.returnTime || "");
           setDriverAge(data.driverAge || "");
@@ -667,6 +681,13 @@ function ReservationSheetContent({
 
     Haptics.selectionAsync();
     if (selectingDate === "pickup") {
+      if (date.toISOString().split("T")[0] < getMinimumPickupDateInput()) {
+        showEitherAlert(
+          "Pickup date unavailable",
+          "Please choose a pickup date that matches our UK booking cut-off.",
+        );
+        return;
+      }
       setTempPickupDate(date);
       setPickupDate(date);
       setReturnDate(null);
@@ -701,6 +722,14 @@ function ReservationSheetContent({
     if (timeModalField === "pickupTime") {
       console.log("[selectTime] Setting pickupTime to:", time);
       setPickupTime(time);
+      if (returnDate) {
+        setTimeModalField("returnTime");
+        Haptics.selectionAsync();
+      } else {
+        setTimeModalVisible(false);
+        setTimeModalField(null);
+      }
+      return;
     } else if (timeModalField === "returnTime") {
       console.log("[selectTime] Setting returnTime to:", time);
 
@@ -1002,17 +1031,6 @@ function ReservationSheetContent({
     return { minimumDate: minTime, maximumDate: maxTime };
   };
 
-  // Presentation-only presets. They continue to write into the original
-  // driverAge state, so validation and reservation payload logic remain intact.
-  const driverAgeOptions = [
-    { label: "18–21", min: 18, max: 21 },
-    { label: "22–24", min: 22, max: 24 },
-    { label: "25–29", min: 25, max: 29 },
-    { label: "30–69", min: 30, max: 69 },
-    { label: "70+", min: 70, max: 80 },
-  ];
-  const numericDriverAge = Number(driverAge);
-
   return (
     <>
       {/* Inline alert rendered inside the sheet when it's open */}
@@ -1252,18 +1270,7 @@ function ReservationSheetContent({
                 enableSwipeMonths
                 minDate={
                   selectingDate === "pickup"
-                    ? (() => {
-                        const londonTime = getLondonTime();
-                        const londonHour = londonTime.getUTCHours();
-                        const minDate = new Date();
-
-                        if (londonHour < 16) {
-                          minDate.setDate(minDate.getDate() + 1);
-                        } else {
-                          minDate.setDate(minDate.getDate() + 2);
-                        }
-                        return minDate.toISOString().split("T")[0];
-                      })()
+                    ? getMinimumPickupDateInput()
                     : pickupDate?.toISOString().split("T")[0]
                 }
                 maxDate={
@@ -1317,23 +1324,14 @@ function ReservationSheetContent({
                   }
 
                   // Mark disabled dates (48-hour restriction + office closed days)
-                  const londonTime = getLondonTime();
-                  const londonHour = londonTime.getUTCHours();
-                  const today = new Date();
-                  const minAllowedDate = new Date(today);
-
-                  if (londonHour < 16) {
-                    minAllowedDate.setDate(today.getDate() + 1);
-                  } else {
-                    minAllowedDate.setDate(today.getDate() + 2);
-                  }
+                  const todayInput = formatDateInputInLondon();
+                  const minAllowedDateInput = getMinimumPickupDateInput();
 
                   for (let i = 0; i < 60; i++) {
-                    const checkDate = new Date(today);
-                    checkDate.setDate(today.getDate() + i);
-                    const dateStr = checkDate.toISOString().split("T")[0];
+                    const dateStr = addDaysToDateInput(todayInput, i);
+                    const checkDate = new Date(`${dateStr}T12:00:00Z`);
 
-                    if (checkDate < minAllowedDate) {
+                    if (dateStr < minAllowedDateInput) {
                       marked[dateStr] = {
                         disabled: true,
                         disableTouchEvent: true,
@@ -1361,136 +1359,317 @@ function ReservationSheetContent({
         visible={timeModalVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setTimeModalVisible(false)}
       >
         <Pressable
-          style={sheetStyles.selectOverlay}
+          style={sheetStyles.timeOverlay}
           onPress={() => setTimeModalVisible(false)}
         >
           <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={sheetStyles.timeModalBox}
+            onPress={(event) => event.stopPropagation()}
+            style={[
+              sheetStyles.timeSheet,
+              isReturnTimeModal && sheetStyles.timeSheetReturn,
+              { maxHeight: Math.min(height * 0.82, 720) },
+            ]}
           >
-            <View style={sheetStyles.timeModalHeader}>
-              <View>
-                <Text style={sheetStyles.selectTitle}>
-                  {timeModalField === "pickupTime" ? "Pickup" : "Return"} Time
+            <LinearGradient
+              colors={
+                isReturnTimeModal
+                  ? ["#102536", "#0b1826", "#07101c"]
+                  : ["#121b29", "#0b1421", "#08111d"]
+              }
+              locations={[0, 0.48, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+
+            <View
+              pointerEvents="none"
+              style={[
+                sheetStyles.timeSheetTopGlow,
+                isReturnTimeModal && sheetStyles.timeSheetTopGlowReturn,
+              ]}
+            />
+            <View style={sheetStyles.timeHandle} />
+
+            <View style={sheetStyles.timeHeader}>
+              <View style={sheetStyles.timeHeaderCopy}>
+                <Text
+                  style={[sheetStyles.timeTitle, { color: timePhaseAccent }]}
+                >
+                  {isReturnTimeModal ? "Return Time" : "Pickup Time"}
                 </Text>
-                <Text style={{ color: "#9ca3af", fontSize: 11, marginTop: 2 }}>
-                  Select a time slot
+                <Text style={sheetStyles.timeSubtitle}>
+                  {isReturnTimeModal
+                    ? "Step 2 of 2 - choose when you'll bring it back"
+                    : "Step 1 of 2 - choose when you'll collect the van"}
                 </Text>
               </View>
+
               <Pressable
                 onPress={() => setTimeModalVisible(false)}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: "rgba(255,255,255,0.1)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  sheetStyles.timeCloseButton,
+                  isReturnTimeModal && sheetStyles.timeCloseButtonReturn,
+                  pressed && sheetStyles.timePressed,
+                ]}
               >
-                <Ionicons name="close" size={20} color="#e5e7eb" />
+                <Ionicons name="close" size={18} color="#e8edf5" />
               </Pressable>
             </View>
-            <ScrollView
-              showsVerticalScrollIndicator={true}
-              contentContainerStyle={{ paddingBottom: 10 }}
-              style={{ maxHeight: height * 0.6 }}
+
+            <View style={sheetStyles.timePhaseRow}>
+              <View
+                style={[
+                  sheetStyles.timePhasePill,
+                  !isReturnTimeModal && sheetStyles.timePhasePillActive,
+                ]}
+              >
+                <Ionicons
+                  name={
+                    isReturnTimeModal ? "checkmark-circle" : "radio-button-on"
+                  }
+                  size={14}
+                  color={!isReturnTimeModal ? ACCENT : "#22d37f"}
+                />
+                <Text
+                  style={[
+                    sheetStyles.timePhaseText,
+                    !isReturnTimeModal && sheetStyles.timePhaseTextActive,
+                  ]}
+                >
+                  Pickup
+                </Text>
+              </View>
+
+              <View style={sheetStyles.timePhaseConnector}>
+                <Ionicons
+                  name="arrow-forward"
+                  size={14}
+                  color={isReturnTimeModal ? RETURN_ACCENT : "#64748b"}
+                />
+              </View>
+
+              <View
+                style={[
+                  sheetStyles.timePhasePill,
+                  isReturnTimeModal && sheetStyles.timePhasePillReturnActive,
+                ]}
+              >
+                <Ionicons
+                  name={isReturnTimeModal ? "radio-button-on" : "ellipse-outline"}
+                  size={14}
+                  color={isReturnTimeModal ? RETURN_ACCENT : "#94a3b8"}
+                />
+                <Text
+                  style={[
+                    sheetStyles.timePhaseText,
+                    isReturnTimeModal && sheetStyles.timePhaseTextReturn,
+                  ]}
+                >
+                  Return
+                </Text>
+              </View>
+            </View>
+
+            <Animated.View
+              style={[
+                sheetStyles.timeAnimatedPane,
+                {
+                  opacity: timePhaseSlide.interpolate({
+                    inputRange: [-26, 0, 26],
+                    outputRange: [0.76, 1, 0.76],
+                  }),
+                  transform: [{ translateX: timePhaseSlide }],
+                },
+              ]}
             >
               {(() => {
-                if (isLoading) {
-                  return (
-                    <View
-                      style={{
-                        padding: 40,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <ActivityIndicator size="large" color={ACCENT} />
-                    </View>
-                  );
-                }
-
-                const isPickup = timeModalField === "pickupTime";
-                const dateToCheck = isPickup ? pickupDate : returnDate;
-                const slots = getAvailableTimeSlots(dateToCheck, isPickup);
-                let timeSlots = slots.slots;
-                const selectedTime = formatTime(
-                  isPickup ? pickupTime : returnTime,
-                );
-
-                // Filter return times if same day rental
-                if (!isPickup && pickupDate && returnDate && pickupTime) {
-                  const isSameDay =
-                    pickupDate.toDateString() === returnDate.toDateString();
-                  if (isSameDay) {
-                    const [pH, pM] = pickupTime.split(":").map(Number);
-                    const minReturnMinutes = pH * 60 + pM + 360; // 360 = 6 hours
-                    timeSlots = timeSlots.filter((time) => {
-                      const [rH, rM] = time.split(":").map(Number);
-                      const returnMinutes = rH * 60 + rM;
-                      return returnMinutes >= minReturnMinutes;
-                    });
-                  }
-                }
-
-                const office = getSelectedOffice();
-                const dayName = dateToCheck
-                  ? [
-                      "sunday",
-                      "monday",
-                      "tuesday",
-                      "wednesday",
-                      "thursday",
-                      "friday",
-                      "saturday",
-                    ][dateToCheck.getDay()]
-                  : "";
-                const workingDay = office?.workingTime?.find(
-                  (w: WorkingTime) => w.day === dayName,
-                );
-                const extension = isPickup
-                  ? workingDay?.pickupExtension
-                  : workingDay?.returnExtension;
-                const is24Hours = slots.normalStart === slots.normalEnd;
-
+              if (isLoading) {
                 return (
-                  <>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        flexWrap: "wrap",
-                        justifyContent: "center",
-                        gap: 2,
-                      }}
-                    >
+                  <View style={sheetStyles.timeLoading}>
+                    <ActivityIndicator size="large" color={timePhaseAccent} />
+                    <Text style={sheetStyles.timeLoadingText}>
+                      Checking available slots...
+                    </Text>
+                  </View>
+                );
+              }
+
+              const isPickup = timeModalField === "pickupTime";
+              const dateToCheck = isPickup ? pickupDate : returnDate;
+              const slots = getAvailableTimeSlots(dateToCheck, isPickup);
+              let timeSlots = slots.slots;
+              const selectedTime = formatTime(
+                isPickup ? pickupTime : returnTime,
+              );
+
+              // Existing logic: filter return times for a same-day rental.
+              if (!isPickup && pickupDate && returnDate && pickupTime) {
+                const isSameDay =
+                  pickupDate.toDateString() === returnDate.toDateString();
+
+                if (isSameDay) {
+                  const [pH, pM] = pickupTime.split(":").map(Number);
+                  const minReturnMinutes = pH * 60 + pM + 360;
+
+                  timeSlots = timeSlots.filter((time) => {
+                    const [rH, rM] = time.split(":").map(Number);
+                    const returnMinutes = rH * 60 + rM;
+                    return returnMinutes >= minReturnMinutes;
+                  });
+                }
+              }
+
+              const office = getSelectedOffice();
+              const dayName = dateToCheck
+                ? [
+                    "sunday",
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                  ][dateToCheck.getDay()]
+                : "";
+
+              const workingDay = office?.workingTime?.find(
+                (workingTime: WorkingTime) => workingTime.day === dayName,
+              );
+
+              const extension = isPickup
+                ? workingDay?.pickupExtension
+                : workingDay?.returnExtension;
+
+              const is24Hours = slots.normalStart === slots.normalEnd;
+
+              const readableDate = dateToCheck
+                ? dateToCheck.toLocaleDateString("en-GB", {
+                    weekday: "short",
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "Select date";
+
+              const officeSubtitle =
+                (office as any)?.address ||
+                (office as any)?.location ||
+                "Selected pickup office";
+
+              return (
+                <>
+                  <View style={sheetStyles.timeContextRow}>
+                    <View style={sheetStyles.timeContextCard}>
+                      <View
+                        style={[
+                          sheetStyles.timeContextIcon,
+                          isReturnTimeModal &&
+                            sheetStyles.timeContextIconReturn,
+                        ]}
+                      >
+                        <Ionicons
+                          name="calendar-outline"
+                          size={17}
+                          color={timePhaseAccent}
+                        />
+                      </View>
+
+                      <View style={sheetStyles.timeContextCopy}>
+                        <Text
+                          style={sheetStyles.timeContextValue}
+                          numberOfLines={1}
+                        >
+                          {readableDate}
+                        </Text>
+                        <Text
+                          style={sheetStyles.timeContextLabel}
+                          numberOfLines={1}
+                        >
+                          {dateToCheck
+                            ? dateToCheck.toLocaleDateString("en-GB", {
+                                weekday: "long",
+                              })
+                            : "Rental date"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={sheetStyles.timeContextCard}>
+                      <View
+                        style={[
+                          sheetStyles.timeContextIcon,
+                          isReturnTimeModal &&
+                            sheetStyles.timeContextIconReturn,
+                        ]}
+                      >
+                        <Ionicons
+                          name="location-outline"
+                          size={17}
+                          color={timePhaseAccent}
+                        />
+                      </View>
+
+                      <View style={sheetStyles.timeContextCopy}>
+                        <Text
+                          style={sheetStyles.timeContextValue}
+                          numberOfLines={1}
+                        >
+                          {office?.name || "London Office"}
+                        </Text>
+                        <Text
+                          style={sheetStyles.timeContextLabel}
+                          numberOfLines={1}
+                        >
+                          {officeSubtitle}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={sheetStyles.timeLegend}>
+                    <View style={sheetStyles.timeAvailableDot} />
+                    <Text style={sheetStyles.timeLegendText}>
+                      {isReturnTimeModal
+                        ? "Return slots available"
+                        : "Pickup slots available"}
+                    </Text>
+                  </View>
+
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    style={sheetStyles.timeSlotsScroll}
+                    contentContainerStyle={sheetStyles.timeSlotsContent}
+                  >
+                    <View style={sheetStyles.timeGrid}>
                       {timeSlots.map((time) => {
                         const isSelected = time === selectedTime;
 
-                        // Use appropriate reserved slots based on whether it's pickup or return time
+                        // Existing logic: choose the relevant reserved-slot collection.
                         const relevantSlots = isPickup
                           ? startDateReservedSlots
                           : endDateReservedSlots;
 
-                        // Only disable the exact start/end time slot
+                        // Existing logic: disable only the exact start/end time.
                         const isReserved = relevantSlots.some((slot) => {
                           if (isPickup) {
-                            // For pickup, disable the startTime
                             return time === slot.startTime;
-                          } else {
-                            // For return, disable the endTime
-                            return time === slot.endTime;
                           }
+
+                          return time === slot.endTime;
                         });
+
                         const isAvailable = !isReserved;
+
                         const isExtension =
                           Boolean(slots.specialDay?.extraPrice) ||
                           is24Hours ||
                           time < slots.normalStart ||
                           time > slots.normalEnd;
+
                         const extensionPrice =
                           slots.specialDay?.extraPrice ||
                           slots.extensionRanges.find(
@@ -1500,10 +1679,7 @@ function ReservationSheetContent({
                           (isExtension && extension ? extension.flatPrice : 0);
 
                         return (
-                          <View
-                            key={time}
-                            style={{ width: "31%", marginBottom: 10 }}
-                          >
+                          <View key={time} style={sheetStyles.timeCell}>
                             <Pressable
                               disabled={!isAvailable}
                               onPress={() => {
@@ -1512,54 +1688,63 @@ function ReservationSheetContent({
                                   selectTime(time);
                                 }
                               }}
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: 6,
-                                paddingVertical: 12,
-                                paddingHorizontal: 10,
-                                borderRadius: 12,
-                                backgroundColor: isSelected
-                                  ? ACCENT
-                                  : "rgba(255,255,255,0.05)",
-                                borderWidth: 1.5,
-                                borderColor: isSelected
-                                  ? ACCENT
-                                  : "rgba(255,255,255,0.1)",
-                                opacity: isAvailable ? 1 : 0.4,
-                              }}
+                              style={({ pressed }) => [
+                                sheetStyles.timeSlot,
+                                isSelected && sheetStyles.timeSlotSelected,
+                                isSelected &&
+                                  isReturnTimeModal &&
+                                  sheetStyles.timeSlotReturnSelected,
+                                !isAvailable && sheetStyles.timeSlotDisabled,
+                                pressed &&
+                                  isAvailable &&
+                                  sheetStyles.timeSlotPressed,
+                              ]}
                             >
+                              {isSelected && (
+                                <LinearGradient
+                                  pointerEvents="none"
+                                  colors={
+                                    isReturnTimeModal
+                                      ? ["#67e8f9", RETURN_ACCENT, "#0ea5e9"]
+                                      : ["#ffb000", ACCENT, "#ff8a00"]
+                                  }
+                                  start={{ x: 0, y: 0 }}
+                                  end={{ x: 1, y: 1 }}
+                                  style={StyleSheet.absoluteFill}
+                                />
+                              )}
+
                               <View
-                                style={{
-                                  width: 6,
-                                  height: 6,
-                                  borderRadius: 3,
-                                  backgroundColor: isAvailable
-                                    ? isExtension
-                                      ? "#fbbf24"
-                                      : "#22c55e"
-                                    : "#ef4444",
-                                }}
+                                style={[
+                                  sheetStyles.timeSlotDot,
+                                  {
+                                    backgroundColor: isAvailable
+                                      ? isExtension
+                                        ? "#fbbf24"
+                                        : "#22d37f"
+                                      : "#ef4444",
+                                  },
+                                ]}
                               />
+
                               <Text
-                                style={{
-                                  color: isSelected ? DARK : "#e5e7eb",
-                                  fontSize: 12,
-                                  fontWeight: "700",
-                                }}
+                                style={[
+                                  sheetStyles.timeSlotText,
+                                  isSelected &&
+                                    sheetStyles.timeSlotTextSelected,
+                                ]}
                               >
                                 {time}
                               </Text>
                             </Pressable>
+
                             {isExtension && extensionPrice > 0 && (
                               <Text
-                                style={{
-                                  fontSize: 9,
-                                  color: isSelected ? "#fff" : "#fbbf24",
-                                  textAlign: "center",
-                                  marginTop: 2,
-                                }}
+                                style={[
+                                  sheetStyles.timeExtensionPrice,
+                                  isSelected &&
+                                    sheetStyles.timeExtensionPriceSelected,
+                                ]}
                               >
                                 +£{extensionPrice}
                               </Text>
@@ -1568,10 +1753,56 @@ function ReservationSheetContent({
                         );
                       })}
                     </View>
-                  </>
-                );
-              })()}
-            </ScrollView>
+                  </ScrollView>
+
+                  <Pressable
+                    onPress={() => setTimeModalVisible(false)}
+                    style={({ pressed }) => [
+                      sheetStyles.timeConfirmButton,
+                      isReturnTimeModal && sheetStyles.timeConfirmReturn,
+                      pressed && sheetStyles.timeConfirmPressed,
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={
+                        isReturnTimeModal
+                          ? ["#67e8f9", RETURN_ACCENT, "#0ea5e9"]
+                          : ["#ffb000", ACCENT, "#ff8900"]
+                      }
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={sheetStyles.timeConfirmGradient}
+                    >
+                      <Text style={sheetStyles.timeConfirmText}>
+                        {isReturnTimeModal
+                          ? "Confirm Return Time"
+                          : "Confirm Pickup Time"}
+                      </Text>
+
+                      <View style={sheetStyles.timeConfirmArrow}>
+                        <Ionicons
+                          name="arrow-forward"
+                          size={16}
+                          color="#f8fafc"
+                        />
+                      </View>
+                    </LinearGradient>
+                  </Pressable>
+
+                  <View style={sheetStyles.timeSecureRow}>
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={13}
+                      color="rgba(226,232,240,0.48)"
+                    />
+                    <Text style={sheetStyles.timeSecureText}>
+                      Secure booking · No payment required
+                    </Text>
+                  </View>
+                </>
+              );
+            })()}
+            </Animated.View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1802,47 +2033,31 @@ function ReservationSheetContent({
           {/* Driver age — presets write to the original driverAge state */}
           <View style={reservationUi.section}>
             <Text style={reservationUi.fieldLabel}>DRIVER AGE</Text>
-            <View style={reservationUi.ageRow}>
-              {driverAgeOptions.map((option) => {
-                const disabled = option.max < minDriverAge;
-                const active =
-                  numericDriverAge >= option.min &&
-                  numericDriverAge <= option.max;
-                const ageToStore = Math.max(option.min, minDriverAge);
-
-                return (
-                  <Pressable
-                    key={option.label}
-                    disabled={disabled}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setDriverAge(String(ageToStore));
-                    }}
-                    style={({ pressed }) => [
-                      reservationUi.ageOption,
-                      active && reservationUi.ageOptionActive,
-                      disabled && reservationUi.ageOptionDisabled,
-                      pressed && !disabled && reservationUi.pressed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        reservationUi.ageOptionText,
-                        active && reservationUi.ageOptionTextActive,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                    {active && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={14}
-                        color="#fff4d6"
-                      />
-                    )}
-                  </Pressable>
-                );
-              })}
+            <View
+              style={[
+                reservationUi.ageInputShell,
+                focusedInput === "driverAge" && reservationUi.ageInputFocused,
+              ]}
+            >
+              <Ionicons
+                name="person-outline"
+                size={18}
+                color={focusedInput === "driverAge" ? ACCENT : "#94a3b8"}
+              />
+              <TextInput
+                value={driverAge}
+                onChangeText={(value) =>
+                  setDriverAge(value.replace(/\D/g, "").slice(0, 2))
+                }
+                onFocus={() => handleFocus("driverAge")}
+                onBlur={handleBlur}
+                placeholder={`${minDriverAge}-80`}
+                placeholderTextColor="#64748b"
+                keyboardType="number-pad"
+                inputMode="numeric"
+                maxLength={2}
+                style={reservationUi.ageInput}
+              />
             </View>
 
             <View style={reservationUi.ageNotice}>
@@ -2326,43 +2541,28 @@ const reservationUi = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(254,154,0,0.48)",
   },
-  ageRow: {
-    flexDirection: "row",
-    gap: 5,
-  },
-  ageOption: {
-    flex: 1,
-    minWidth: 0,
-    height: 35,
-    borderRadius: 8,
+  ageInputShell: {
+    minHeight: 46,
+    borderRadius: 10,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
+    gap: 8,
     backgroundColor: "rgba(255,255,255,0.045)",
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.15)",
   },
-  ageOptionActive: {
-    backgroundColor: "rgba(254,154,0,0.18)",
+  ageInputFocused: {
     borderColor: ACCENT,
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOpacity: 0.22,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-      },
-      android: { elevation: 3 },
-    }),
+    backgroundColor: "rgba(254,154,0,0.08)",
   },
-  ageOptionDisabled: { opacity: 0.28 },
-  ageOptionText: {
-    color: "rgba(226,232,240,0.62)",
-    fontSize: 9,
+  ageInput: {
+    flex: 1,
+    color: "#f8fafc",
+    fontSize: 14,
     fontWeight: "800",
+    paddingVertical: 10,
   },
-  ageOptionTextActive: { color: ACCENT, fontWeight: "900" },
   ageNotice: {
     minHeight: 45,
     marginTop: 9,

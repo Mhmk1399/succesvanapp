@@ -44,6 +44,10 @@ export default function UserProfileCard() {
   const [editAddress, setEditAddress] = useState(user.address || "");
   const [editCity, setEditCity] = useState(user.city || "");
   const [editPostalCode, setEditPostalCode] = useState(user.postalCode || "");
+  const [avatarAsset, setAvatarAsset] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState(user.avatar || null);
+  const [avatarUploadProgress, setAvatarUploadProgress] = useState(0);
 
   // License states
   const [licenseFront, setLicenseFront] =
@@ -58,7 +62,12 @@ export default function UserProfileCard() {
   );
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeletingAvatar, setIsDeletingAvatar] = useState(false);
   const [isUploadingLicenses, setIsUploadingLicenses] = useState(false);
+  const [isDeletingLicense, setIsDeletingLicense] = useState({
+    front: false,
+    back: false,
+  });
 
   useEffect(() => {
     setEditName(user.name || "");
@@ -68,6 +77,9 @@ export default function UserProfileCard() {
     setEditAddress(user.address || "");
     setEditCity(user.city || "");
     setEditPostalCode(user.postalCode || "");
+    setAvatarPreview(user.avatar || null);
+    setAvatarAsset(null);
+    setAvatarUploadProgress(0);
     setLicensePreviewFront(user?.licenceAttached?.front || null);
     setLicensePreviewBack(user?.licenceAttached?.back || null);
   }, [user]);
@@ -93,6 +105,15 @@ export default function UserProfileCard() {
         city: editCity.trim(),
         postalCode: editPostalCode.trim(),
       };
+
+      if (avatarAsset?.uri) {
+        setAvatarUploadProgress(1);
+        requestBody.avatar = await uploadToS3(
+          avatarAsset,
+          "avatar",
+          setAvatarUploadProgress,
+        );
+      }
 
       const response = await safeFetch(`${API_URL}/${user._id}`, {
         method: "PUT",
@@ -123,6 +144,8 @@ export default function UserProfileCard() {
       if (result.success) {
         await AsyncStorage.setItem("user", JSON.stringify(result.data));
         await refreshUser();
+        setAvatarAsset(null);
+        setAvatarUploadProgress(0);
         setIsEditing(false);
       } else {
         showToast({
@@ -140,6 +163,94 @@ export default function UserProfileCard() {
       });
     } finally {
       setIsSaving(false);
+      setAvatarUploadProgress(0);
+    }
+  };
+
+  const pickAvatarImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.86,
+      });
+
+      if (!result.canceled && result.assets?.length > 0) {
+        const file = result.assets[0];
+        setAvatarAsset(file);
+        setAvatarPreview(file.uri);
+        await Haptics.selectionAsync();
+      }
+    } catch {
+      showToast({
+        type: "error",
+        title: "Image not selected",
+        message: "Failed to pick avatar image.",
+      });
+    }
+  };
+
+  const handleDeleteAvatar = async () => {
+    if (avatarAsset) {
+      setAvatarAsset(null);
+      setAvatarPreview(user.avatar || null);
+      setAvatarUploadProgress(0);
+      await Haptics.selectionAsync();
+      return;
+    }
+
+    if (!user.avatar) {
+      setAvatarPreview(null);
+      return;
+    }
+
+    setIsDeletingAvatar(true);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const API_URL = process.env.EXPO_PUBLIC_USERS_API || "";
+
+      const response = await safeFetch(`${API_URL}/${user._id}`, {
+        method: "PUT",
+        toast: {
+          successTitle: "Avatar deleted",
+          successMessage: "Your profile photo has been removed.",
+          errorTitle: "Delete failed",
+        },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ deleteAvatar: true }),
+      });
+
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch {
+        throw new Error(text || "Invalid response");
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to delete avatar");
+      }
+
+      await AsyncStorage.setItem("user", JSON.stringify(result.data));
+      await refreshUser();
+      setAvatarAsset(null);
+      setAvatarPreview(null);
+    } catch (error) {
+      console.log("Avatar Delete Error:", error);
+      showToast({
+        type: "error",
+        title: "Delete failed",
+        message: error instanceof Error ? error.message : "Network error",
+      });
+    } finally {
+      setIsDeletingAvatar(false);
     }
   };
 
@@ -222,8 +333,87 @@ export default function UserProfileCard() {
     }
   };
 
+  const handleDeleteLicense = async (side: "front" | "back") => {
+    const pendingImage = side === "front" ? licenseFront : licenseBack;
+    const storedUrl = user?.licenceAttached?.[side];
+
+    if (pendingImage) {
+      if (side === "front") {
+        setLicenseFront(null);
+        setLicensePreviewFront(storedUrl || null);
+      } else {
+        setLicenseBack(null);
+        setLicensePreviewBack(storedUrl || null);
+      }
+      await Haptics.selectionAsync();
+      return;
+    }
+
+    if (!storedUrl) {
+      if (side === "front") setLicensePreviewFront(null);
+      else setLicensePreviewBack(null);
+      return;
+    }
+
+    setIsDeletingLicense((prev) => ({ ...prev, [side]: true }));
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const API_URL = process.env.EXPO_PUBLIC_USERS_API || "";
+
+      const response = await safeFetch(`${API_URL}/${user._id}`, {
+        method: "PUT",
+        toast: {
+          successTitle: "Licence deleted",
+          successMessage: `The ${side} side has been removed from your profile.`,
+          errorTitle: "Delete failed",
+        },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ deleteLicenceSide: side }),
+      });
+
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch {
+        throw new Error(text || "Invalid response");
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to delete licence");
+      }
+
+      await AsyncStorage.setItem("user", JSON.stringify(result.data));
+      await refreshUser();
+      if (side === "front") {
+        setLicenseFront(null);
+        setLicensePreviewFront(null);
+      } else {
+        setLicenseBack(null);
+        setLicensePreviewBack(null);
+      }
+    } catch (error) {
+      console.log("License Delete Error:", error);
+      showToast({
+        type: "error",
+        title: "Delete failed",
+        message: error instanceof Error ? error.message : "Network error",
+      });
+    } finally {
+      setIsDeletingLicense((prev) => ({ ...prev, [side]: false }));
+    }
+  };
+
   const handleCancel = () => {
     setIsEditing(false);
+    setAvatarAsset(null);
+    setAvatarPreview(user.avatar || null);
+    setAvatarUploadProgress(0);
     setLicenseFront(null);
     setLicenseBack(null);
     setLicensePreviewFront(user?.licenceAttached?.front || null);
@@ -265,6 +455,10 @@ export default function UserProfileCard() {
   const fullAddress =
     [user.address, user.city, user.postalCode].filter(Boolean).join(", ") ||
     null;
+  const userAvatar =
+    typeof avatarPreview === "string" && avatarPreview.trim()
+      ? avatarPreview.trim()
+      : null;
 
   return (
     <View style={styles.card}>
@@ -285,14 +479,60 @@ export default function UserProfileCard() {
             end={{ x: 0.85, y: 1 }}
             style={styles.avatarRing}
           >
-            <View style={styles.avatarInner}>
+            <Pressable
+              disabled={!isEditing || isSaving || isDeletingAvatar}
+              onPress={pickAvatarImage}
+              style={styles.avatarInner}
+            >
               <Image
-                source={require("../../assets/images/logo.png")}
-                style={styles.avatar}
-                resizeMode="contain"
+                source={
+                  userAvatar
+                    ? { uri: userAvatar }
+                    : require("../../assets/images/logo.png")
+                }
+                style={[styles.avatar, userAvatar && styles.avatarPhoto]}
+                resizeMode={userAvatar ? "cover" : "contain"}
               />
-            </View>
+              {isEditing && (
+                <View style={styles.avatarEditOverlay}>
+                  <Ionicons name="camera" size={15} color="#07111f" />
+                </View>
+              )}
+            </Pressable>
           </LinearGradient>
+          {isEditing && (
+            <View style={styles.avatarControls}>
+              <Pressable
+                onPress={pickAvatarImage}
+                disabled={isSaving || isDeletingAvatar}
+                style={({ pressed }) => [
+                  styles.avatarMiniButton,
+                  pressed && styles.avatarMiniButtonPressed,
+                  (isSaving || isDeletingAvatar) && styles.avatarMiniDisabled,
+                ]}
+              >
+                <Ionicons name="camera-outline" size={13} color="#07111f" />
+              </Pressable>
+              {(userAvatar || avatarAsset) && (
+                <Pressable
+                  onPress={handleDeleteAvatar}
+                  disabled={isSaving || isDeletingAvatar}
+                  style={({ pressed }) => [
+                    styles.avatarDeleteButton,
+                    pressed && styles.avatarMiniButtonPressed,
+                    (isSaving || isDeletingAvatar) && styles.avatarMiniDisabled,
+                  ]}
+                >
+                  {isDeletingAvatar ? (
+                    <ActivityIndicator size="small" color="#fb7185" />
+                  ) : (
+                    <Ionicons name="trash-outline" size={13} color="#fb7185" />
+                  )}
+                </Pressable>
+              )}
+            </View>
+          )}
+          {avatarAsset && <View style={styles.avatarPendingDot} />}
         </View>
 
         <View style={styles.nameBlock}>
@@ -305,8 +545,15 @@ export default function UserProfileCard() {
               size={12}
               color={ACCENT}
             />
-            <Text style={styles.subtitle}>Success Van Hire Member</Text>
+          <Text style={styles.subtitle}>Success Van Hire Member</Text>
           </View>
+          {isEditing && avatarAsset && (
+            <Text style={styles.avatarHint}>
+              {isSaving && avatarUploadProgress > 0
+                ? `Uploading photo ${avatarUploadProgress}%`
+                : "New profile photo selected"}
+            </Text>
+          )}
         </View>
 
         {!isEditing ? (
@@ -506,12 +753,34 @@ export default function UserProfileCard() {
                   style={styles.licenseImage}
                   resizeMode="cover"
                 />
-                <Pressable
-                  onPress={() => pickLicenseImage("front")}
-                  style={styles.changeButton}
-                >
-                  <Ionicons name="pencil" size={16} color="#07111f" />
-                </Pressable>
+                <View style={styles.licensePreviewActions}>
+                  <Pressable
+                    onPress={() => handleDeleteLicense("front")}
+                    disabled={isDeletingLicense.front || isUploadingLicenses}
+                    style={[
+                      styles.deleteLicenseButton,
+                      (isDeletingLicense.front || isUploadingLicenses) &&
+                        styles.licenseActionDisabled,
+                    ]}
+                  >
+                    {isDeletingLicense.front ? (
+                      <ActivityIndicator size="small" color="#fb7185" />
+                    ) : (
+                      <Ionicons name="trash-outline" size={16} color="#fb7185" />
+                    )}
+                  </Pressable>
+                  <Pressable
+                    onPress={() => pickLicenseImage("front")}
+                    disabled={isDeletingLicense.front || isUploadingLicenses}
+                    style={[
+                      styles.changeButton,
+                      (isDeletingLicense.front || isUploadingLicenses) &&
+                        styles.licenseActionDisabled,
+                    ]}
+                  >
+                    <Ionicons name="pencil" size={16} color="#07111f" />
+                  </Pressable>
+                </View>
                 {licenseFront && (
                   <View style={styles.newBadge}>
                     <Text style={styles.newBadgeText}>NEW</Text>
@@ -541,12 +810,34 @@ export default function UserProfileCard() {
                   style={styles.licenseImage}
                   resizeMode="cover"
                 />
-                <Pressable
-                  onPress={() => pickLicenseImage("back")}
-                  style={styles.changeButton}
-                >
-                  <Ionicons name="pencil" size={16} color="#07111f" />
-                </Pressable>
+                <View style={styles.licensePreviewActions}>
+                  <Pressable
+                    onPress={() => handleDeleteLicense("back")}
+                    disabled={isDeletingLicense.back || isUploadingLicenses}
+                    style={[
+                      styles.deleteLicenseButton,
+                      (isDeletingLicense.back || isUploadingLicenses) &&
+                        styles.licenseActionDisabled,
+                    ]}
+                  >
+                    {isDeletingLicense.back ? (
+                      <ActivityIndicator size="small" color="#fb7185" />
+                    ) : (
+                      <Ionicons name="trash-outline" size={16} color="#fb7185" />
+                    )}
+                  </Pressable>
+                  <Pressable
+                    onPress={() => pickLicenseImage("back")}
+                    disabled={isDeletingLicense.back || isUploadingLicenses}
+                    style={[
+                      styles.changeButton,
+                      (isDeletingLicense.back || isUploadingLicenses) &&
+                        styles.licenseActionDisabled,
+                    ]}
+                  >
+                    <Ionicons name="pencil" size={16} color="#07111f" />
+                  </Pressable>
+                </View>
                 {licenseBack && (
                   <View style={styles.newBadge}>
                     <Text style={styles.newBadgeText}>NEW</Text>
@@ -800,6 +1091,60 @@ const styles = StyleSheet.create({
     borderColor: "#0a1424",
   },
   avatar: { width: 37, height: 27 },
+  avatarPhoto: {
+    width: "100%",
+    height: "100%",
+  },
+  avatarEditOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.86)",
+  },
+  avatarControls: {
+    position: "absolute",
+    right: -9,
+    bottom: -6,
+    flexDirection: "row",
+    gap: 4,
+  },
+  avatarMiniButton: {
+    width: 25,
+    height: 25,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: ACCENT,
+    borderWidth: 1,
+    borderColor: "rgba(255,219,146,0.72)",
+  },
+  avatarDeleteButton: {
+    width: 25,
+    height: 25,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(251,113,133,0.42)",
+  },
+  avatarMiniButtonPressed: { opacity: 0.78, transform: [{ scale: 0.94 }] },
+  avatarMiniDisabled: { opacity: 0.5 },
+  avatarPendingDot: {
+    position: "absolute",
+    top: 1,
+    right: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: "#25c96f",
+    borderWidth: 2,
+    borderColor: "#08111f",
+  },
   nameBlock: { flex: 1, minWidth: 0 },
   name: {
     color: "#f8fafc",
@@ -817,6 +1162,12 @@ const styles = StyleSheet.create({
     color: ACCENT,
     fontSize: 9,
     fontWeight: "700",
+  },
+  avatarHint: {
+    color: "#25c96f",
+    fontSize: 8.5,
+    fontWeight: "800",
+    marginTop: 4,
   },
   editButton: {
     width: 39,
@@ -980,10 +1331,17 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.08)",
   },
   licenseImage: { width: "100%", height: 140 },
-  changeButton: {
+  licensePreviewActions: {
     position: "absolute",
+    left: 9,
     right: 9,
     bottom: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  changeButton: {
     width: 35,
     height: 35,
     borderRadius: 18,
@@ -991,6 +1349,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: ACCENT,
   },
+  deleteLicenseButton: {
+    width: 35,
+    height: 35,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.86)",
+    borderWidth: 1,
+    borderColor: "rgba(251,113,133,0.32)",
+  },
+  licenseActionDisabled: { opacity: 0.55 },
   newBadge: {
     position: "absolute",
     top: 9,

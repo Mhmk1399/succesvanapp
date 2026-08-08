@@ -1,6 +1,7 @@
 // app/profile.tsx
 import UserProfileCard from "@/components/dashboard/profile";
 import UserReservations from "@/components/dashboard/reserve";
+import ContractsContent from "@/components/dashboard/ContractsContent";
 import LicenseUploadModal from "@/components/dashboard/LicenseUploadModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { reservationService } from "@/services/reservationService";
@@ -21,6 +22,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -35,12 +37,14 @@ const INK = "#050914";
 const PANEL = "#10182a";
 const PANEL_2 = "#121b2e";
 
-type TabKey = "profile" | "reservations";
+type TabKey = "profile" | "reservations" | "contracts";
+
+const tabOrder: TabKey[] = ["reservations", "contracts", "profile"];
 
 export default function ProfileScreen() {
   const tabsRowRef = useRef<View>(null);
   const [tabsRowWidth, setTabsRowWidth] = useState<number>(0);
-  const { user, token, isLoading: authLoading, logout } = useAuth();
+  const { user, token, isLoading: authLoading, logout, refreshUser } = useAuth();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -72,7 +76,7 @@ export default function ProfileScreen() {
     prevTabRef.current = activeTab;
 
     if (prevTab !== activeTab && tabsRowWidth > 0) {
-      const targetX = activeTab === "reservations" ? 0 : 1;
+      const targetX = tabOrder.indexOf(activeTab);
 
       Animated.spring(indicatorX, {
         toValue: targetX,
@@ -91,7 +95,7 @@ export default function ProfileScreen() {
       const newReservations = result.data || [];
 
       const changed = await checkStatusChanges(newReservations);
-      changed.forEach((res) => showStatusNotification(res));
+      await Promise.all(changed.map((res) => showStatusNotification(res)));
 
       setReservations(newReservations);
     } catch (error) {
@@ -128,7 +132,22 @@ export default function ProfileScreen() {
   const hasLicense =
     user?.licenceAttached?.front && user?.licenceAttached?.back;
   const activeReservations = reservations.filter((reservation) =>
-    ["pending", "confirmed", "delivered"].includes(String(reservation.status)),
+    [
+      "pending",
+      "confirmed",
+      "deposit_pending",
+      "deposit_paid",
+      "contract_pending",
+      "contract_signed",
+      "ready_for_collection",
+      "handover_in_progress",
+      "delivered",
+      "vehicle_returned",
+      "return_inspection",
+      "deposit_review",
+      "refund_processing",
+      "refund_completed",
+    ].includes(String(reservation.status)),
   ).length;
 
   const floatingHeaderOpacity = scrollY.interpolate({
@@ -152,6 +171,8 @@ export default function ProfileScreen() {
     <>
       <DashboardHeader
         name={user?.name || "Customer"}
+        avatar={user?.avatar}
+        onProfilePress={() => handleTabChange("profile")}
         onBack={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           router.back();
@@ -181,8 +202,12 @@ export default function ProfileScreen() {
               transform: [
                 {
                   translateX: indicatorX.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, (tabsRowWidth - 8) / 2],
+                    inputRange: [0, 1, 2],
+                    outputRange: [
+                      0,
+                      (tabsRowWidth - 8) / 3,
+                      ((tabsRowWidth - 8) / 3) * 2,
+                    ],
                   }),
                 },
               ],
@@ -219,6 +244,32 @@ export default function ProfileScreen() {
             ]}
           >
             Reservations
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => handleTabChange("contracts")}
+          style={({ pressed }) => [
+            styles.tabButton,
+            pressed && styles.tabButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name={
+              activeTab === "contracts"
+                ? "document-text"
+                : "document-text-outline"
+            }
+            size={15}
+            color={activeTab === "contracts" ? "#101827" : "#9aa5b6"}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "contracts" && styles.tabTextActive,
+            ]}
+          >
+            Agreements
           </Text>
         </Pressable>
 
@@ -281,6 +332,15 @@ export default function ProfileScreen() {
               <UserProfileCard />
             </View>
           </ScrollView>
+        ) : activeTab === "contracts" ? (
+          <View style={styles.tabContent}>
+            <ContractsContent
+              onScroll={handleDashboardScroll}
+              ListHeaderComponent={
+                <View style={styles.chromeInList}>{dashboardChrome}</View>
+              }
+            />
+          </View>
         ) : (
           <View style={styles.tabContent}>
             <UserReservations
@@ -363,8 +423,9 @@ export default function ProfileScreen() {
         visible={licenseModalVisible}
         onClose={() => setLicenseModalVisible(false)}
         userId={user?._id || ""}
-        onSuccess={() => {
-          fetchReservations();
+        onSuccess={async () => {
+          await refreshUser();
+          await fetchReservations();
         }}
       />
     </>
@@ -436,14 +497,20 @@ function DashboardFloatingHeader({
 
 function DashboardHeader({
   name,
+  avatar,
+  onProfilePress,
   onBack,
   onLogout,
 }: {
   name: string;
+  avatar?: string;
+  onProfilePress: () => void;
   onBack: () => void;
   onLogout: () => void;
 }) {
   const initial = name.trim().charAt(0).toUpperCase() || "S";
+  const avatarUri =
+    typeof avatar === "string" && avatar.trim() ? avatar.trim() : null;
 
   return (
     <View style={styles.headerWrap}>
@@ -462,7 +529,13 @@ function DashboardHeader({
         </Pressable>
       </View>
 
-      <View style={styles.accountCard}>
+      <Pressable
+        onPress={onProfilePress}
+        style={({ pressed }) => [
+          styles.accountCard,
+          pressed && styles.accountCardPressed,
+        ]}
+      >
         <LinearGradient
           colors={[
             "rgba(255,155,20,0.42)",
@@ -483,7 +556,15 @@ function DashboardHeader({
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.avatarInner}>
-            <Text style={styles.avatarText}>{initial}</Text>
+            {avatarUri ? (
+              <Image
+                source={{ uri: avatarUri }}
+                style={styles.avatarPhoto}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>{initial}</Text>
+            )}
           </View>
         </View>
 
@@ -498,7 +579,7 @@ function DashboardHeader({
           <Ionicons name="shield-checkmark-outline" size={12} color={ACCENT} />
           <Text style={styles.accountBadgeText}>Secure</Text>
         </View>
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -743,6 +824,10 @@ const styles = StyleSheet.create({
       android: { elevation: 5 },
     }),
   },
+  accountCardPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
   accountCardGlow: {
     position: "absolute",
     width: 112,
@@ -780,6 +865,7 @@ const styles = StyleSheet.create({
   avatarInner: {
     flex: 1,
     borderRadius: 23,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#ffae25",
@@ -790,6 +876,10 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 21,
     fontWeight: "900",
+  },
+  avatarPhoto: {
+    width: "100%",
+    height: "100%",
   },
   accountCopy: { flex: 1, minWidth: 0 },
   accountKicker: {
@@ -899,7 +989,7 @@ const styles = StyleSheet.create({
     top: 4,
     left: 4,
     bottom: 4,
-    width: "50%",
+    width: "33.3333%",
     borderRadius: 18,
     overflow: "hidden",
     ...Platform.select({

@@ -3,8 +3,20 @@ type EntityStatus = "active" | "inactive";
 type ReservationStatus =
   | "pending"
   | "confirmed"
+  | "deposit_pending"
+  | "deposit_paid"
+  | "contract_pending"
+  | "contract_signed"
+  | "ready_for_collection"
+  | "handover_in_progress"
   | "canceled"
   | "delivered"
+  | "vehicle_returned"
+  | "return_inspection"
+  | "deposit_review"
+  | "refund_processing"
+  | "refund_completed"
+  | "expired"
   | "completed";
 type FuelType = "gas" | "diesel" | "electric" | "hybrid";
 type GearType = "manual" | "automatic";
@@ -193,6 +205,16 @@ export interface Category extends MongoTimestamps {
   seats: number;
   doors: number;
   servicesPeriod?: ServicesPeriod;
+  deposit?: {
+    amount?: number;
+    fullPayDiscountPercent?: number;
+    securePayPrice?: number;
+    officePayPrice?: number;
+  };
+  amount?: number;
+  fullPayDiscountPercent?: number;
+  securePayPrice?: number;
+  officePayPrice?: number;
 }
 
 // Type ---------------------------------------------------------------------------------------
@@ -231,6 +253,12 @@ export interface AddOn extends MongoTimestamps {
   _id: string;
   name: string;
   description?: string;
+  image?: string;
+  imageUrl?: string;
+  thumbnail?: string;
+  photo?: string;
+  picture?: string;
+  images?: string[];
   type?: string;
   icon?: string;
   pricingType: "flat" | "tiered";
@@ -269,6 +297,116 @@ export interface Reservation extends MongoTimestamps {
   returnTime?: string;
   totalPrice: number;
   status: ReservationStatus;
+  statusHistory?: Array<{
+    status: ReservationStatus | string;
+    changedAt: string;
+    source?: string;
+    note?: string;
+  }>;
+  deposit?: {
+    amount?: number;
+    originalAmount?: number;
+    option?: "full" | "secure" | "office";
+    status?:
+      | "not_paid"
+      | "pending"
+      | "paid"
+      | "failed"
+      | "held"
+      | "refund_processing"
+      | "refunded"
+      | "partially_refunded";
+    dueAt?: string;
+    paidAt?: string;
+    method?: string;
+    transactionRef?: string;
+    receiptUrl?: string;
+    receiptUploadedAt?: string;
+    failureReason?: string;
+    discountPercent?: number;
+    discountAmount?: number;
+    priceAdjustment?: {
+      status?: "payment_due" | "credit_due" | "balanced";
+      paidAmount?: number;
+      revisedTotal?: number;
+      balanceDue?: number;
+      creditAmount?: number;
+    };
+  };
+  collectionCode?: string;
+  handover?: {
+    startedAt?: string;
+    startMileage?: number;
+    startFuelLevel?: string;
+    conditionNotes?: string;
+    existingDamages?: string[];
+    photos?: string[];
+    customerSignature?: string;
+    staffSignature?: string;
+    staff?: {
+      user?: string;
+      name?: string;
+      role?: "admin" | "owner";
+    };
+    keyCount?: number;
+    equipment?: string[];
+    customFields?: {
+      templateFieldId?: string;
+      label?: string;
+      fieldType?: "input" | "file";
+      inputType?: string;
+      value?: string;
+      files?: string[];
+      helpText?: string;
+    }[];
+    completedAt?: string;
+  };
+  inspection?: {
+    receivedAt?: string;
+    returnMileage?: number;
+    returnFuelLevel?: string;
+    newDamages?: string[];
+    lateReturn?: boolean;
+    lateMinutes?: number;
+    cleaningIssue?: boolean;
+    missingEquipment?: string[];
+    photos?: string[];
+    notes?: string;
+    staff?: {
+      user?: string;
+      name?: string;
+      role?: "admin" | "owner";
+    };
+    customFields?: {
+      templateFieldId?: string;
+      label?: string;
+      fieldType?: "input" | "file";
+      inputType?: string;
+      value?: string;
+      files?: string[];
+      helpText?: string;
+    }[];
+    completedAt?: string;
+  };
+  refund?: {
+    depositPaid?: number;
+    deductionsTotal?: number;
+    refundAmount?: number;
+    status?: "not_started" | "under_review" | "approved" | "processing" | "completed" | "failed";
+    reference?: string;
+    expectedBy?: string;
+    chargeReason?: string;
+    otherChargeReason?: string;
+    charges?: {
+      fuel?: number;
+      late?: number;
+      damage?: number;
+      cleaning?: number;
+      missingEquipment?: number;
+      other?: number;
+    };
+    additionalCharges?: Array<{ reason?: string; amount?: number }>;
+  };
   cancelReason?: string;
   driverAge?: number;
   dirverAge?: number;
@@ -282,7 +420,7 @@ export interface Reservation extends MongoTimestamps {
   manualPricePerDay?: number;
   manualPriceNote?: string;
   perInvoice?: boolean;
-  reservationType?: "Office" | "Website";
+  reservationType?: "Office" | "Website" | "App";
 }
 
 // Custom Select ------------------------------------------------------------------------------
@@ -342,6 +480,25 @@ export interface User extends MongoTimestamps {
   licenceAttached?: {
     front?: string;
     back?: string;
+  };
+  licenceDetails?: {
+    isFrontSide?: boolean;
+    sourceSide?: "front" | "back" | "unknown";
+    firstName?: string | null;
+    lastName?: string | null;
+    fullName?: string | null;
+    dateOfBirth?: string | null;
+    address?: string | null;
+    postcode?: string | null;
+    licenseNumber?: string | null;
+    licenceNumber?: string | null;
+    issueDate?: string | null;
+    expirationDate?: string | null;
+    expiryDate?: string | null;
+    issuingCountry?: string | null;
+    issuingAuthority?: string | null;
+    licenceCategories?: string[];
+    extractedAt?: string | Date;
   };
   avatar?: string;
   address?: string;

@@ -44,28 +44,13 @@ import {
   isAddonAvailableForCategory,
   isAddonAvailableForDays,
 } from "@/utils/bookingPrice";
-
-const getLondonTime = () => {
-  const now = new Date();
-  const londonTimeStr = now.toLocaleString("en-US", {
-    timeZone: "Europe/London",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    hourCycle: "h23",
-  });
-  const [datePart, timePart] = londonTimeStr.split(", ");
-  const [month, day, year] = datePart.split("/").map(Number);
-  const [hours, minutes, seconds] = timePart.split(":").map(Number);
-  const londonDate = new Date(
-    Date.UTC(year, month - 1, day, hours, minutes, seconds),
-  );
-  return londonDate;
-};
+import {
+  addDaysToDateInput,
+  formatDateInputInLondon,
+  getMinimumPickupDateInput,
+  syncServerClock,
+} from "@/utils/londonTime";
+import { getAddonImageUri } from "@/utils/addonImage";
 
 const formatStoredDateShort = (displayDate?: string, isoDate?: string) => {
   const source = displayDate || isoDate;
@@ -90,6 +75,8 @@ const formatCalendarLabel = (date: Date | null) =>
       })
     : "No date selected yet";
 
+const RETURN_ACCENT = "#38bdf8";
+
 export default function BookingModal({
   visible,
   van,
@@ -108,6 +95,12 @@ export default function BookingModal({
   const [rulesModalVisible, setRulesModalVisible] = React.useState(false);
   const [termsModalVisible, setTermsModalVisible] = React.useState(false);
   const previousRulesVanId = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (visible) {
+      syncServerClock().catch(() => {});
+    }
+  }, [visible]);
 
   React.useEffect(() => {
     if (!visible || !van?.id) return;
@@ -227,6 +220,21 @@ export default function BookingModal({
     }
   }, [errors]);
 
+  const isReturnTimePicker = timeModalField === "returnTime";
+  const timePhaseAccent = isReturnTimePicker ? RETURN_ACCENT : ACCENT;
+  const timePhaseSlide = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (!timeModalVisible) return;
+    timePhaseSlide.setValue(isReturnTimePicker ? 26 : -26);
+    Animated.spring(timePhaseSlide, {
+      toValue: 0,
+      tension: 74,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  }, [isReturnTimePicker, timeModalVisible, timePhaseSlide]);
+
   if (!van) return null;
 
   const priceSummary = bookingPrice
@@ -246,7 +254,7 @@ export default function BookingModal({
         totalSavings: bookingPrice.totalSavings,
         addonItems: addonLineItems.map((item) => ({
           id: item.id,
-          label: `${item.name} x${item.quantity}`,
+          label: item.name,
           price: item.price,
         })),
         discountAmount: bookingPrice.discountAmount,
@@ -266,7 +274,9 @@ export default function BookingModal({
   const dailyPrice = Number(dynamicVanPrice || van.showPrice || 0);
   const totalPrice = priceSummary?.total ?? 0;
   const rentalDaysForAddons = bookingPrice?.totalDays || 1;
-  const normalizedAddons = ((Array.isArray(addons) ? addons : []) as any[]).filter(
+  const normalizedAddons = (
+    (Array.isArray(addons) ? addons : []) as any[]
+  ).filter(
     (addon) =>
       isAddonAvailableForCategory(addon, van?.id) &&
       isAddonAvailableForDays(addon, rentalDaysForAddons),
@@ -276,16 +286,19 @@ export default function BookingModal({
       ? van.purpose
       : "Ford Transit Custom or similar";
 
-  const setAddonQuantity = (addonId: string, quantity: number) => {
-    const nextQuantity = Math.max(0, Math.min(99, Math.floor(quantity || 0)));
-
+  const toggleAddon = (addonId: string) => {
     setAddonSelections((current: any) => {
       const next = { ...(current || {}) };
       const addon = normalizedAddons.find(
         (item) => String(item._id ?? item.id ?? item.name) === addonId,
       );
 
-      if (nextQuantity <= 0) {
+      const selectedQuantity =
+        typeof next[addonId] === "number"
+          ? Number(next[addonId] || 0)
+          : Number(next[addonId]?.quantity || 0);
+
+      if (selectedQuantity > 0) {
         delete next[addonId];
         return next;
       }
@@ -304,7 +317,7 @@ export default function BookingModal({
       }
 
       next[addonId] = {
-        quantity: nextQuantity,
+        quantity: 1,
         selectedTierIndex: addon
           ? getMatchingAddonTierIndex(addon, rentalDaysForAddons)
           : undefined,
@@ -408,9 +421,8 @@ export default function BookingModal({
                 ]}
               >
                 <View style={localStyles.vanSummaryCard}>
-                
                   <View style={localStyles.vanImageBox}>
-                     <Image
+                    <Image
                       source={van.image}
                       contentFit="cover"
                       transition={220}
@@ -567,39 +579,43 @@ export default function BookingModal({
                   </Text>
                 ) : null}
                 {false && (
-                <View style={localStyles.segmentRow}>
-                  {["23-29", "30-69", "70+"].map((age) => {
-                    const active = driverAge === age;
-                    return (
-                      <Pressable
-                        key={age}
-                        onPress={() => {
-                          Haptics.selectionAsync();
-                          setDriverAge(age as any);
-                        }}
-                        style={({ pressed }) => [
-                          localStyles.segmentButton,
-                          active && localStyles.segmentButtonActive,
-                          pressed && localStyles.pressed,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            localStyles.segmentText,
-                            active && localStyles.segmentTextActive,
+                  <View style={localStyles.segmentRow}>
+                    {["23-29", "30-69", "70+"].map((age) => {
+                      const active = driverAge === age;
+                      return (
+                        <Pressable
+                          key={age}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            setDriverAge(age as any);
+                          }}
+                          style={({ pressed }) => [
+                            localStyles.segmentButton,
+                            active && localStyles.segmentButtonActive,
+                            pressed && localStyles.pressed,
                           ]}
                         >
-                          {age === "70+" ? "70+" : age.replace("-", " – ")}
-                        </Text>
-                        {active && (
-                          <View style={localStyles.segmentCheck}>
-                            <Ionicons name="checkmark" size={10} color={DARK} />
-                          </View>
-                        )}
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                          <Text
+                            style={[
+                              localStyles.segmentText,
+                              active && localStyles.segmentTextActive,
+                            ]}
+                          >
+                            {age === "70+" ? "70+" : age.replace("-", " – ")}
+                          </Text>
+                          {active && (
+                            <View style={localStyles.segmentCheck}>
+                              <Ionicons
+                                name="checkmark"
+                                size={10}
+                                color={DARK}
+                              />
+                            </View>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 )}
                 <View style={localStyles.ageHelperRow}>
                   <Ionicons
@@ -819,69 +835,87 @@ export default function BookingModal({
                           const addonId = String(
                             addon._id ?? addon.id ?? addon.name,
                           );
-                          const selection = (addonSelections as any)?.[
-                            addonId
-                          ];
+                          const selection = (addonSelections as any)?.[addonId];
                           const quantity =
                             typeof selection === "number"
                               ? Math.max(0, selection)
                               : Math.max(0, Number(selection?.quantity || 0));
-                          const selectedTierIndex =
-                            getMatchingAddonTierIndex(
-                              addon,
-                              rentalDaysForAddons,
-                            );
+                          const isSelected = quantity > 0;
+                          const selectedTierIndex = getMatchingAddonTierIndex(
+                            addon,
+                            rentalDaysForAddons,
+                          );
                           const addonPrice = getAddonPriceForDays(
                             addon,
                             rentalDaysForAddons,
                             1,
                             selectedTierIndex,
                           );
+                          const addonImageUri = getAddonImageUri(addon);
                           const addonType = addon.type;
                           const isTypeDisabled =
-                            quantity <= 0 &&
+                            !isSelected &&
                             Boolean(
                               addonType &&
-                                Object.entries(addonSelections || {}).some(
-                                  ([selectedId, selectedValue]) => {
-                                    const selectedQuantity =
-                                      typeof selectedValue === "number"
-                                        ? selectedValue
-                                        : Number(
-                                            (selectedValue as any)?.quantity ||
-                                              0,
-                                          );
-                                    if (
-                                      selectedId === addonId ||
-                                      selectedQuantity <= 0
-                                    ) {
-                                      return false;
-                                    }
-                                    const selectedAddon =
-                                      normalizedAddons.find(
-                                        (item) =>
-                                          String(
-                                            item._id ?? item.id ?? item.name,
-                                          ) === selectedId,
-                                      );
-                                    return selectedAddon?.type === addonType;
-                                  },
-                                ),
+                              Object.entries(addonSelections || {}).some(
+                                ([selectedId, selectedValue]) => {
+                                  const selectedQuantity =
+                                    typeof selectedValue === "number"
+                                      ? selectedValue
+                                      : Number(
+                                          (selectedValue as any)?.quantity || 0,
+                                        );
+                                  if (
+                                    selectedId === addonId ||
+                                    selectedQuantity <= 0
+                                  ) {
+                                    return false;
+                                  }
+                                  const selectedAddon = normalizedAddons.find(
+                                    (item) =>
+                                      String(
+                                        item._id ?? item.id ?? item.name,
+                                      ) === selectedId,
+                                  );
+                                  return selectedAddon?.type === addonType;
+                                },
+                              ),
                             );
                           return (
                             <View
                               key={addonId}
                               style={[
                                 localStyles.addonRow,
+                                isSelected && localStyles.addonRowSelected,
                                 isTypeDisabled && localStyles.disabled,
                               ]}
                             >
-                              <View style={localStyles.addonIcon}>
-                                <Ionicons
-                                  name="add-circle-outline"
-                                  size={17}
-                                  color={ACCENT}
-                                />
+                              <View style={localStyles.addonMedia}>
+                                {addonImageUri ? (
+                                  <Image
+                                    source={{ uri: addonImageUri }}
+                                    style={localStyles.addonImage}
+                                    contentFit="cover"
+                                    transition={180}
+                                  />
+                                ) : (
+                                  <View style={localStyles.addonImageFallback}>
+                                    <Ionicons
+                                      name="add-circle-outline"
+                                      size={19}
+                                      color={ACCENT}
+                                    />
+                                  </View>
+                                )}
+                                {isSelected ? (
+                                  <View style={localStyles.addonSelectedBadge}>
+                                    <Ionicons
+                                      name="checkmark"
+                                      size={10}
+                                      color={DARK}
+                                    />
+                                  </View>
+                                ) : null}
                               </View>
                               <View style={localStyles.addonCopy}>
                                 <Text
@@ -890,47 +924,46 @@ export default function BookingModal({
                                 >
                                   {addon.name || "Optional extra"}
                                 </Text>
+                                {isTypeDisabled ? (
+                                  <Text style={localStyles.addonLockedText}>
+                                    Another option of this type is selected
+                                  </Text>
+                                ) : null}
                                 <Text style={localStyles.addonPrice}>
                                   £{addonPrice.toFixed(0)}
                                 </Text>
                               </View>
-                              <View style={localStyles.stepper}>
-                                <Pressable
-                                  disabled={quantity <= 0}
-                                  onPress={() =>
-                                    setAddonQuantity(addonId, quantity - 1)
+                              <Pressable
+                                disabled={isTypeDisabled}
+                                onPress={() => {
+                                  Haptics.selectionAsync();
+                                  toggleAddon(addonId);
+                                }}
+                                style={[
+                                  localStyles.addonToggle,
+                                  isSelected && localStyles.addonToggleActive,
+                                  isTypeDisabled && localStyles.disabled,
+                                ]}
+                              >
+                                <Ionicons
+                                  name={
+                                    isSelected
+                                      ? "checkmark-circle"
+                                      : "add-circle-outline"
                                   }
+                                  size={15}
+                                  color={isSelected ? DARK : ACCENT}
+                                />
+                                <Text
                                   style={[
-                                    localStyles.stepperButton,
-                                    quantity <= 0 && localStyles.disabled,
+                                    localStyles.addonToggleText,
+                                    isSelected &&
+                                      localStyles.addonToggleTextActive,
                                   ]}
                                 >
-                                  <Ionicons
-                                    name="remove"
-                                    size={14}
-                                    color="#d7e0e8"
-                                  />
-                                </Pressable>
-                                <Text style={localStyles.stepperValue}>
-                                  {quantity}
+                                  {isSelected ? "Selected" : "Select"}
                                 </Text>
-                                <Pressable
-                                  disabled={isTypeDisabled}
-                                  onPress={() =>
-                                    setAddonQuantity(addonId, quantity + 1)
-                                  }
-                                  style={[
-                                    localStyles.stepperButton,
-                                    isTypeDisabled && localStyles.disabled,
-                                  ]}
-                                >
-                                  <Ionicons
-                                    name="add"
-                                    size={14}
-                                    color="#d7e0e8"
-                                  />
-                                </Pressable>
-                              </View>
+                              </Pressable>
                             </View>
                           );
                         })}
@@ -1207,18 +1240,7 @@ export default function BookingModal({
                   enableSwipeMonths
                   minDate={
                     selectingDate === "pickup"
-                      ? (() => {
-                          const londonTime = getLondonTime();
-                          const londonHour = londonTime.getUTCHours();
-                          const minDate = new Date();
-
-                          if (londonHour < 16) {
-                            minDate.setDate(minDate.getDate() + 1);
-                          } else {
-                            minDate.setDate(minDate.getDate() + 2);
-                          }
-                          return minDate.toISOString().split("T")[0];
-                        })()
+                      ? getMinimumPickupDateInput()
                       : tempPickupDate?.toISOString().split("T")[0]
                   }
                   maxDate={
@@ -1264,23 +1286,14 @@ export default function BookingModal({
                     }
 
                     // Mark disabled dates (London time-based restriction + office closed days)
-                    const londonTime = getLondonTime();
-                    const londonHour = londonTime.getUTCHours();
-                    const today = new Date();
-                    const minAllowedDate = new Date(today);
-
-                    if (londonHour < 16) {
-                      minAllowedDate.setDate(today.getDate() + 1);
-                    } else {
-                      minAllowedDate.setDate(today.getDate() + 2);
-                    }
+                    const todayInput = formatDateInputInLondon();
+                    const minAllowedDateInput = getMinimumPickupDateInput();
 
                     for (let i = 0; i < 60; i++) {
-                      const checkDate = new Date(today);
-                      checkDate.setDate(today.getDate() + i);
-                      const dateStr = checkDate.toISOString().split("T")[0];
+                      const dateStr = addDaysToDateInput(todayInput, i);
+                      const checkDate = new Date(`${dateStr}T12:00:00Z`);
 
-                      if (checkDate < minAllowedDate) {
+                      if (dateStr < minAllowedDateInput) {
                         marked[dateStr] = {
                           disabled: true,
                           disableTouchEvent: true,
@@ -1309,200 +1322,481 @@ export default function BookingModal({
           </Pressable>
         </Modal>
 
-        <Modal visible={timeModalVisible} transparent animationType="fade">
+        <Modal
+          visible={timeModalVisible}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => {
+            setTimeModalVisible(false);
+            setTimeModalField(null);
+          }}
+        >
           <Pressable
-            style={styles.modalOverlay}
+            style={styles.timePickerOverlay}
             onPress={() => {
               setTimeModalVisible(false);
               setTimeModalField(null);
             }}
           >
             <Pressable
-              onPress={(e) => e.stopPropagation()}
-              style={styles.timeModalBox}
+              onPress={(event) => event.stopPropagation()}
+              style={[
+                styles.timePickerSheet,
+                isReturnTimePicker && styles.timePickerSheetReturn,
+              ]}
             >
-              <View style={styles.timeModalHeader}>
-                <View>
-                  <Text style={styles.modalTitle}>
-                    {timeModalField === "pickupTime" ? "Pickup" : "Return"} Time
-                  </Text>
+              <LinearGradient
+                colors={
+                  isReturnTimePicker
+                    ? ["#102536", "#0b1826", "#07101c"]
+                    : ["#131c2a", "#0c1522", "#07101c"]
+                }
+                locations={[0, 0.5, 1]}
+                style={StyleSheet.absoluteFill}
+              />
+
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.timePickerGlow,
+                  isReturnTimePicker && styles.timePickerGlowReturn,
+                ]}
+              />
+              <View style={styles.timePickerHandle} />
+
+              <View style={styles.timePickerHeader}>
+                <View style={styles.timePickerHeaderCopy}>
                   <Text
-                    style={{ color: "#9ca3af", fontSize: 11, marginTop: 2 }}
+                    style={[
+                      styles.timePickerTitle,
+                      { color: timePhaseAccent },
+                    ]}
                   >
-                    Select a time slot
+                    {isReturnTimePicker ? "Return Time" : "Pickup Time"}
+                  </Text>
+                  <Text style={styles.timePickerSubtitle}>
+                    {isReturnTimePicker
+                      ? "Step 2 of 2 - choose when you'll bring it back"
+                      : "Step 1 of 2 - choose when you'll collect the van"}
                   </Text>
                 </View>
+
                 <Pressable
+                  hitSlop={8}
                   onPress={() => {
                     setTimeModalVisible(false);
                     setTimeModalField(null);
                   }}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: "rgba(255,255,255,0.1)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+                  style={({ pressed }) => [
+                    styles.timePickerClose,
+                    isReturnTimePicker && styles.timePickerCloseReturn,
+                    pressed && styles.timePickerPressed,
+                  ]}
                 >
-                  <Ionicons name="close" size={20} color="#e5e7eb" />
+                  <Ionicons name="close" size={18} color="#e8edf5" />
                 </Pressable>
               </View>
-              <ScrollView
-                showsVerticalScrollIndicator
-                contentContainerStyle={{ paddingBottom: 10 }}
-              >
+
+              <View style={styles.timePickerPhaseRow}>
                 <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    justifyContent: "center",
-                    gap: 2,
-                  }}
+                  style={[
+                    styles.timePickerPhasePill,
+                    !isReturnTimePicker && styles.timePickerPhasePillActive,
+                  ]}
                 >
-                  {(() => {
-                    const office = getSelectedOffice(offices, selectedOffice);
-                    const dateToCheck =
-                      timeModalField === "pickupTime" ? pickupDate : returnDate;
-                    const isPickup = timeModalField === "pickupTime";
-                    const slots =
-                      office && dateToCheck
-                        ? getAvailableTimeSlots(dateToCheck, office, isPickup)
-                        : null;
-                    if (!slots?.slots?.length) return null;
-
-                    let times: string[] = slots.slots;
-
-                    if (!isPickup && pickupDate && returnDate && pickupTime) {
-                      const isSameDay =
-                        pickupDate.toDateString() === returnDate.toDateString();
-                      if (isSameDay) {
-                        const [pH, pM] = pickupTime.split(":").map(Number);
-                        const minReturnMinutes = pH * 60 + pM + 360;
-                        times = times.filter((time) => {
-                          const [rH, rM] = time.split(":").map(Number);
-                          const returnMinutes = rH * 60 + rM;
-                          return returnMinutes >= minReturnMinutes;
-                        });
-                      }
+                  <Ionicons
+                    name={
+                      isReturnTimePicker
+                        ? "checkmark-circle"
+                        : "radio-button-on"
                     }
-
-                    const dayName = [
-                      "sunday",
-                      "monday",
-                      "tuesday",
-                      "wednesday",
-                      "thursday",
-                      "friday",
-                      "saturday",
-                    ][dateToCheck?.getDay() || 0];
-                    const workingDay = office?.workingTime?.find(
-                      (w: WorkingTime) => w.day === dayName,
-                    );
-                    const extension = isPickup
-                      ? workingDay?.pickupExtension
-                      : workingDay?.returnExtension;
-                    const isAllExtension =
-                      slots.normalStart === slots.normalEnd;
-
-                    return times.map((time) => {
-                      const isPickup = timeModalField === "pickupTime";
-                      const isReserved = reservedSlots.some((slot) => {
-                        if (isPickup) {
-                          return time === slot.startTime;
-                        } else {
-                          return time === slot.endTime;
-                        }
-                      });
-                      const currentTime =
-                        timeModalField === "pickupTime"
-                          ? pickupTime
-                          : returnTime;
-                      const isAvailable = !isReserved;
-                      const isExtension =
-                        Boolean(slots.specialDay?.extraPrice) ||
-                        isAllExtension ||
-                        (slots.normalStart &&
-                          slots.normalEnd &&
-                          (time < slots.normalStart || time > slots.normalEnd));
-                      const extensionPrice =
-                        slots.specialDay?.extraPrice ||
-                        slots.extensionRanges.find(
-                          (range) =>
-                            time >= range.startTime && time <= range.endTime,
-                        )?.flatPrice ||
-                        (isExtension && extension ? extension.flatPrice : 0);
-
-                      return (
-                        <View
-                          key={time}
-                          style={{ width: "31%", marginBottom: 10 }}
-                        >
-                          <Pressable
-                            disabled={!isAvailable}
-                            onPress={() => isAvailable && selectTime(time)}
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: 6,
-                              paddingVertical: 12,
-                              paddingHorizontal: 10,
-                              borderRadius: 12,
-                              backgroundColor:
-                                currentTime === time
-                                  ? ACCENT
-                                  : "rgba(255,255,255,0.05)",
-                              borderWidth: 1.5,
-                              borderColor:
-                                currentTime === time
-                                  ? ACCENT
-                                  : "rgba(255,255,255,0.1)",
-                              opacity: isAvailable ? 1 : 0.4,
-                            }}
-                          >
-                            <View
-                              style={{
-                                width: 6,
-                                height: 6,
-                                borderRadius: 3,
-                                backgroundColor: isAvailable
-                                  ? isExtension
-                                    ? "#fbbf24"
-                                    : "#22c55e"
-                                  : "#ef4444",
-                              }}
-                            />
-                            <Text
-                              style={{
-                                color: currentTime === time ? DARK : "#e5e7eb",
-                                fontSize: 12,
-                                fontWeight: "600",
-                              }}
-                            >
-                              {time}
-                            </Text>
-                          </Pressable>
-                          {isExtension && extensionPrice > 0 && (
-                            <Text
-                              style={{
-                                fontSize: 9,
-                                color:
-                                  currentTime === time ? "#fff" : "#fbbf24",
-                                textAlign: "center",
-                                marginTop: 2,
-                              }}
-                            >
-                              +Â£{extensionPrice}
-                            </Text>
-                          )}
-                        </View>
-                      );
-                    });
-                  })()}
+                    size={14}
+                    color={!isReturnTimePicker ? ACCENT : "#22d37f"}
+                  />
+                  <Text
+                    style={[
+                      styles.timePickerPhaseText,
+                      !isReturnTimePicker && styles.timePickerPhaseTextActive,
+                    ]}
+                  >
+                    Pickup
+                  </Text>
                 </View>
-              </ScrollView>
+
+                <View style={styles.timePickerPhaseConnector}>
+                  <Ionicons
+                    name="arrow-forward"
+                    size={14}
+                    color={isReturnTimePicker ? RETURN_ACCENT : "#64748b"}
+                  />
+                </View>
+
+                <View
+                  style={[
+                    styles.timePickerPhasePill,
+                    isReturnTimePicker &&
+                      styles.timePickerPhasePillReturnActive,
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      isReturnTimePicker ? "radio-button-on" : "ellipse-outline"
+                    }
+                    size={14}
+                    color={isReturnTimePicker ? RETURN_ACCENT : "#94a3b8"}
+                  />
+                  <Text
+                    style={[
+                      styles.timePickerPhaseText,
+                      isReturnTimePicker && styles.timePickerPhaseTextReturn,
+                    ]}
+                  >
+                    Return
+                  </Text>
+                </View>
+              </View>
+
+              <Animated.View
+                style={[
+                  styles.timePickerAnimatedPane,
+                  {
+                    opacity: timePhaseSlide.interpolate({
+                      inputRange: [-26, 0, 26],
+                      outputRange: [0.76, 1, 0.76],
+                    }),
+                    transform: [{ translateX: timePhaseSlide }],
+                  },
+                ]}
+              >
+                {(() => {
+                const office = getSelectedOffice(offices, selectedOffice);
+                const dateToCheck =
+                  timeModalField === "pickupTime" ? pickupDate : returnDate;
+                const isPickup = timeModalField === "pickupTime";
+
+                const slots =
+                  office && dateToCheck
+                    ? getAvailableTimeSlots(dateToCheck, office, isPickup)
+                    : null;
+
+                if (!slots?.slots?.length) {
+                  return (
+                    <View style={styles.timePickerEmpty}>
+                      <View style={styles.timePickerEmptyIcon}>
+                        <Ionicons
+                          name="time-outline"
+                          size={25}
+                          color={timePhaseAccent}
+                        />
+                      </View>
+                      <Text style={styles.timePickerEmptyTitle}>
+                        No available time slots
+                      </Text>
+                      <Text style={styles.timePickerEmptyText}>
+                        Please select another date or office.
+                      </Text>
+                    </View>
+                  );
+                }
+
+                let times: string[] = slots.slots;
+
+                // Existing logic: minimum six-hour return on same-day rentals.
+                if (!isPickup && pickupDate && returnDate && pickupTime) {
+                  const isSameDay =
+                    pickupDate.toDateString() === returnDate.toDateString();
+
+                  if (isSameDay) {
+                    const [pH, pM] = pickupTime.split(":").map(Number);
+                    const minReturnMinutes = pH * 60 + pM + 360;
+
+                    times = times.filter((time) => {
+                      const [rH, rM] = time.split(":").map(Number);
+                      const returnMinutes = rH * 60 + rM;
+                      return returnMinutes >= minReturnMinutes;
+                    });
+                  }
+                }
+
+                const dayName = [
+                  "sunday",
+                  "monday",
+                  "tuesday",
+                  "wednesday",
+                  "thursday",
+                  "friday",
+                  "saturday",
+                ][dateToCheck?.getDay() || 0];
+
+                const workingDay = office?.workingTime?.find(
+                  (workingTime: WorkingTime) => workingTime.day === dayName,
+                );
+
+                const extension = isPickup
+                  ? workingDay?.pickupExtension
+                  : workingDay?.returnExtension;
+
+                const isAllExtension = slots.normalStart === slots.normalEnd;
+
+                const currentTime =
+                  timeModalField === "pickupTime" ? pickupTime : returnTime;
+
+                const readableDate = dateToCheck
+                  ? dateToCheck.toLocaleDateString("en-GB", {
+                      weekday: "short",
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "Select date";
+
+                const officeSecondaryText =
+                  (office as any)?.address ||
+                  (office as any)?.location ||
+                  "Selected rental office";
+
+                return (
+                  <>
+                    <View style={styles.timePickerContextRow}>
+                      <View style={styles.timePickerContextCard}>
+                        <View
+                          style={[
+                            styles.timePickerContextIcon,
+                            isReturnTimePicker &&
+                              styles.timePickerContextIconReturn,
+                          ]}
+                        >
+                          <Ionicons
+                            name="calendar-outline"
+                            size={16}
+                            color={timePhaseAccent}
+                          />
+                        </View>
+
+                        <View style={styles.timePickerContextCopy}>
+                          <Text
+                            style={styles.timePickerContextValue}
+                            numberOfLines={1}
+                          >
+                            {readableDate}
+                          </Text>
+                          <Text
+                            style={styles.timePickerContextLabel}
+                            numberOfLines={1}
+                          >
+                            {dateToCheck
+                              ? dateToCheck.toLocaleDateString("en-GB", {
+                                  weekday: "long",
+                                })
+                              : "Rental date"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.timePickerContextCard}>
+                        <View
+                          style={[
+                            styles.timePickerContextIcon,
+                            isReturnTimePicker &&
+                              styles.timePickerContextIconReturn,
+                          ]}
+                        >
+                          <Ionicons
+                            name="location-outline"
+                            size={16}
+                            color={timePhaseAccent}
+                          />
+                        </View>
+
+                        <View style={styles.timePickerContextCopy}>
+                          <Text
+                            style={styles.timePickerContextValue}
+                            numberOfLines={1}
+                          >
+                            {office?.name || "London Office"}
+                          </Text>
+                          <Text
+                            style={styles.timePickerContextLabel}
+                            numberOfLines={1}
+                          >
+                            {officeSecondaryText}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.timePickerLegend}>
+                      <View style={styles.timePickerLegendDot} />
+                      <Text style={styles.timePickerLegendText}>
+                        {isReturnTimePicker
+                          ? "Return slots available"
+                          : "Pickup slots available"}
+                      </Text>
+                    </View>
+
+                    <ScrollView
+                      showsVerticalScrollIndicator={false}
+                      style={styles.timePickerScroll}
+                      contentContainerStyle={styles.timePickerScrollContent}
+                    >
+                      <View style={styles.timePickerGrid}>
+                        {times.map((time) => {
+                          const isReserved = reservedSlots.some((slot) => {
+                            if (isPickup) {
+                              return time === slot.startTime;
+                            }
+
+                            return time === slot.endTime;
+                          });
+
+                          const isAvailable = !isReserved;
+                          const isSelected = currentTime === time;
+
+                          const isExtension =
+                            Boolean(slots.specialDay?.extraPrice) ||
+                            isAllExtension ||
+                            Boolean(
+                              slots.normalStart &&
+                              slots.normalEnd &&
+                              (time < slots.normalStart ||
+                                time > slots.normalEnd),
+                            );
+
+                          const extensionPrice =
+                            slots.specialDay?.extraPrice ||
+                            slots.extensionRanges.find(
+                              (range) =>
+                                time >= range.startTime &&
+                                time <= range.endTime,
+                            )?.flatPrice ||
+                            (isExtension && extension
+                              ? extension.flatPrice
+                              : 0);
+
+                          return (
+                            <View key={time} style={styles.timePickerCell}>
+                              <Pressable
+                                disabled={!isAvailable}
+                                onPress={() => isAvailable && selectTime(time)}
+                                style={({ pressed }) => [
+                                  styles.timePickerSlot,
+                                  isSelected && styles.timePickerSlotSelected,
+                                  isSelected &&
+                                    isReturnTimePicker &&
+                                    styles.timePickerSlotReturnSelected,
+                                  !isAvailable && styles.timePickerSlotDisabled,
+                                  pressed &&
+                                    isAvailable &&
+                                    styles.timePickerSlotPressed,
+                                ]}
+                              >
+                                {isSelected && (
+                                  <LinearGradient
+                                    pointerEvents="none"
+                                    colors={
+                                      isReturnTimePicker
+                                        ? ["#67e8f9", RETURN_ACCENT, "#0ea5e9"]
+                                        : ["#ffb000", ACCENT, "#ff8900"]
+                                    }
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={StyleSheet.absoluteFill}
+                                  />
+                                )}
+
+                                <View
+                                  style={[
+                                    styles.timePickerSlotDot,
+                                    {
+                                      backgroundColor: isAvailable
+                                        ? isExtension
+                                          ? "#fbbf24"
+                                          : "#22d37f"
+                                        : "#ef4444",
+                                    },
+                                  ]}
+                                />
+
+                                <Text
+                                  style={[
+                                    styles.timePickerSlotText,
+                                    isSelected &&
+                                      styles.timePickerSlotTextSelected,
+                                  ]}
+                                >
+                                  {time}
+                                </Text>
+                              </Pressable>
+
+                              {isExtension && extensionPrice > 0 && (
+                                <Text
+                                  style={[
+                                    styles.timePickerExtensionPrice,
+                                    isSelected &&
+                                      styles.timePickerExtensionPriceSelected,
+                                  ]}
+                                >
+                                  +£{extensionPrice}
+                                </Text>
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
+
+                    <Pressable
+                      onPress={() => {
+                        setTimeModalVisible(false);
+                        setTimeModalField(null);
+                      }}
+                      style={({ pressed }) => [
+                        styles.timePickerConfirm,
+                        isReturnTimePicker && styles.timePickerConfirmReturn,
+                        pressed && styles.timePickerConfirmPressed,
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={
+                          isReturnTimePicker
+                            ? ["#67e8f9", RETURN_ACCENT, "#0ea5e9"]
+                            : ["#ffb000", ACCENT, "#ff8900"]
+                        }
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.timePickerConfirmGradient}
+                      >
+                        <Text style={styles.timePickerConfirmText}>
+                          {isReturnTimePicker
+                            ? "Confirm Return Time"
+                            : "Confirm Pickup Time"}
+                        </Text>
+
+                        <View style={styles.timePickerConfirmArrow}>
+                          <Ionicons
+                            name="arrow-forward"
+                            size={16}
+                            color="#f8fafc"
+                          />
+                        </View>
+                      </LinearGradient>
+                    </Pressable>
+
+                    <View style={styles.timePickerSecureRow}>
+                      <Ionicons
+                        name="shield-checkmark-outline"
+                        size={13}
+                        color="rgba(226,232,240,0.48)"
+                      />
+                      <Text style={styles.timePickerSecureText}>
+                        Secure booking · No payment required
+                      </Text>
+                    </View>
+                  </>
+                );
+              })()}
+              </Animated.View>
             </Pressable>
           </Pressable>
         </Modal>
@@ -2048,13 +2342,55 @@ const localStyles = StyleSheet.create({
   loadingText: { color: "#8795a4", fontSize: 9, fontWeight: "700" },
   addonSection: { gap: 7 },
   addonRow: {
-    minHeight: 47,
+    minHeight: 72,
     paddingHorizontal: 8,
+    paddingVertical: 8,
     borderRadius: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     backgroundColor: "rgba(22,31,41,0.7)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.045)",
+  },
+  addonRowSelected: {
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderColor: "rgba(254,154,0,0.28)",
+  },
+  addonMedia: {
+    width: 58,
+    height: 54,
+    borderRadius: 11,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  addonImage: {
+    width: "100%",
+    height: "100%",
+  },
+  addonImageFallback: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.08)",
+  },
+  addonSelectedBadge: {
+    position: "absolute",
+    right: 4,
+    bottom: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: ACCENT,
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.88)",
   },
   addonIcon: {
     width: 27,
@@ -2066,23 +2402,36 @@ const localStyles = StyleSheet.create({
   },
   addonCopy: { flex: 1, minWidth: 0 },
   addonName: { color: "#e8edf2", fontSize: 9.5, fontWeight: "800" },
+  addonLockedText: {
+    color: "#fb7185",
+    fontSize: 7.5,
+    fontWeight: "700",
+    marginTop: 1,
+  },
   addonPrice: { color: ACCENT, fontSize: 8.5, fontWeight: "800", marginTop: 1 },
-  stepper: { flexDirection: "row", alignItems: "center", gap: 7 },
-  stepperButton: {
-    width: 25,
-    height: 25,
-    borderRadius: 8,
+  addonToggle: {
+    minHeight: 29,
+    minWidth: 82,
+    paddingHorizontal: 9,
+    borderRadius: 9,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.055)",
+    gap: 4,
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.24)",
   },
-  stepperValue: {
-    minWidth: 13,
-    textAlign: "center",
-    color: "#f8fafc",
-    fontSize: 10,
+  addonToggleActive: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  addonToggleText: {
+    color: ACCENT,
+    fontSize: 9,
     fontWeight: "900",
   },
+  addonToggleTextActive: { color: DARK },
   discountToggle: {
     minHeight: 42,
     paddingHorizontal: 9,

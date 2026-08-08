@@ -7,6 +7,16 @@ import { addonService } from "@/services/addonService";
 import { Ionicons } from "@expo/vector-icons";
 import GlassView from "@/components/global/GlassView";
 import { useToast } from "@/components/global/AppToast";
+import ReservationJourneyModal from "@/components/dashboard/ReservationJourneyModal";
+import PendingReservationEditSheet from "@/components/dashboard/PendingReservationEditSheet";
+import { statusLabel, statusTone } from "@/constants/reservationStatus";
+import { buildReservationJourney } from "@/utils/reservationJourney";
+import {
+  getInclusiveLondonDeadline,
+  getMinimumPickupDateInput,
+  getTrustedNowMs,
+  syncServerClock,
+} from "@/utils/londonTime";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -33,18 +43,9 @@ import { JSX } from "react/jsx-runtime";
 const { height } = Dimensions.get("window");
 
 const ACCENT = "#fe9a00";
-
-const getLondonTime = () => {
-  const now = new Date();
-  const londonTimeStr = now.toLocaleString("en-GB", {
-    timeZone: "Europe/London",
-  });
-  const [datePart, timePart] = londonTimeStr.split(", ");
-  const [day, month, year] = datePart.split("/").map(Number);
-  const [hours, minutes, seconds] = timePart.split(":").map(Number);
-  const londonDate = new Date(year, month - 1, day, hours, minutes, seconds);
-  return londonDate;
-};
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 
 type UserReservationsProps = {
   reservations: Reservation[];
@@ -82,6 +83,80 @@ const formatDate = (dateStr: string) => {
   return `${day}/${month}/${year} · ${hours}:${mins}`;
 };
 
+const getApiOrigin = () => {
+  const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "";
+  return baseUrl.replace(/\/api(?:\/.*)?$/i, "").replace(/\/$/, "");
+};
+
+const normalizeImageUri = (value: unknown): string | null => {
+  if (!value) return null;
+
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    return normalizeImageUri(
+      record.url || record.uri || record.src || record.location,
+    );
+  }
+
+  if (typeof value !== "string") return null;
+
+  const imageValue = value.trim();
+  if (!imageValue) return null;
+
+  if (/^(https?:|file:|content:|data:image\/)/i.test(imageValue)) {
+    return imageValue;
+  }
+
+  if (imageValue.startsWith("//")) {
+    return `https:${imageValue}`;
+  }
+
+  const origin = getApiOrigin();
+  if (imageValue.startsWith("/") && origin) {
+    return `${origin}${imageValue}`;
+  }
+
+  if (/\.(avif|gif|jpe?g|png|webp)(\?.*)?$/i.test(imageValue) && origin) {
+    return `${origin}/${imageValue.replace(/^\/+/, "")}`;
+  }
+
+  return null;
+};
+
+const getReservationVehicleImage = (reservation: Reservation) => {
+  const vehicle = reservation.vehicle as any;
+  const category = reservation.category as any;
+  const candidates = [
+    vehicle?.image,
+    vehicle?.thumbnail,
+    vehicle?.photo,
+    Array.isArray(vehicle?.images) ? vehicle.images[0] : null,
+    category?.image,
+    category?.thumbnail,
+    Array.isArray(category?.images) ? category.images[0] : null,
+  ];
+
+  for (const candidate of candidates) {
+    const imageUri = normalizeImageUri(candidate);
+    if (imageUri) return imageUri;
+  }
+
+  return null;
+};
+
+const formatCompactCountdown = (deadline: Date) => {
+  const difference = Math.max(0, deadline.getTime() - getTrustedNowMs());
+  if (difference === 0) return "Reached";
+
+  const days = Math.floor(difference / DAY);
+  const hours = Math.floor((difference % DAY) / HOUR);
+  const minutes = Math.floor((difference % HOUR) / MINUTE);
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${Math.max(1, minutes)}m`;
+};
+
 export default function UserReservations({
   reservations,
   isLoading = false,
@@ -106,6 +181,7 @@ export default function UserReservations({
   const [timeModalField, setTimeModalField] = useState<
     "pickup" | "return" | null
   >(null);
+
   const [tempPickupDate, setTempPickupDate] = useState<Date | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [reservedSlots, setReservedSlots] = useState<
@@ -119,8 +195,28 @@ export default function UserReservations({
     Record<string, number>
   >({});
   const [availableAddons, setAvailableAddons] = useState<AddOn[]>([]);
+  const [trackingReservation, setTrackingReservation] =
+    useState<Reservation | null>(null);
+  const [pendingEditReservation, setPendingEditReservation] =
+    useState<Reservation | null>(null);
+  const [trackingInitialSection, setTrackingInitialSection] = useState<
+    string | undefined
+  >(undefined);
+  const [, setTimerTick] = useState(0);
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    syncServerClock().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimerTick((value) => value + 1);
+    }, MINUTE);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -220,6 +316,18 @@ export default function UserReservations({
 
   const cancelEditing = () => {
     setIsEditing(false);
+  };
+
+  const openPendingEdit = (reservation: Reservation) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPendingEditReservation(reservation);
+  };
+
+  const openPendingEditFromDetails = () => {
+    const reservationToEdit = selectedReservation;
+    if (!reservationToEdit) return;
+    closeModal();
+    setTimeout(() => setPendingEditReservation(reservationToEdit), 260);
   };
 
   useEffect(() => {
@@ -415,6 +523,13 @@ export default function UserReservations({
     const date = new Date(dateString);
     Haptics.selectionAsync();
     if (selectingDate === "pickup") {
+      if (dateString < getMinimumPickupDateInput()) {
+        Alert.alert(
+          "Pickup date unavailable",
+          "Please choose a pickup date that matches our UK booking cut-off.",
+        );
+        return;
+      }
       setEditPickupDate(date);
       setTempPickupDate(date);
       setSelectingDate("return");
@@ -489,7 +604,8 @@ export default function UserReservations({
           startDate: start.toISOString(),
           endDate: end.toISOString(),
           totalPrice: dynamicPrice,
-          messege: editMessage,
+          messege: editMessage.trim(),
+          message: editMessage.trim(),
           addOns: updatedAddOns,
         },
       );
@@ -516,95 +632,231 @@ export default function UserReservations({
     }
   };
   const renderStatus = (status: string) => {
-    let label = "";
-    let color = "";
-    switch (status) {
-      case "pending":
-        label = "Pending";
-        color = "#fbbf24";
-        break;
-      case "confirmed":
-        label = "Confirmed";
-        color = "#22c55e";
-        break;
-      case "completed":
-        label = "Completed";
-        color = "#38bdf8";
-        break;
-      case "canceled":
-        label = "Cancelled";
-        color = "#f97373";
-      case "delivered":
-        label = "Collected";
-        color = "#e406d9ff";
-        break;
-      default:
-        label = status;
-        color = "#9ca3af";
-    }
+    const label = statusLabel(status);
+    const color = statusTone(status).fg;
     return (
       <View style={[styles.statusBadge, { backgroundColor: color + "33" }]}>
         <View style={[styles.statusDot, { backgroundColor: color }]} />
-        <Text style={[styles.statusText, { color }]}>{label}</Text>
+        <Text style={[styles.statusText, { color }]} numberOfLines={1}>
+          {label}
+        </Text>
       </View>
     );
   };
 
-  const renderItem = ({ item }: { item: Reservation }) => (
-    <Pressable
-      style={styles.card}
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        setSelectedReservation(item);
-      }}
-    >
-      <View style={styles.rowBetween}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.vanName}>{item.category?.name || "Van"}</Text>
-          <Text style={styles.locationText}>
-            <Ionicons name="location-outline" size={13} color={ACCENT} />{" "}
-            {item.office?.name || "Office"}
-          </Text>
-          {item.createdAt && (
-            <Text style={styles.reservedDate}>
-              <Ionicons name="calendar" size={13} color={ACCENT} /> Reserved On:{" "}
-              {formatDate(item.createdAt.toString())}
-            </Text>
-          )}
-        </View>
-        {renderStatus(item.status)}
-      </View>
+  const renderItem = ({ item }: { item: Reservation }) => {
+    const journey = buildReservationJourney(item);
+    const vehicleImageUri = getReservationVehicleImage(item);
+    const plateNumber = item.vehicle?.number
+      ? String(item.vehicle.number)
+      : "Plate pending";
+    const categoryName = item.category?.name || "Category pending";
+    const refundDeadline =
+      journey.mainStatus === "refund_processing"
+        ? getInclusiveLondonDeadline(journey.refund?.expectedBy)
+        : null;
+    const timerValue = refundDeadline
+      ? formatCompactCountdown(refundDeadline)
+      : null;
+    const openDetails = () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setSelectedReservation(item);
+    };
+    const openTracker = (section?: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setTrackingInitialSection(section);
+      setTrackingReservation(item);
+    };
 
-      <View style={styles.datesRow}>
-        <View style={styles.dateBlock}>
-          <Text style={styles.dateLabel}>Pickup</Text>
-          <Text style={styles.dateValue}>{formatDate(item.startDate)}</Text>
-        </View>
-        <View style={styles.dateBlock}>
-          <Text style={styles.dateLabel}>Return</Text>
-          <Text style={styles.dateValue}>{formatDate(item.endDate)}</Text>
-        </View>
-      </View>
+    return (
+      <Pressable
+        onPress={openDetails}
+        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      >
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            "rgba(19,29,45,0.98)",
+            "rgba(8,17,31,0.99)",
+            "rgba(7,15,28,0.99)",
+          ]}
+          locations={[0, 0.48, 1]}
+          style={StyleSheet.absoluteFill}
+        />
 
-      {item.addOns && item.addOns.length > 0 && (
-        <View style={styles.addonsSection}>
-          <Text style={styles.addonsLabel}>Add-ons</Text>
-          {item.addOns.map((addon, index) => (
-            <View key={index} style={styles.addonItem}>
-              <Text style={styles.addonName}>
-                {addon.addOn?.name || "Add-on"} x{addon.quantity}
+        <View pointerEvents="none" style={styles.cardTopGlow} />
+        <View pointerEvents="none" style={styles.cardEdgeHighlight} />
+
+        <View style={styles.cardTopRow}>
+          <View style={styles.vehicleImageWrap}>
+            <LinearGradient
+              pointerEvents="none"
+              colors={[
+                "rgba(31,46,67,0.96)",
+                "rgba(12,24,40,0.96)",
+                "rgba(5,12,22,0.98)",
+              ]}
+              style={StyleSheet.absoluteFill}
+            />
+
+            <View pointerEvents="none" style={styles.vehicleImageGlow} />
+
+            {vehicleImageUri ? (
+              <Image
+                source={{ uri: vehicleImageUri }}
+                style={styles.vehicleImage}
+                contentFit="cover"
+                transition={220}
+              />
+            ) : (
+              <View style={styles.vehicleImageFallback}>
+                <Ionicons name="car-sport-outline" size={30} color={ACCENT} />
+              </View>
+            )}
+
+            <LinearGradient
+              pointerEvents="none"
+              colors={[
+                "rgba(5,10,18,0)",
+                "rgba(5,10,18,0.08)",
+                "rgba(5,10,18,0.72)",
+              ]}
+              locations={[0, 0.58, 1]}
+              style={styles.vehicleImageShade}
+            />
+          </View>
+
+          <View style={styles.cardSummary}>
+            <View style={styles.cardTitleLine}>
+              <Text style={styles.vanName} numberOfLines={1}>
+                {journey.vehicleName}
+              </Text>
+
+              <Text style={styles.vehiclePlateText} numberOfLines={1}>
+                {plateNumber}
               </Text>
             </View>
-          ))}
-        </View>
-      )}
 
-      <View style={styles.priceRow}>
-        <Text style={styles.priceLabel}>Total Price</Text>
-        <Text style={styles.priceValue}>£{item.totalPrice}</Text>
-      </View>
-    </Pressable>
-  );
+            <View style={styles.compactInfoRow}>
+              <View style={styles.categoryPill}>
+                <Text style={styles.categoryPillText} numberOfLines={1}>
+                  {categoryName}
+                </Text>
+              </View>
+              <View style={styles.statusWrap}>{renderStatus(item.status)}</View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.datesRow}>
+          <View style={styles.dateBlock}>
+            <View style={styles.dateHeaderRow}>
+              <Ionicons
+                name="calendar-outline"
+                size={12}
+                color="rgba(226,232,240,0.56)"
+              />
+              <Text style={styles.dateLabel}>PICKUP</Text>
+            </View>
+            <Text style={styles.dateValue} numberOfLines={1}>
+              {journey.pickupDateTime}
+            </Text>
+          </View>
+
+          <View style={styles.dateBlock}>
+            <View style={styles.dateHeaderRow}>
+              <Ionicons
+                name="calendar-outline"
+                size={12}
+                color="rgba(226,232,240,0.56)"
+              />
+              <Text style={styles.dateLabel}>RETURN</Text>
+            </View>
+            <Text style={styles.dateValue} numberOfLines={1}>
+              {journey.returnDateTime}
+            </Text>
+          </View>
+        </View>
+
+        {timerValue ? (
+          <View style={styles.compactTimerRow}>
+            <View style={styles.compactTimerLeft}>
+              <View style={styles.compactTimerIcon}>
+                <Ionicons name="timer-outline" size={14} color="#38bdf8" />
+              </View>
+              <Text style={styles.compactTimerLabel}>Refund timer</Text>
+            </View>
+
+            <Text
+              style={[
+                styles.compactTimerValue,
+                timerValue === "Reached" && styles.compactTimerReached,
+              ]}
+            >
+              {timerValue}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.compactActions}>
+          <View style={styles.compactHiddenPrice}>
+            <Text style={styles.priceLabel}>Total Price</Text>
+            <Text style={styles.priceValue}>£{item.totalPrice}</Text>
+          </View>
+
+          <View style={styles.cardActions}>
+            {item.status === "pending" ? (
+              <Pressable
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openPendingEdit(item);
+                }}
+                style={({ pressed }) => [
+                  styles.editReservationButton,
+                  pressed && styles.actionPressed,
+                ]}
+              >
+                <Ionicons name="create-outline" size={13} color="#052e16" />
+                <Text style={styles.editReservationText}>Edit</Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                openDetails();
+              }}
+              style={({ pressed }) => [
+                styles.moreInfoButton,
+                pressed && styles.actionPressed,
+              ]}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color="#0f172a"
+              />
+              <Text style={styles.moreInfoText}>More info</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                openTracker();
+              }}
+              style={({ pressed }) => [
+                styles.trackButton,
+                pressed && styles.actionPressed,
+              ]}
+            >
+              <Text style={styles.trackButtonText}>Track</Text>
+              <Ionicons name="arrow-forward" size={13} color={ACCENT} />
+            </Pressable>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -690,6 +942,24 @@ export default function UserReservations({
         }
       />
 
+      <ReservationJourneyModal
+        visible={!!trackingReservation}
+        reservation={trackingReservation}
+        initialSection={trackingInitialSection}
+        onClose={() => {
+          setTrackingReservation(null);
+          setTrackingInitialSection(undefined);
+        }}
+        onUpdated={onRefresh}
+      />
+
+      <PendingReservationEditSheet
+        visible={!!pendingEditReservation}
+        reservation={pendingEditReservation}
+        onClose={() => setPendingEditReservation(null)}
+        onUpdated={onRefresh}
+      />
+
       <Modal
         visible={
           !!selectedReservation && !dateModalVisible && !timeModalVisible
@@ -717,7 +987,10 @@ export default function UserReservations({
                   </Text>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {!isEditing && selectedReservation.status === "pending" && (
-                      <Pressable onPress={startEditing} style={styles.editBtn}>
+                      <Pressable
+                        onPress={openPendingEditFromDetails}
+                        style={styles.editBtn}
+                      >
                         <Ionicons
                           name="create-outline"
                           size={20}
@@ -1280,17 +1553,7 @@ export default function UserReservations({
                 markingType="period"
                 minDate={
                   selectingDate === "pickup"
-                    ? (() => {
-                        const londonTime = getLondonTime();
-                        const londonHour = londonTime.getUTCHours();
-                        const minDate = new Date();
-                        if (londonHour < 16) {
-                          minDate.setDate(minDate.getDate() + 1);
-                        } else {
-                          minDate.setDate(minDate.getDate() + 2);
-                        }
-                        return minDate.toISOString().split("T")[0];
-                      })()
+                    ? getMinimumPickupDateInput()
                     : tempPickupDate?.toISOString().split("T")[0]
                 }
                 theme={{
@@ -1539,17 +1802,447 @@ const styles = StyleSheet.create({
     paddingBottom: 132,
   },
   card: {
-    backgroundColor: "rgba(12,20,35,0.96)",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
+    position: "relative",
+    overflow: "hidden",
+    padding: 12,
+    paddingBottom: 7,
+    marginBottom: 14,
+    borderRadius: 18,
+    backgroundColor: "#08111f",
     borderWidth: 1,
-    borderColor: "rgba(111,142,180,0.13)",
-    shadowColor: "#000",
+    borderColor: "rgba(254,154,0,0.5)",
+    shadowColor: ACCENT,
     shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.17,
+    shadowRadius: 18,
+    elevation: 7,
+  },
+
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.992 }],
+  },
+
+  cardTopGlow: {
+    position: "absolute",
+    top: -74,
+    left: -20,
+    width: 190,
+    height: 128,
+    borderRadius: 90,
+    backgroundColor: "rgba(254,154,0,0.075)",
+  },
+
+  cardEdgeHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 22,
+    right: 22,
+    height: 1,
+    backgroundColor: "rgba(255,221,162,0.25)",
+  },
+
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    minHeight: 91,
+  },
+
+  vehicleImageWrap: {
+    position: "relative",
+    width: 94,
+    minHeight: 91,
+    overflow: "hidden",
+    borderRadius: 14,
+    marginRight: 12,
+    backgroundColor: "#0b1626",
+    borderWidth: 1,
+    borderColor: "rgba(119,146,179,0.14)",
+  },
+
+  vehicleImageGlow: {
+    position: "absolute",
+    width: 98,
+    height: 70,
+    right: -28,
+    bottom: -12,
+    borderRadius: 52,
+    backgroundColor: "rgba(42,91,160,0.12)",
+  },
+
+  vehicleImage: {
+    width: "100%",
+    height: "100%",
+    transform: [{ scale: 1.06 }],
+  },
+
+  vehicleImageFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  vehicleImageShade: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  cardSummary: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+
+  cardTitleLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    minWidth: 0,
+  },
+
+  vanName: {
+    flexShrink: 1,
+    flexGrow: 0,
+    minWidth: 0,
+    maxWidth: "72%",
+    color: "#f8fafc",
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+
+  cardAlertDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    flexShrink: 0,
+    backgroundColor: "#ff334f",
+    shadowColor: "#ff334f",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 5,
+  },
+
+  vehiclePlateRow: {
+    alignSelf: "flex-start",
+    minHeight: 23,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 7,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(254,154,0,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.16)",
+  },
+
+  vehiclePlateIcon: {
+    width: 14,
+    height: 14,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  vehiclePlateText: {
+    maxWidth: 82,
+    flexShrink: 0,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 5,
+    overflow: "hidden",
+    backgroundColor: "rgba(254,154,0,0.1)",
+    color: "#ffd071",
+    fontSize: 8.5,
+    lineHeight: 10,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+
+  compactInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
+    marginTop: 7,
+  },
+
+  categoryPill: {
+    maxWidth: 128,
+    minHeight: 23,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderWidth: 1,
+    borderColor: "rgba(133,156,184,0.14)",
+  },
+
+  categoryPillText: {
+    flexShrink: 1,
+    color: "rgba(226,232,240,0.8)",
+    fontSize: 8.5,
+    fontWeight: "800",
+  },
+
+  statusWrap: {
+    flexShrink: 1,
+  },
+
+  datesRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 11,
+  },
+
+  dateBlock: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 35,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(128,153,184,0.13)",
+  },
+
+  dateHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 5,
+  },
+
+  dateLabel: {
+    color: "rgba(203,213,225,0.48)",
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+
+  dateValue: {
+    color: "#edf2f8",
+    fontSize: 9.5,
+    lineHeight: 14,
+    fontWeight: "800",
+  },
+
+  compactTimerRow: {
+    minHeight: 39,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 9,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(4,114,171,0.09)",
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.23)",
+  },
+
+  compactTimerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  compactTimerIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(56,189,248,0.08)",
+  },
+
+  compactTimerLabel: {
+    color: "#dbeafe",
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+
+  compactTimerValue: {
+    color: "#22d3ee",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+
+  compactTimerReached: {
+    color: "#fb7185",
+  },
+
+  compactActions: {
+    marginTop: 9,
+  },
+
+  compactHiddenPrice: {
+    display: "none",
+  },
+
+  priceLabel: {
+    color: "rgba(203,213,225,0.48)",
+    fontSize: 8.5,
+    fontWeight: "800",
+  },
+
+  priceValue: {
+    color: ACCENT,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  cardActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+
+  editReservationButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    overflow: "hidden",
+    backgroundColor: "#22c55e",
+    borderWidth: 1,
+    borderColor: "rgba(187,247,208,0.42)",
+  },
+
+  editReservationText: {
+    color: "#052e16",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  moreInfoButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    overflow: "hidden",
+    backgroundColor: ACCENT,
+    borderWidth: 1,
+    borderColor: "rgba(255,218,150,0.55)",
+    shadowColor: ACCENT,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+
+  moreInfoText: {
+    color: "#0f172a",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  trackButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(254,154,0,0.035)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.28)",
+  },
+
+  trackButtonText: {
+    color: ACCENT,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  actionPressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.985 }],
+  },
+
+  cardBottomChevron: {
+    width: 34,
+    height: 18,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 3,
+  },
+
+  chevronPressed: {
+    opacity: 0.55,
+    transform: [{ translateY: 1 }],
+  },
+
+  vehicleImageTag: {
+    position: "absolute",
+    left: 7,
+    right: 7,
+    bottom: 7,
+    minHeight: 24,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(9,15,25,0.82)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  vehicleImageTagText: {
+    color: "#f8fafc",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  cardMetaRow: {
+    gap: 7,
+    marginTop: 9,
+  },
+  cardMetaPill: {
+    minHeight: 30,
+    paddingHorizontal: 9,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  cardMetaText: {
+    flex: 1,
+    minWidth: 0,
+    color: "rgba(226,232,240,0.76)",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  cardHintRow: {
+    minHeight: 25,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+  },
+  cardHintText: {
+    flex: 1,
+    color: "rgba(148,163,184,0.72)",
+    fontSize: 9,
+    fontWeight: "700",
   },
   rowBetween: {
     flexDirection: "row",
@@ -1557,12 +2250,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 10,
   },
-  vanName: {
-    color: "#f7f8fb",
-    fontSize: 15,
-    fontWeight: "900",
-    letterSpacing: -0.2,
-  },
+
   locationText: {
     color: "rgba(208,217,230,0.6)",
     fontSize: 10.5,
@@ -1574,36 +2262,10 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     marginTop: 4,
   },
-  datesRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-  },
-  dateBlock: {
-    flex: 1,
-    minHeight: 54,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 11,
-    backgroundColor: "rgba(255,255,255,0.035)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.055)",
-  },
-  dateLabel: {
-    color: "rgba(197,207,220,0.48)",
-    fontSize: 8.5,
-    textTransform: "uppercase",
-    letterSpacing: 0.65,
-    marginBottom: 4,
-    fontWeight: "800",
-  },
-  dateValue: {
-    color: "#e9edf4",
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "700",
-  },
+
   statusBadge: {
+    maxWidth: 104,
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 8,
@@ -1617,7 +2279,8 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   statusText: {
-    fontSize: 9.5,
+    flexShrink: 1,
+    fontSize: 7.5,
     fontWeight: "800",
   },
   emptyState: {
@@ -1781,16 +2444,72 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(148,163,184,0.12)",
   },
-  priceLabel: {
-    color: "rgba(231,236,243,0.72)",
-    fontSize: 11,
-    fontWeight: "800",
+
+  nextActionCard: {
+    flexDirection: "row",
+    gap: 10,
+    borderRadius: 13,
+    padding: 11,
+    marginTop: 11,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.065)",
   },
-  priceValue: {
-    color: ACCENT,
-    fontSize: 17,
+  nextActionCardHot: {
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderColor: "rgba(254,154,0,0.26)",
+  },
+  nextActionIcon: {
+    width: 31,
+    height: 31,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.16)",
+  },
+  nextActionCopy: { flex: 1, minWidth: 0 },
+  nextActionKicker: {
+    color: "rgba(190,201,216,0.48)",
+    fontSize: 8.5,
+    textTransform: "uppercase",
+    letterSpacing: 0.65,
     fontWeight: "900",
   },
+  nextActionTitle: {
+    color: "#f7f8fb",
+    fontSize: 12.5,
+    fontWeight: "900",
+    marginTop: 2,
+  },
+  nextActionDescription: {
+    color: "rgba(214,222,234,0.58)",
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+
+  cardActionButton: {
+    minHeight: 32,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  cardActionButtonHot: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  cardActionText: {
+    color: "#f8fafc",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  cardActionTextHot: { color: "#111827" },
+
   addonsSection: {
     marginTop: 10,
     paddingTop: 10,

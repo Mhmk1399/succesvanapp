@@ -44,6 +44,13 @@ export interface AddOnOption {
   _id: string;
   name: string;
   description?: string;
+  image?: string;
+  imageUrl?: string;
+  thumbnail?: string;
+  photo?: string;
+  picture?: string;
+  images?: string[];
+  icon?: string;
   pricingType: "flat" | "tiered";
   flatPrice?: {
     amount: number;

@@ -1,0 +1,311 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
+import * as ImagePicker from "expo-image-picker";
+import * as Linking from "expo-linking";
+import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
+import { buildUrl, normalizeUrl, safeFetch } from "./apiClient";
+import { uploadToS3 } from "@/utils/s3Upload";
+import type { ContractDocumentKind, SafeContractSummary } from "@/types/contract";
+import type { Reservation } from "@/types/type";
+
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL || "").trim();
+const RESERVATIONS_API = (process.env.EXPO_PUBLIC_RESERVATIONS_API || "").trim();
+const USERS_API = (process.env.EXPO_PUBLIC_USERS_API || "").trim();
+
+export type LicenceDetailsReview = {
+  isFrontSide?: boolean;
+  sourceSide?: "front" | "back" | "unknown";
+  firstName?: string | null;
+  lastName?: string | null;
+  fullName?: string | null;
+  dateOfBirth?: string | null;
+  address?: string | null;
+  postcode?: string | null;
+  licenseNumber?: string | null;
+  licenceNumber?: string | null;
+  issueDate?: string | null;
+  expirationDate?: string | null;
+  expiryDate?: string | null;
+  issuingCountry?: string | null;
+  issuingAuthority?: string | null;
+  licenceCategories?: string[];
+};
+
+type LicenceAttached = {
+  front?: string;
+  back?: string;
+};
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await AsyncStorage.getItem("authToken");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function apiBase(path: string) {
+  if (!API_BASE_URL) throw new Error("API base URL is not configured");
+  return `${API_BASE_URL}${path}`;
+}
+
+function usersUrl(userId: string) {
+  if (USERS_API) return `${USERS_API}/${userId}`;
+  return apiBase(`/users/${userId}`);
+}
+
+async function readJson(response: Response) {
+  const data = await response.json();
+  if (!data?.success) throw new Error(data?.error || "Request failed");
+  return data;
+}
+
+async function readDocumentError(response: Response) {
+  const text = await response.text().catch(() => "");
+  if (!text) return `Download failed with status ${response.status}`;
+  try {
+    const data = JSON.parse(text);
+    return data?.error || data?.message || `Download failed with status ${response.status}`;
+  } catch {
+    return text;
+  }
+}
+
+function sanitizeFileName(value: string) {
+  return value.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function contractDocumentFileName(
+  contract: Pick<SafeContractSummary, "_id" | "contractNumber">,
+  kind: ContractDocumentKind,
+) {
+  const suffix =
+    kind === "source"
+      ? "unsigned-agreement"
+      : kind === "certificate"
+        ? "certificate"
+        : "signed-agreement";
+  return `${sanitizeFileName(contract.contractNumber || contract._id)}-${suffix}.pdf`;
+}
+
+function profileFieldsFromLicence(details: LicenceDetailsReview) {
+  return {
+    ...(details.address?.trim() ? { address: details.address.trim() } : {}),
+    ...(details.postcode?.trim()
+      ? { postalCode: details.postcode.trim() }
+      : {}),
+  };
+}
+
+async function imageAssetToBase64(asset: ImagePicker.ImagePickerAsset) {
+  if (asset.base64) return asset.base64;
+  if (!asset.uri) throw new Error("Licence image is missing");
+
+  if (Platform.OS === "web") {
+    const response = await fetch(asset.uri);
+    const blob = await response.blob();
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Could not read licence image"));
+      reader.onload = () => {
+        const value = String(reader.result || "");
+        resolve(value.includes(",") ? value.split(",")[1] : value);
+      };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  return new FileSystem.File(asset.uri).base64();
+}
+
+export const customerJourneyService = {
+  async extractLicenceDetails(asset: ImagePicker.ImagePickerAsset) {
+    const image = await imageAssetToBase64(asset);
+    const response = await safeFetch(apiBase("/extract-license"), {
+      method: "POST",
+      toast: { silent: true },
+      headers: {
+        "Content-Type": "application/json",
+        ...(await authHeaders()),
+      },
+      body: JSON.stringify({
+        image,
+        mimeType: asset.mimeType || "image/jpeg",
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(
+        payload?.error || "Could not scan the front licence image",
+      );
+    }
+
+    return (await response.json()) as LicenceDetailsReview;
+  },
+
+  async updateUserLicence(
+    userId: string,
+    licenceAttached: LicenceAttached,
+    licenceDetails?: LicenceDetailsReview,
+  ) {
+    const response = await safeFetch(usersUrl(userId), {
+      method: "PUT",
+      toast: {
+        successTitle: "Licence uploaded",
+        successMessage: "Your licence is ready for review.",
+        errorTitle: "Upload failed",
+      },
+      headers: {
+        "Content-Type": "application/json",
+        ...(await authHeaders()),
+      },
+      body: JSON.stringify({
+        ...(licenceDetails ? profileFieldsFromLicence(licenceDetails) : {}),
+        licenceAttached,
+        ...(licenceDetails
+          ? {
+              licenceDetails: {
+                ...licenceDetails,
+                isFrontSide: true,
+                sourceSide: "front",
+              },
+            }
+          : {}),
+      }),
+    });
+
+    return readJson(response);
+  },
+
+  async getReservationJourney(reservationId: string) {
+    const response = await safeFetch(
+      apiBase(`/customer/reservations/${reservationId}/journey`),
+      { headers: await authHeaders() },
+    );
+    return readJson(response) as Promise<{
+      success: boolean;
+      data: {
+        reservation: Reservation;
+        contract: SafeContractSummary | null;
+      };
+    }>;
+  },
+
+  async getContracts(bookingId?: string) {
+    const response = await safeFetch(
+      buildUrl(apiBase("/contracts"), bookingId ? { bookingId } : undefined),
+      { headers: await authHeaders() },
+    );
+    const data = await readJson(response);
+    return (data.data || []) as SafeContractSummary[];
+  },
+
+  async startSigning(contractId: string, returnUrl?: string) {
+    const response = await safeFetch(apiBase(`/contracts/${contractId}/signing-url`), {
+      method: "POST",
+      toast: {
+        successTitle: "DocuSign ready",
+        successMessage: "Opening your agreement.",
+        errorTitle: "DocuSign unavailable",
+      },
+      headers: {
+        "Content-Type": "application/json",
+        ...(await authHeaders()),
+      },
+      body: JSON.stringify({ returnUrl }),
+    });
+    const data = await readJson(response);
+    return data.data?.url as string;
+  },
+
+  async refreshContract(contractId: string) {
+    const response = await safeFetch(
+      apiBase(`/contracts/${contractId}/status?refresh=true`),
+      { headers: await authHeaders() },
+    );
+    const data = await readJson(response);
+    return data.data as SafeContractSummary;
+  },
+
+  getContractDocumentUrl(contractId: string, kind: ContractDocumentKind) {
+    return apiBase(`/contracts/${contractId}/document?type=${kind}`);
+  },
+
+  async downloadContractDocument(
+    contract: Pick<SafeContractSummary, "_id" | "contractNumber">,
+    kind: ContractDocumentKind,
+  ) {
+    const url = this.getContractDocumentUrl(contract._id, kind);
+    const headers = await authHeaders();
+    const fileName = contractDocumentFileName(contract, kind);
+
+    if (Platform.OS === "web") {
+      const response = await safeFetch(url, { headers });
+      if (!response.ok) throw new Error(await readDocumentError(response));
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+      return fileName;
+    }
+
+    const destination = new FileSystem.File(
+      FileSystem.Paths.document,
+      fileName,
+    );
+    const downloadedFile = await FileSystem.File.downloadFileAsync(
+      normalizeUrl(url),
+      destination,
+      { headers, idempotent: true },
+    );
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(downloadedFile.uri, {
+        mimeType: "application/pdf",
+        dialogTitle: fileName,
+        UTI: "com.adobe.pdf",
+      });
+    } else {
+      await Linking.openURL(downloadedFile.uri);
+    }
+
+    return downloadedFile.uri;
+  },
+
+  async submitDeposit(
+    reservationId: string,
+    option: "full" | "secure" | "office",
+    receipt?: ImagePicker.ImagePickerAsset | null,
+  ) {
+    let receiptUrl: string | undefined;
+    if (option !== "office") {
+      if (!receipt) throw new Error("Please upload your payment receipt");
+      receiptUrl = await uploadToS3(receipt, "deposit-receipt");
+    }
+
+    const base = API_BASE_URL
+      ? apiBase(`/reservations/${reservationId}/deposit`)
+      : `${RESERVATIONS_API}/${reservationId}/deposit`;
+    const response = await safeFetch(base, {
+      method: "POST",
+      toast: {
+        successTitle: option === "office" ? "Deposit noted" : "Receipt sent",
+        successMessage:
+          option === "office"
+            ? "You'll pay the deposit at the office."
+            : "We'll verify your payment shortly.",
+        errorTitle: "Deposit update failed",
+      },
+      headers: {
+        "Content-Type": "application/json",
+        ...(await authHeaders()),
+      },
+      body: JSON.stringify({ option, receiptUrl }),
+    });
+    return readJson(response);
+  },
+};

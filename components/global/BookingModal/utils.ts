@@ -1,5 +1,6 @@
 import * as Notifications from "expo-notifications";
 import { Audio } from "expo-av";
+import { Platform } from "react-native";
 import { Van } from "../vanlist";
 import { Office } from "@/types/type";
 import {
@@ -65,19 +66,28 @@ export const playSuccessSound = async () => {
 };
 
 export const scheduleNotification = async (van: Van | null) => {
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== "granted") return;
+  if (Platform.OS === "web") {
+    console.log("[BookingModal] Notification skipped on web:", van?.name);
+    return;
+  }
 
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "Booking Confirmed!",
-      body: `Your ${van?.name} is reserved. We'll contact you soon.`,
-      sound: true,
-      data: { vanId: van?.id, vanName: van?.name },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: 2,
-    },
-  });
+  try {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== "granted") return;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Booking Confirmed!",
+        body: `Your ${van?.name} is reserved. We'll contact you soon.`,
+        sound: true,
+        data: { vanId: van?.id, vanName: van?.name },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 2,
+      },
+    });
+  } catch (error) {
+    console.log("[BookingModal] Notification skipped:", error);
+  }
 };

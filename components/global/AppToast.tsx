@@ -11,6 +11,7 @@ import React, {
 } from "react";
 import {
   Animated,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -60,6 +61,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [currentToast, setCurrentToast] = useState<ToastPayload | null>(null);
+  const [portalKey, setPortalKey] = useState(0);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -90,6 +92,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         typeof payload === "string" ? { message: payload } : payload;
 
       clearTimer();
+      setPortalKey((value) => value + 1);
       setCurrentToast({
         type: "info",
         duration: 2800,
@@ -138,60 +141,74 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast, hideToast }}>
       {children}
-      {currentToast && (
-        <Animated.View
-          pointerEvents="box-none"
-          style={[
-            styles.toastWrap,
-            {
-              opacity,
-              transform: [{ translateY }],
-            },
-          ]}
-        >
-          <Pressable onPress={hideToast} style={styles.pressable}>
-            <GlassView
-              intensity={100}
-              tint="dark"
-              blurReductionFactor={Platform.OS === "android" ? 1 : undefined}
-              overlayStyle={styles.toastGlassOverlay}
-              style={styles.toastCard}
+      <Modal
+        key={`toast-portal-${portalKey}`}
+        visible={!!currentToast}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        navigationBarTranslucent
+        hardwareAccelerated
+        presentationStyle="overFullScreen"
+        onRequestClose={hideToast}
+      >
+        <View pointerEvents="box-none" style={styles.toastPortal}>
+          {currentToast && (
+            <Animated.View
+              pointerEvents="box-none"
+              style={[
+                styles.toastWrap,
+                {
+                  opacity,
+                  transform: [{ translateY }],
+                },
+              ]}
             >
-              <View pointerEvents="none" style={styles.toastReadableBase} />
-              <View
-                style={[
-                  styles.iconWrap,
-                  currentToast.type === "success" && styles.iconSuccess,
-                  currentToast.type === "error" && styles.iconError,
-                ]}
-              >
-                <Ionicons
-                  name={getIconName(currentToast.type)}
-                  size={17}
-                  color={getIconColor(currentToast.type)}
-                />
-              </View>
-
-              <View style={styles.copy}>
-                {!!currentToast.title && (
-                  <Text style={styles.title} numberOfLines={2}>
-                    {currentToast.title}
-                  </Text>
-                )}
-                <Text
-                  style={[
-                    styles.message,
-                    !currentToast.title && styles.messageOnly,
-                  ]}
-                  numberOfLines={4}
+              <Pressable onPress={hideToast} style={styles.pressable}>
+                <GlassView
+                  intensity={100}
+                  tint="dark"
+                  blurReductionFactor={Platform.OS === "android" ? 1 : undefined}
+                  overlayStyle={styles.toastGlassOverlay}
+                  style={styles.toastCard}
                 >
-                  {currentToast.message}
-                </Text>
-              </View>
-            </GlassView>
-          </Pressable>
-        </Animated.View>
-      )}
+                  <View pointerEvents="none" style={styles.toastReadableBase} />
+                  <View
+                    style={[
+                      styles.iconWrap,
+                      currentToast.type === "success" && styles.iconSuccess,
+                      currentToast.type === "error" && styles.iconError,
+                    ]}
+                  >
+                    <Ionicons
+                      name={getIconName(currentToast.type)}
+                      size={17}
+                      color={getIconColor(currentToast.type)}
+                    />
+                  </View>
+
+                  <View style={styles.copy}>
+                    {!!currentToast.title && (
+                      <Text style={styles.title} numberOfLines={2}>
+                        {currentToast.title}
+                      </Text>
+                    )}
+                    <Text
+                      style={[
+                        styles.message,
+                        !currentToast.title && styles.messageOnly,
+                      ]}
+                      numberOfLines={4}
+                    >
+                      {currentToast.message}
+                    </Text>
+                  </View>
+                </GlassView>
+              </Pressable>
+            </Animated.View>
+          )}
+        </View>
+      </Modal>
     </ToastContext.Provider>
   );
 }
@@ -215,6 +232,11 @@ function getIconColor(type?: ToastType) {
 }
 
 const styles = StyleSheet.create({
+  toastPortal: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 999999999999999999,
+    elevation: 999999999999999999,
+  },
   toastWrap: {
     position: "absolute",
     top: Platform.OS === "ios" ? 56 : 34,

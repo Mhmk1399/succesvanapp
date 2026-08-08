@@ -14,7 +14,7 @@ import { calculateOfficeExtensionPrices } from "@/utils/bookingSchedule";
 import {
   createLondonDateTime,
   formatDateForStorage,
-  getLondonTime,
+  getMinimumPickupDateInput,
   syncServerClock,
 } from "@/utils/londonTime";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -90,18 +90,18 @@ export const useBookingModal = (
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [pickupDate, setPickupDate] = useState<Date | null>(() => {
-    return (
-      parseStoredDate(prefilledData?.startDateDisplay, prefilledData?.pickupDate) ||
-      new Date()
+    return parseStoredDate(
+      prefilledData?.startDateDisplay,
+      prefilledData?.pickupDate,
     );
   });
   const [pickupTime, setPickupTime] = useState<string>(
     prefilledData?.pickupTime || ""
   );
   const [returnDate, setReturnDate] = useState<Date | null>(() => {
-    return (
-      parseStoredDate(prefilledData?.endDateDisplay, prefilledData?.returnDate) ||
-      new Date(Date.now() + 24 * 60 * 60 * 1000)
+    return parseStoredDate(
+      prefilledData?.endDateDisplay,
+      prefilledData?.returnDate,
     );
   });
   const [returnTime, setReturnTime] = useState<string>(
@@ -141,7 +141,6 @@ export const useBookingModal = (
   const [selectedGear, setSelectedGear] = useState<"manual" | "automatic">(
     "manual"
   );
-
   const minDriverAge = useMemo(
     () => getMinDriverAge((van as any)?.type?.name || van?.name),
     [van],
@@ -491,8 +490,10 @@ export const useBookingModal = (
       return;
     }
     Haptics.selectionAsync();
-    setSelectingDate(initialSelection);
-    setTempPickupDate(initialSelection === "return" ? pickupDate : null);
+    const nextSelection =
+      initialSelection === "return" && !pickupDate ? "pickup" : initialSelection;
+    setSelectingDate(nextSelection);
+    setTempPickupDate(nextSelection === "return" ? pickupDate : null);
     setDateRangeModalVisible(true);
   };
 
@@ -518,18 +519,13 @@ export const useBookingModal = (
     }
 
     if (selectingDate === "pickup") {
-      const londonTime = getLondonTime();
-      const londonHour = londonTime.getUTCHours();
-      const today = new Date();
-      const minAllowedDate = new Date(today);
-
-      if (londonHour < 16) {
-        minAllowedDate.setDate(today.getDate() + 1);
-      } else {
-        minAllowedDate.setDate(today.getDate() + 2);
+      if (dateString < getMinimumPickupDateInput()) {
+        Alert.alert(
+          "Pickup date unavailable",
+          "Please choose a pickup date that matches our UK booking cut-off.",
+        );
+        return;
       }
-
-   
 
       setPickupDate(date);
       setTempPickupDate(date);
@@ -545,6 +541,14 @@ export const useBookingModal = (
     Haptics.selectionAsync();
     if (timeModalField === "pickupTime") {
       setPickupTime(time);
+      if (returnDate) {
+        setTimeModalField("returnTime");
+        Haptics.selectionAsync();
+      } else {
+        setTimeModalVisible(false);
+        setTimeModalField(null);
+      }
+      return;
     } else if (timeModalField === "returnTime") {
       setReturnTime(time);
 
@@ -652,7 +656,6 @@ export const useBookingModal = (
         .filter(([_, selection]) => Number(selection?.quantity || 0) > 0)
         .map(([addonId, selection]) => {
           const addon = addons.find((a) => a._id === addonId);
-          const quantity = Number(selection.quantity || 0);
           const selectedTierIndex =
             selection.selectedTierIndex ??
             (addon
@@ -660,7 +663,7 @@ export const useBookingModal = (
               : undefined);
           return {
             addOn: addonId,
-            quantity,
+            quantity: 1,
             ...(selectedTierIndex !== undefined ? { selectedTierIndex } : {}),
           };
         });
@@ -686,8 +689,9 @@ export const useBookingModal = (
         selectedGear,
         pickupExtensionPrice: extensionPrices.pickupExtension,
         returnExtensionPrice: extensionPrices.returnExtension,
-        reservationType: "Website" as const,
-        messege: message,
+        reservationType: "App" as const,
+        messege: message.trim(),
+        message: message.trim(),
       };
       console.log(reservationData, "reservationData");
 

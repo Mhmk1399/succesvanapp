@@ -693,4 +693,438 @@ export const styles = StyleSheet.create({
     marginTop: 8,
     marginLeft: 36,
   },
+  timePickerOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+    backgroundColor: "rgba(0,4,10,0.8)",
+  },
+
+  timePickerSheet: {
+    width: "100%",
+    maxWidth: 370,
+    maxHeight: "88%",
+    minHeight: 530,
+    paddingTop: 11,
+    paddingHorizontal: 15,
+    paddingBottom: 12,
+    overflow: "hidden",
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.42)",
+    backgroundColor: "#0b1421",
+    shadowColor: ACCENT,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 28,
+    elevation: 18,
+  },
+
+  timePickerSheetReturn: {
+    borderColor: "rgba(56,189,248,0.5)",
+    shadowColor: "#38bdf8",
+  },
+
+  timePickerGlow: {
+    position: "absolute",
+    top: -92,
+    left: 26,
+    right: 26,
+    height: 140,
+    borderRadius: 90,
+    backgroundColor: "rgba(254,154,0,0.065)",
+  },
+
+  timePickerGlowReturn: {
+    backgroundColor: "rgba(56,189,248,0.095)",
+  },
+
+  timePickerHandle: {
+    width: 50,
+    height: 4,
+    borderRadius: 999,
+    alignSelf: "center",
+    marginBottom: 12,
+    backgroundColor: "rgba(203,213,225,0.62)",
+  },
+
+  timePickerHeader: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+
+  timePickerHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
+  },
+
+  timePickerTitle: {
+    color: "#f8fafc",
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+
+  timePickerSubtitle: {
+    color: "rgba(203,213,225,0.58)",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+
+  timePickerClose: {
+    width: 31,
+    height: 31,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.075)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.34)",
+  },
+
+  timePickerCloseReturn: {
+    borderColor: "rgba(56,189,248,0.36)",
+  },
+
+  timePickerPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.95 }],
+  },
+
+  timePickerPhaseRow: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 12,
+  },
+
+  timePickerPhasePill: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 34,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.052)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.16)",
+  },
+
+  timePickerPhasePillActive: {
+    backgroundColor: "rgba(254,154,0,0.13)",
+    borderColor: "rgba(254,154,0,0.46)",
+  },
+
+  timePickerPhasePillReturnActive: {
+    backgroundColor: "rgba(56,189,248,0.14)",
+    borderColor: "rgba(56,189,248,0.52)",
+  },
+
+  timePickerPhaseText: {
+    color: "rgba(226,232,240,0.58)",
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: "900",
+  },
+
+  timePickerPhaseTextActive: {
+    color: "#fed7aa",
+  },
+
+  timePickerPhaseTextReturn: {
+    color: "#bae6fd",
+  },
+
+  timePickerPhaseConnector: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.84)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.14)",
+  },
+
+  timePickerAnimatedPane: {
+    flexShrink: 1,
+  },
+
+  timePickerEmpty: {
+    minHeight: 350,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 30,
+  },
+
+  timePickerEmptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 13,
+    backgroundColor: "rgba(254,154,0,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.2)",
+  },
+
+  timePickerEmptyTitle: {
+    color: "#f8fafc",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  timePickerEmptyText: {
+    color: "rgba(203,213,225,0.5)",
+    fontSize: 10,
+    lineHeight: 15,
+    textAlign: "center",
+    fontWeight: "600",
+    marginTop: 5,
+  },
+
+  timePickerContextRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  timePickerContextCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    borderRadius: 13,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderWidth: 1,
+    borderColor: "rgba(130,157,190,0.13)",
+  },
+
+  timePickerContextIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.13)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.18)",
+  },
+
+  timePickerContextIconReturn: {
+    backgroundColor: "rgba(56,189,248,0.13)",
+    borderColor: "rgba(56,189,248,0.2)",
+  },
+
+  timePickerContextCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  timePickerContextValue: {
+    color: "#eef2f7",
+    fontSize: 9.5,
+    lineHeight: 13,
+    fontWeight: "800",
+  },
+
+  timePickerContextLabel: {
+    color: "rgba(203,213,225,0.45)",
+    fontSize: 7.5,
+    lineHeight: 10,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  timePickerLegend: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 9,
+    paddingLeft: 2,
+  },
+
+  timePickerLegendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#22d37f",
+    shadowColor: "#22d37f",
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+  },
+
+  timePickerLegendText: {
+    color: "rgba(226,232,240,0.58)",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
+  timePickerScroll: {
+    flexGrow: 0,
+    maxHeight: 330,
+  },
+
+  timePickerScrollContent: {
+    paddingBottom: 6,
+  },
+
+  timePickerGrid: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+
+  timePickerCell: {
+    width: "31.8%",
+    minHeight: 42,
+    marginBottom: 7,
+  },
+
+  timePickerSlot: {
+    minHeight: 37,
+    paddingHorizontal: 6,
+    overflow: "hidden",
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderWidth: 1,
+    borderColor: "rgba(137,159,188,0.15)",
+  },
+
+  timePickerSlotSelected: {
+    borderColor: "rgba(255,209,117,0.78)",
+    shadowColor: ACCENT,
+    shadowOpacity: 0.34,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+
+  timePickerSlotReturnSelected: {
+    borderColor: "rgba(125,211,252,0.82)",
+    shadowColor: "#38bdf8",
+  },
+
+  timePickerSlotDisabled: {
+    opacity: 0.34,
+  },
+
+  timePickerSlotPressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.97 }],
+  },
+
+  timePickerSlotDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+
+  timePickerSlotText: {
+    color: "#dce3ed",
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: "800",
+  },
+
+  timePickerSlotTextSelected: {
+    color: "#101723",
+  },
+
+  timePickerExtensionPrice: {
+    color: "#fbbf24",
+    fontSize: 7.5,
+    lineHeight: 10,
+    textAlign: "center",
+    fontWeight: "800",
+    marginTop: 2,
+  },
+
+  timePickerExtensionPriceSelected: {
+    color: "#ffe9b5",
+  },
+
+  timePickerConfirm: {
+    overflow: "hidden",
+    borderRadius: 10,
+    marginTop: 4,
+    shadowColor: ACCENT,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 7,
+  },
+
+  timePickerConfirmReturn: {
+    shadowColor: "#38bdf8",
+  },
+
+  timePickerConfirmPressed: {
+    opacity: 0.86,
+    transform: [{ scale: 0.985 }],
+  },
+
+  timePickerConfirmGradient: {
+    minHeight: 43,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  timePickerConfirmText: {
+    color: "#101723",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+
+  timePickerConfirmArrow: {
+    position: "absolute",
+    right: 8,
+    width: 27,
+    height: 27,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#142033",
+  },
+
+  timePickerSecureRow: {
+    minHeight: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingTop: 7,
+  },
+
+  timePickerSecureText: {
+    color: "rgba(203,213,225,0.42)",
+    fontSize: 7.5,
+    fontWeight: "700",
+  },
 });

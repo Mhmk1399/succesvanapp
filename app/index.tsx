@@ -33,8 +33,7 @@ const ACCENT_SOFT = "#ffb83d";
 const DARK = "#07111f";
 
 const AUTOPLAY_MS = 3500;
-const HERO_RADIUS = 26;
-const BRAND_LOGO_URI =
+ const BRAND_LOGO_URI =
   "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png";
 
 type VanSlide = {
@@ -1640,8 +1639,7 @@ const styles = StyleSheet.create({
   vanShadow: {
     position: "absolute",
     width: "74%",
-    height: 18,
-    borderRadius: 60,
+     borderRadius: 60,
     right: 20,
     bottom: 12,
     backgroundColor: "rgba(0,0,0,0.38)",

@@ -1,4 +1,5 @@
 import { safeFetch } from "./apiClient";
+import { getTrustedNow, syncServerClock } from "@/utils/londonTime";
 
 const API_URL = process.env.EXPO_PUBLIC_DISCOUNTS_API;
 
@@ -22,7 +23,8 @@ export const discountService = {
         return { success: false, message: "Invalid discount code" };
       }
 
-      const now = new Date();
+      await syncServerClock().catch(() => {});
+      const now = getTrustedNow();
       const validFrom = new Date(discount.validFrom);
       const validTo = new Date(discount.validTo);
       console.log('Date check:', { now, validFrom, validTo });
