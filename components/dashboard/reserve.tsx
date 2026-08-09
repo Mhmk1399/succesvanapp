@@ -5,7 +5,18 @@ import { calculateAddonPrice } from "@/utils/addonCalculator";
 import { calculatePrice } from "@/utils/priceCalculator";
 import { addonService } from "@/services/addonService";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
+import { useToast } from "@/components/global/AppToast";
+import ReservationJourneyModal from "@/components/dashboard/ReservationJourneyModal";
+import PendingReservationEditSheet from "@/components/dashboard/PendingReservationEditSheet";
+import { statusLabel, statusTone } from "@/constants/reservationStatus";
+import { buildReservationJourney } from "@/utils/reservationJourney";
+import {
+  getInclusiveLondonDeadline,
+  getMinimumPickupDateInput,
+  getTrustedNowMs,
+  syncServerClock,
+} from "@/utils/londonTime";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -32,24 +43,17 @@ import { JSX } from "react/jsx-runtime";
 const { height } = Dimensions.get("window");
 
 const ACCENT = "#fe9a00";
-
-const getLondonTime = () => {
-  const now = new Date();
-  const londonTimeStr = now.toLocaleString("en-GB", {
-    timeZone: "Europe/London",
-  });
-  const [datePart, timePart] = londonTimeStr.split(", ");
-  const [day, month, year] = datePart.split("/").map(Number);
-  const [hours, minutes, seconds] = timePart.split(":").map(Number);
-  const londonDate = new Date(year, month - 1, day, hours, minutes, seconds);
-  return londonDate;
-};
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 
 type UserReservationsProps = {
   reservations: Reservation[];
   isLoading?: boolean;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  ListHeaderComponent?: React.ReactElement | null;
+  onScroll?: (event: any) => void;
 };
 
 type WorkingTime = {
@@ -79,12 +83,89 @@ const formatDate = (dateStr: string) => {
   return `${day}/${month}/${year} · ${hours}:${mins}`;
 };
 
+const getApiOrigin = () => {
+  const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "";
+  return baseUrl.replace(/\/api(?:\/.*)?$/i, "").replace(/\/$/, "");
+};
+
+const normalizeImageUri = (value: unknown): string | null => {
+  if (!value) return null;
+
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    return normalizeImageUri(
+      record.url || record.uri || record.src || record.location,
+    );
+  }
+
+  if (typeof value !== "string") return null;
+
+  const imageValue = value.trim();
+  if (!imageValue) return null;
+
+  if (/^(https?:|file:|content:|data:image\/)/i.test(imageValue)) {
+    return imageValue;
+  }
+
+  if (imageValue.startsWith("//")) {
+    return `https:${imageValue}`;
+  }
+
+  const origin = getApiOrigin();
+  if (imageValue.startsWith("/") && origin) {
+    return `${origin}${imageValue}`;
+  }
+
+  if (/\.(avif|gif|jpe?g|png|webp)(\?.*)?$/i.test(imageValue) && origin) {
+    return `${origin}/${imageValue.replace(/^\/+/, "")}`;
+  }
+
+  return null;
+};
+
+const getReservationVehicleImage = (reservation: Reservation) => {
+  const vehicle = reservation.vehicle as any;
+  const category = reservation.category as any;
+  const candidates = [
+    vehicle?.image,
+    vehicle?.thumbnail,
+    vehicle?.photo,
+    Array.isArray(vehicle?.images) ? vehicle.images[0] : null,
+    category?.image,
+    category?.thumbnail,
+    Array.isArray(category?.images) ? category.images[0] : null,
+  ];
+
+  for (const candidate of candidates) {
+    const imageUri = normalizeImageUri(candidate);
+    if (imageUri) return imageUri;
+  }
+
+  return null;
+};
+
+const formatCompactCountdown = (deadline: Date) => {
+  const difference = Math.max(0, deadline.getTime() - getTrustedNowMs());
+  if (difference === 0) return "Reached";
+
+  const days = Math.floor(difference / DAY);
+  const hours = Math.floor((difference % DAY) / HOUR);
+  const minutes = Math.floor((difference % HOUR) / MINUTE);
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${Math.max(1, minutes)}m`;
+};
+
 export default function UserReservations({
   reservations,
   isLoading = false,
   onRefresh,
   isRefreshing = false,
+  ListHeaderComponent,
+  onScroll,
 }: UserReservationsProps) {
+  const { showToast } = useToast();
   const [selectedReservation, setSelectedReservation] =
     useState<Reservation | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -100,6 +181,7 @@ export default function UserReservations({
   const [timeModalField, setTimeModalField] = useState<
     "pickup" | "return" | null
   >(null);
+
   const [tempPickupDate, setTempPickupDate] = useState<Date | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [reservedSlots, setReservedSlots] = useState<
@@ -113,8 +195,28 @@ export default function UserReservations({
     Record<string, number>
   >({});
   const [availableAddons, setAvailableAddons] = useState<AddOn[]>([]);
+  const [trackingReservation, setTrackingReservation] =
+    useState<Reservation | null>(null);
+  const [pendingEditReservation, setPendingEditReservation] =
+    useState<Reservation | null>(null);
+  const [trackingInitialSection, setTrackingInitialSection] = useState<
+    string | undefined
+  >(undefined);
+  const [, setTimerTick] = useState(0);
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    syncServerClock().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimerTick((value) => value + 1);
+    }, MINUTE);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -216,6 +318,18 @@ export default function UserReservations({
     setIsEditing(false);
   };
 
+  const openPendingEdit = (reservation: Reservation) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPendingEditReservation(reservation);
+  };
+
+  const openPendingEditFromDetails = () => {
+    const reservationToEdit = selectedReservation;
+    if (!reservationToEdit) return;
+    closeModal();
+    setTimeout(() => setPendingEditReservation(reservationToEdit), 260);
+  };
+
   useEffect(() => {
     const fetchReservedSlots = async () => {
       if (
@@ -236,8 +350,6 @@ export default function UserReservations({
           type === "start" ? "startDate" : "endDate"
         }=${dateStr}&type=${type}`;
 
-       
-
         const response = await fetch(url);
         const data = await response.json();
 
@@ -256,7 +368,7 @@ export default function UserReservations({
               }
             },
           );
-           setReservedSlots(filteredSlots);
+          setReservedSlots(filteredSlots);
         } else {
           setReservedSlots([]);
         }
@@ -411,6 +523,13 @@ export default function UserReservations({
     const date = new Date(dateString);
     Haptics.selectionAsync();
     if (selectingDate === "pickup") {
+      if (dateString < getMinimumPickupDateInput()) {
+        Alert.alert(
+          "Pickup date unavailable",
+          "Please choose a pickup date that matches our UK booking cut-off.",
+        );
+        return;
+      }
       setEditPickupDate(date);
       setTempPickupDate(date);
       setSelectingDate("return");
@@ -485,138 +604,318 @@ export default function UserReservations({
           startDate: start.toISOString(),
           endDate: end.toISOString(),
           totalPrice: dynamicPrice,
-          messege: editMessage,
+          messege: editMessage.trim(),
+          message: editMessage.trim(),
           addOns: updatedAddOns,
         },
       );
 
       if (result.success) {
-        Alert.alert("Success", "Reservation updated successfully");
         setIsEditing(false);
         closeModal();
         onRefresh?.();
       } else {
-        Alert.alert("Error", result.error || "Failed to update reservation");
+        showToast({
+          type: "error",
+          title: "Update failed",
+          message: result.error || "Failed to update reservation",
+        });
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to update reservation");
+      showToast({
+        type: "error",
+        title: "Update failed",
+        message: "Failed to update reservation",
+      });
     } finally {
       setIsUpdating(false);
     }
   };
   const renderStatus = (status: string) => {
-    let label = "";
-    let color = "";
-    switch (status) {
-      case "pending":
-        label = "Pending";
-        color = "#fbbf24";
-        break;
-      case "confirmed":
-        label = "Confirmed";
-        color = "#22c55e";
-        break;
-      case "completed":
-        label = "Completed";
-        color = "#38bdf8";
-        break;
-      case "canceled":
-        label = "Cancelled";
-        color = "#f97373";
-      case "delivered":
-        label = "Collected";
-        color = "#e406d9ff";
-        break;
-      default:
-        label = status;
-        color = "#9ca3af";
-    }
+    const label = statusLabel(status);
+    const color = statusTone(status).fg;
     return (
       <View style={[styles.statusBadge, { backgroundColor: color + "33" }]}>
         <View style={[styles.statusDot, { backgroundColor: color }]} />
-        <Text style={[styles.statusText, { color }]}>{label}</Text>
+        <Text style={[styles.statusText, { color }]} numberOfLines={1}>
+          {label}
+        </Text>
       </View>
     );
   };
 
-  const renderItem = ({ item }: { item: Reservation }) => (
-    <Pressable
-      style={styles.card}
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        setSelectedReservation(item);
-      }}
-    >
-      <View style={styles.rowBetween}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.vanName}>{item.category?.name || "Van"}</Text>
-          <Text style={styles.locationText}>
-            <Ionicons name="location-outline" size={13} color={ACCENT} />{" "}
-            {item.office?.name || "Office"}
-          </Text>
-          {item.createdAt && (
-            <Text style={styles.reservedDate}>
-              <Ionicons name="calendar" size={13} color={ACCENT} /> Reserved On:{" "}
-              {formatDate(item.createdAt.toString())}
-            </Text>
-          )}
-        </View>
-        {renderStatus(item.status)}
-      </View>
+  const renderItem = ({ item }: { item: Reservation }) => {
+    const journey = buildReservationJourney(item);
+    const vehicleImageUri = getReservationVehicleImage(item);
+    const plateNumber = item.vehicle?.number
+      ? String(item.vehicle.number)
+      : "Plate pending";
+    const categoryName = item.category?.name || "Category pending";
+    const refundDeadline =
+      journey.mainStatus === "refund_processing"
+        ? getInclusiveLondonDeadline(journey.refund?.expectedBy)
+        : null;
+    const timerValue = refundDeadline
+      ? formatCompactCountdown(refundDeadline)
+      : null;
+    const openDetails = () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setSelectedReservation(item);
+    };
+    const openTracker = (section?: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setTrackingInitialSection(section);
+      setTrackingReservation(item);
+    };
 
-      <View style={styles.datesRow}>
-        <View style={styles.dateBlock}>
-          <Text style={styles.dateLabel}>Pickup</Text>
-          <Text style={styles.dateValue}>{formatDate(item.startDate)}</Text>
-        </View>
-        <View style={styles.dateBlock}>
-          <Text style={styles.dateLabel}>Return</Text>
-          <Text style={styles.dateValue}>{formatDate(item.endDate)}</Text>
-        </View>
-      </View>
+    return (
+      <Pressable
+        onPress={openDetails}
+        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      >
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            "rgba(19,29,45,0.98)",
+            "rgba(8,17,31,0.99)",
+            "rgba(7,15,28,0.99)",
+          ]}
+          locations={[0, 0.48, 1]}
+          style={StyleSheet.absoluteFill}
+        />
 
-      {item.addOns && item.addOns.length > 0 && (
-        <View style={styles.addonsSection}>
-          <Text style={styles.addonsLabel}>Add-ons</Text>
-          {item.addOns.map((addon, index) => (
-            <View key={index} style={styles.addonItem}>
-              <Text style={styles.addonName}>
-                {addon.addOn?.name || "Add-on"} x{addon.quantity}
+        <View pointerEvents="none" style={styles.cardTopGlow} />
+        <View pointerEvents="none" style={styles.cardEdgeHighlight} />
+
+        <View style={styles.cardTopRow}>
+          <View style={styles.vehicleImageWrap}>
+            <LinearGradient
+              pointerEvents="none"
+              colors={[
+                "rgba(31,46,67,0.96)",
+                "rgba(12,24,40,0.96)",
+                "rgba(5,12,22,0.98)",
+              ]}
+              style={StyleSheet.absoluteFill}
+            />
+
+            <View pointerEvents="none" style={styles.vehicleImageGlow} />
+
+            {vehicleImageUri ? (
+              <Image
+                source={{ uri: vehicleImageUri }}
+                style={styles.vehicleImage}
+                contentFit="cover"
+                transition={220}
+              />
+            ) : (
+              <View style={styles.vehicleImageFallback}>
+                <Ionicons name="car-sport-outline" size={30} color={ACCENT} />
+              </View>
+            )}
+
+            <LinearGradient
+              pointerEvents="none"
+              colors={[
+                "rgba(5,10,18,0)",
+                "rgba(5,10,18,0.08)",
+                "rgba(5,10,18,0.72)",
+              ]}
+              locations={[0, 0.58, 1]}
+              style={styles.vehicleImageShade}
+            />
+          </View>
+
+          <View style={styles.cardSummary}>
+            <View style={styles.cardTitleLine}>
+              <Text style={styles.vanName} numberOfLines={1}>
+                {journey.vehicleName}
+              </Text>
+
+              <Text style={styles.vehiclePlateText} numberOfLines={1}>
+                {plateNumber}
               </Text>
             </View>
-          ))}
-        </View>
-      )}
 
-      <View style={styles.priceRow}>
-        <Text style={styles.priceLabel}>Total Price</Text>
-        <Text style={styles.priceValue}>£{item.totalPrice}</Text>
-      </View>
-    </Pressable>
-  );
+            <View style={styles.compactInfoRow}>
+              <View style={styles.categoryPill}>
+                <Text style={styles.categoryPillText} numberOfLines={1}>
+                  {categoryName}
+                </Text>
+              </View>
+              <View style={styles.statusWrap}>{renderStatus(item.status)}</View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.datesRow}>
+          <View style={styles.dateBlock}>
+            <View style={styles.dateHeaderRow}>
+              <Ionicons
+                name="calendar-outline"
+                size={12}
+                color="rgba(226,232,240,0.56)"
+              />
+              <Text style={styles.dateLabel}>PICKUP</Text>
+            </View>
+            <Text style={styles.dateValue} numberOfLines={1}>
+              {journey.pickupDateTime}
+            </Text>
+          </View>
+
+          <View style={styles.dateBlock}>
+            <View style={styles.dateHeaderRow}>
+              <Ionicons
+                name="calendar-outline"
+                size={12}
+                color="rgba(226,232,240,0.56)"
+              />
+              <Text style={styles.dateLabel}>RETURN</Text>
+            </View>
+            <Text style={styles.dateValue} numberOfLines={1}>
+              {journey.returnDateTime}
+            </Text>
+          </View>
+        </View>
+
+        {timerValue ? (
+          <View style={styles.compactTimerRow}>
+            <View style={styles.compactTimerLeft}>
+              <View style={styles.compactTimerIcon}>
+                <Ionicons name="timer-outline" size={14} color="#38bdf8" />
+              </View>
+              <Text style={styles.compactTimerLabel}>Refund timer</Text>
+            </View>
+
+            <Text
+              style={[
+                styles.compactTimerValue,
+                timerValue === "Reached" && styles.compactTimerReached,
+              ]}
+            >
+              {timerValue}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.compactActions}>
+          <View style={styles.compactHiddenPrice}>
+            <Text style={styles.priceLabel}>Total Price</Text>
+            <Text style={styles.priceValue}>£{item.totalPrice}</Text>
+          </View>
+
+          <View style={styles.cardActions}>
+            {item.status === "pending" ? (
+              <Pressable
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openPendingEdit(item);
+                }}
+                style={({ pressed }) => [
+                  styles.editReservationButton,
+                  pressed && styles.actionPressed,
+                ]}
+              >
+                <Ionicons name="create-outline" size={13} color="#052e16" />
+                <Text style={styles.editReservationText}>Edit</Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                openDetails();
+              }}
+              style={({ pressed }) => [
+                styles.moreInfoButton,
+                pressed && styles.actionPressed,
+              ]}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color="#0f172a"
+              />
+              <Text style={styles.moreInfoText}>More info</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                openTracker();
+              }}
+              style={({ pressed }) => [
+                styles.trackButton,
+                pressed && styles.actionPressed,
+              ]}
+            >
+              <Text style={styles.trackButtonText}>Track</Text>
+              <Ionicons name="arrow-forward" size={13} color={ACCENT} />
+            </Pressable>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
 
   if (isLoading) {
     return (
-      <View style={styles.emptyState}>
-        <ActivityIndicator size="large" color={"#fff"} />
-        <Text style={styles.emptySubtitle}>Loading reservations...</Text>
-      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={ACCENT}
+            colors={[ACCENT]}
+          />
+        }
+      >
+        {ListHeaderComponent}
+        <View style={[styles.emptyState, styles.loadingState]}>
+          <View style={styles.loadingRing}>
+            <ActivityIndicator size="small" color={ACCENT} />
+          </View>
+          <Text style={styles.emptyTitle}>Loading reservations</Text>
+          <Text style={styles.emptySubtitle}>
+            Checking your latest bookings...
+          </Text>
+        </View>
+      </ScrollView>
     );
   }
 
   if (!reservations.length) {
     return (
-      <View style={styles.emptyState}>
-        <Ionicons
-          name="calendar-outline"
-          size={40}
-          color="rgba(255, 255, 255, 0.9)"
-        />
-        <Text style={styles.emptyTitle}>No reservations yet</Text>
-        <Text style={styles.emptySubtitle}>
-          When you book a van, your reservations will appear here.
-        </Text>
-      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={ACCENT}
+            colors={[ACCENT]}
+          />
+        }
+      >
+        {ListHeaderComponent}
+        <View style={styles.emptyState}>
+          <EmptyReservationArtwork />
+          <Text style={styles.emptyTitle}>No reservations yet</Text>
+          <Text style={styles.emptySubtitle}>
+            When you book a van, your
+            {`
+`}
+            reservations will appear here.
+          </Text>
+        </View>
+      </ScrollView>
     );
   }
 
@@ -629,7 +928,10 @@ export default function UserReservations({
         data={[...safeReservations].reverse()}
         keyExtractor={(item) => item._id || Math.random().toString()}
         renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        ListHeaderComponent={ListHeaderComponent}
+        contentContainerStyle={styles.listContent}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -638,6 +940,24 @@ export default function UserReservations({
             colors={[ACCENT]}
           />
         }
+      />
+
+      <ReservationJourneyModal
+        visible={!!trackingReservation}
+        reservation={trackingReservation}
+        initialSection={trackingInitialSection}
+        onClose={() => {
+          setTrackingReservation(null);
+          setTrackingInitialSection(undefined);
+        }}
+        onUpdated={onRefresh}
+      />
+
+      <PendingReservationEditSheet
+        visible={!!pendingEditReservation}
+        reservation={pendingEditReservation}
+        onClose={() => setPendingEditReservation(null)}
+        onUpdated={onRefresh}
       />
 
       <Modal
@@ -656,7 +976,7 @@ export default function UserReservations({
           <Animated.View
             style={[styles.modalContainer, { transform: [{ translateY }] }]}
           >
-            <BlurView intensity={90} tint="dark" style={styles.modalContent}>
+            <GlassView intensity={90} tint="dark" style={styles.modalContent}>
               <View {...panResponder.panHandlers} style={styles.handleArea}>
                 <View style={styles.handle} />
               </View>
@@ -667,7 +987,10 @@ export default function UserReservations({
                   </Text>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {!isEditing && selectedReservation.status === "pending" && (
-                      <Pressable onPress={startEditing} style={styles.editBtn}>
+                      <Pressable
+                        onPress={openPendingEditFromDetails}
+                        style={styles.editBtn}
+                      >
                         <Ionicons
                           name="create-outline"
                           size={20}
@@ -714,7 +1037,7 @@ export default function UserReservations({
                     <>
                       <Pressable
                         onPress={() => {
-                           setSelectingDate("pickup");
+                          setSelectingDate("pickup");
                           setTempPickupDate(null);
                           setDateModalVisible(true);
                         }}
@@ -732,7 +1055,6 @@ export default function UserReservations({
                       >
                         <Pressable
                           onPress={() => {
-                            
                             setTimeModalField("pickup");
                             setTimeModalVisible(true);
                           }}
@@ -746,7 +1068,6 @@ export default function UserReservations({
                         </Pressable>
                         <Pressable
                           onPress={() => {
-                           
                             setTimeModalField("return");
                             setTimeModalVisible(true);
                           }}
@@ -928,7 +1249,7 @@ export default function UserReservations({
                         returnTime,
                         quantity,
                       );
-                      
+
                       addOnsPrice += price;
 
                       addonItems.push(
@@ -1162,7 +1483,7 @@ export default function UserReservations({
                   </View>
                 )}
               </ScrollView>
-            </BlurView>
+            </GlassView>
           </Animated.View>
         )}
       </Modal>
@@ -1232,17 +1553,7 @@ export default function UserReservations({
                 markingType="period"
                 minDate={
                   selectingDate === "pickup"
-                    ? (() => {
-                        const londonTime = getLondonTime();
-                        const londonHour = londonTime.getUTCHours();
-                        const minDate = new Date();
-                        if (londonHour < 16) {
-                          minDate.setDate(minDate.getDate() + 1);
-                        } else {
-                          minDate.setDate(minDate.getDate() + 2);
-                        }
-                        return minDate.toISOString().split("T")[0];
-                      })()
+                    ? getMinimumPickupDateInput()
                     : tempPickupDate?.toISOString().split("T")[0]
                 }
                 theme={{
@@ -1428,119 +1739,790 @@ export default function UserReservations({
   );
 }
 
+function EmptyReservationArtwork() {
+  return (
+    <View style={styles.emptyArtwork}>
+      <View style={styles.emptyArtworkGlow} />
+      <View style={[styles.emptySpark, styles.emptySparkOne]} />
+      <View style={[styles.emptySpark, styles.emptySparkTwo]} />
+      <View style={[styles.emptySpark, styles.emptySparkThree]} />
+
+      <View style={styles.emptyLeafLeft}>
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "-34deg" }] }]}
+        />
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "-12deg" }] }]}
+        />
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "18deg" }] }]}
+        />
+      </View>
+      <View style={styles.emptyLeafRight}>
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "34deg" }] }]}
+        />
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "12deg" }] }]}
+        />
+        <View
+          style={[styles.emptyLeaf, { transform: [{ rotate: "-18deg" }] }]}
+        />
+      </View>
+
+      <View style={styles.calendarTopRingLeft} />
+      <View style={styles.calendarTopRingRight} />
+      <View style={styles.calendarIconBody}>
+        <LinearGradient
+          colors={["#526389", "#273551"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.calendarIconHeader} />
+        <View style={styles.calendarGrid}>
+          {[0, 1, 2, 3, 4, 5].map((item) => (
+            <View
+              key={item}
+              style={[
+                styles.calendarGridDot,
+                item === 5 && styles.calendarGridDotActive,
+              ]}
+            />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 132,
+  },
   card: {
-    backgroundColor: "rgba(15,23,42,0.7)",
-    borderRadius: 18,
-    padding: 16,
+    position: "relative",
+    overflow: "hidden",
+    padding: 12,
+    paddingBottom: 7,
     marginBottom: 14,
+    borderRadius: 18,
+    backgroundColor: "#08111f",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.5)",
+    shadowColor: ACCENT,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.17,
+    shadowRadius: 18,
+    elevation: 7,
+  },
+
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.992 }],
+  },
+
+  cardTopGlow: {
+    position: "absolute",
+    top: -74,
+    left: -20,
+    width: 190,
+    height: 128,
+    borderRadius: 90,
+    backgroundColor: "rgba(254,154,0,0.075)",
+  },
+
+  cardEdgeHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 22,
+    right: 22,
+    height: 1,
+    backgroundColor: "rgba(255,221,162,0.25)",
+  },
+
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    minHeight: 91,
+  },
+
+  vehicleImageWrap: {
+    position: "relative",
+    width: 94,
+    minHeight: 91,
+    overflow: "hidden",
+    borderRadius: 14,
+    marginRight: 12,
+    backgroundColor: "#0b1626",
+    borderWidth: 1,
+    borderColor: "rgba(119,146,179,0.14)",
+  },
+
+  vehicleImageGlow: {
+    position: "absolute",
+    width: 98,
+    height: 70,
+    right: -28,
+    bottom: -12,
+    borderRadius: 52,
+    backgroundColor: "rgba(42,91,160,0.12)",
+  },
+
+  vehicleImage: {
+    width: "100%",
+    height: "100%",
+    transform: [{ scale: 1.06 }],
+  },
+
+  vehicleImageFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  vehicleImageShade: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  cardSummary: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+
+  cardTitleLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    minWidth: 0,
+  },
+
+  vanName: {
+    flexShrink: 1,
+    flexGrow: 0,
+    minWidth: 0,
+    maxWidth: "72%",
+    color: "#f8fafc",
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+
+  cardAlertDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    flexShrink: 0,
+    backgroundColor: "#ff334f",
+    shadowColor: "#ff334f",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 5,
+  },
+
+  vehiclePlateRow: {
+    alignSelf: "flex-start",
+    minHeight: 23,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 7,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(254,154,0,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.16)",
+  },
+
+  vehiclePlateIcon: {
+    width: 14,
+    height: 14,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  vehiclePlateText: {
+    maxWidth: 82,
+    flexShrink: 0,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 5,
+    overflow: "hidden",
+    backgroundColor: "rgba(254,154,0,0.1)",
+    color: "#ffd071",
+    fontSize: 8.5,
+    lineHeight: 10,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+
+  compactInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
+    marginTop: 7,
+  },
+
+  categoryPill: {
+    maxWidth: 128,
+    minHeight: 23,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderWidth: 1,
+    borderColor: "rgba(133,156,184,0.14)",
+  },
+
+  categoryPillText: {
+    flexShrink: 1,
+    color: "rgba(226,232,240,0.8)",
+    fontSize: 8.5,
+    fontWeight: "800",
+  },
+
+  statusWrap: {
+    flexShrink: 1,
+  },
+
+  datesRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 11,
+  },
+
+  dateBlock: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 35,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(128,153,184,0.13)",
+  },
+
+  dateHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 5,
+  },
+
+  dateLabel: {
+    color: "rgba(203,213,225,0.48)",
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+
+  dateValue: {
+    color: "#edf2f8",
+    fontSize: 9.5,
+    lineHeight: 14,
+    fontWeight: "800",
+  },
+
+  compactTimerRow: {
+    minHeight: 39,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 9,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(4,114,171,0.09)",
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.23)",
+  },
+
+  compactTimerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  compactTimerIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(56,189,248,0.08)",
+  },
+
+  compactTimerLabel: {
+    color: "#dbeafe",
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+
+  compactTimerValue: {
+    color: "#22d3ee",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+
+  compactTimerReached: {
+    color: "#fb7185",
+  },
+
+  compactActions: {
+    marginTop: 9,
+  },
+
+  compactHiddenPrice: {
+    display: "none",
+  },
+
+  priceLabel: {
+    color: "rgba(203,213,225,0.48)",
+    fontSize: 8.5,
+    fontWeight: "800",
+  },
+
+  priceValue: {
+    color: ACCENT,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  cardActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+
+  editReservationButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    overflow: "hidden",
+    backgroundColor: "#22c55e",
+    borderWidth: 1,
+    borderColor: "rgba(187,247,208,0.42)",
+  },
+
+  editReservationText: {
+    color: "#052e16",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  moreInfoButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    overflow: "hidden",
+    backgroundColor: ACCENT,
+    borderWidth: 1,
+    borderColor: "rgba(255,218,150,0.55)",
+    shadowColor: ACCENT,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+
+  moreInfoText: {
+    color: "#0f172a",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  trackButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(254,154,0,0.035)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.28)",
+  },
+
+  trackButtonText: {
+    color: ACCENT,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  actionPressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.985 }],
+  },
+
+  cardBottomChevron: {
+    width: 34,
+    height: 18,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 3,
+  },
+
+  chevronPressed: {
+    opacity: 0.55,
+    transform: [{ translateY: 1 }],
+  },
+
+  vehicleImageTag: {
+    position: "absolute",
+    left: 7,
+    right: 7,
+    bottom: 7,
+    minHeight: 24,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(9,15,25,0.82)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  vehicleImageTagText: {
+    color: "#f8fafc",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  cardMetaRow: {
+    gap: 7,
+    marginTop: 9,
+  },
+  cardMetaPill: {
+    minHeight: 30,
+    paddingHorizontal: 9,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  cardMetaText: {
+    flex: 1,
+    minWidth: 0,
+    color: "rgba(226,232,240,0.76)",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  cardHintRow: {
+    minHeight: 25,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+  },
+  cardHintText: {
+    flex: 1,
+    color: "rgba(148,163,184,0.72)",
+    fontSize: 9,
+    fontWeight: "700",
   },
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    gap: 10,
   },
-  vanName: {
-    color: "#f9fafb",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+
   locationText: {
-    color: "#9ca3af",
-    fontSize: 13,
+    color: "rgba(208,217,230,0.6)",
+    fontSize: 10.5,
+    fontWeight: "600",
     marginTop: 4,
   },
   reservedDate: {
-    color: "#9ca3af",
-    fontSize: 11,
+    color: "rgba(190,201,217,0.45)",
+    fontSize: 9.5,
     marginTop: 4,
   },
-  datesRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 14,
-  },
-  dateBlock: {
-    flex: 1,
-  },
-  dateLabel: {
-    color: "#9ca3af",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  dateValue: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    fontWeight: "600",
-  },
+
   statusBadge: {
+    maxWidth: 104,
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: 999,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: "600",
+    flexShrink: 1,
+    fontSize: 7.5,
+    fontWeight: "800",
   },
   emptyState: {
+    minHeight: 178,
+    borderRadius: 16,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 40,
     paddingHorizontal: 20,
+    paddingTop: 19,
+    paddingBottom: 18,
+    backgroundColor: "rgba(13,22,39,0.97)",
+    borderWidth: 1,
+    borderColor: "rgba(105,136,174,0.13)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  loadingState: {
+    minHeight: 170,
+  },
+  loadingRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.16)",
+  },
+  emptyArtwork: {
+    width: 128,
+    height: 91,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 7,
+  },
+  emptyArtworkGlow: {
+    position: "absolute",
+    width: 88,
+    height: 72,
+    borderRadius: 44,
+    top: 7,
+    backgroundColor: "rgba(254,154,0,0.11)",
+  },
+  emptySpark: {
+    position: "absolute",
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: ACCENT,
+  },
+  emptySparkOne: { top: 7, right: 34 },
+  emptySparkTwo: { top: 25, left: 18, opacity: 0.55 },
+  emptySparkThree: { bottom: 15, right: 13, opacity: 0.45 },
+  emptyLeafLeft: {
+    position: "absolute",
+    left: 12,
+    bottom: 10,
+    width: 36,
+    height: 44,
+    justifyContent: "space-around",
+    alignItems: "flex-end",
+    transform: [{ rotate: "-18deg" }],
+  },
+  emptyLeafRight: {
+    position: "absolute",
+    right: 12,
+    bottom: 10,
+    width: 36,
+    height: 44,
+    justifyContent: "space-around",
+    alignItems: "flex-start",
+    transform: [{ rotate: "18deg" }],
+  },
+  emptyLeaf: {
+    width: 18,
+    height: 7,
+    borderRadius: 8,
+    backgroundColor: "rgba(58,76,112,0.72)",
+  },
+  calendarTopRingLeft: {
+    position: "absolute",
+    zIndex: 4,
+    width: 5,
+    height: 18,
+    borderRadius: 3,
+    top: 12,
+    left: 49,
+    backgroundColor: "#ffab23",
+  },
+  calendarTopRingRight: {
+    position: "absolute",
+    zIndex: 4,
+    width: 5,
+    height: 18,
+    borderRadius: 3,
+    top: 12,
+    right: 49,
+    backgroundColor: "#ffab23",
+  },
+  calendarIconBody: {
+    width: 64,
+    height: 59,
+    marginTop: 15,
+    borderRadius: 12,
+    overflow: "hidden",
+    transform: [{ rotate: "6deg" }],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.38,
+    shadowRadius: 9,
+    elevation: 8,
+  },
+  calendarIconHeader: {
+    height: 14,
+    backgroundColor: "#ff9f18",
+  },
+  calendarGrid: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 8,
+  },
+  calendarGridDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 2,
+    backgroundColor: "rgba(191,204,229,0.3)",
+  },
+  calendarGridDotActive: {
+    backgroundColor: ACCENT,
   },
   emptyTitle: {
-    color: "#e5e7eb",
-    fontSize: 16,
-    fontWeight: "700",
-    marginTop: 12,
+    color: "#f0f2f7",
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 1,
+    letterSpacing: -0.15,
   },
   emptySubtitle: {
-    color: "#ffffffd4",
-    fontSize: 13,
+    color: "rgba(190,200,216,0.54)",
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "600",
     textAlign: "center",
-    marginTop: 6,
+    marginTop: 5,
   },
   priceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 11,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "rgba(148,163,184,0.2)",
+    borderTopColor: "rgba(148,163,184,0.12)",
   },
-  priceLabel: {
-    color: "#e0e8deff",
-    fontSize: 14,
+
+  nextActionCard: {
+    flexDirection: "row",
+    gap: 10,
+    borderRadius: 13,
+    padding: 11,
+    marginTop: 11,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.065)",
+  },
+  nextActionCardHot: {
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderColor: "rgba(254,154,0,0.26)",
+  },
+  nextActionIcon: {
+    width: 31,
+    height: 31,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.16)",
+  },
+  nextActionCopy: { flex: 1, minWidth: 0 },
+  nextActionKicker: {
+    color: "rgba(190,201,216,0.48)",
+    fontSize: 8.5,
+    textTransform: "uppercase",
+    letterSpacing: 0.65,
     fontWeight: "900",
   },
-  priceValue: {
-    color: ACCENT,
-    fontSize: 18,
-    fontWeight: "800",
+  nextActionTitle: {
+    color: "#f7f8fb",
+    fontSize: 12.5,
+    fontWeight: "900",
+    marginTop: 2,
   },
+  nextActionDescription: {
+    color: "rgba(214,222,234,0.58)",
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+
+  cardActionButton: {
+    minHeight: 32,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  cardActionButtonHot: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  cardActionText: {
+    color: "#f8fafc",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  cardActionTextHot: { color: "#111827" },
+
   addonsSection: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "rgba(148,163,184,0.2)",
+    borderTopColor: "rgba(148,163,184,0.12)",
   },
   addonsLabel: {
-    color: "#9ca3af",
-    fontSize: 11,
+    color: "rgba(190,201,216,0.5)",
+    fontSize: 8.5,
     textTransform: "uppercase",
-    letterSpacing: 0.8,
+    letterSpacing: 0.7,
     marginBottom: 6,
+    fontWeight: "800",
   },
   addonItem: {
     flexDirection: "row",
@@ -1549,12 +2531,12 @@ const styles = StyleSheet.create({
   },
   addonName: {
     color: "#e5e7eb",
-    fontSize: 10,
-    fontWeight: "500",
+    fontSize: 9.5,
+    fontWeight: "600",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.72)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1563,98 +2545,87 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: height * 0.85,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    height: height * 0.86,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     overflow: "hidden",
   },
   modalContent: {
     flex: 1,
-    backgroundColor: "rgba(15,23,42,0.95)",
+    backgroundColor: "rgba(7,13,24,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   handleArea: {
-    paddingVertical: 12,
+    paddingVertical: 11,
     alignItems: "center",
   },
   handle: {
-    width: 40,
+    width: 38,
     height: 4,
-    backgroundColor: "rgba(148,163,184,0.7)",
+    backgroundColor: "rgba(148,163,184,0.58)",
     borderRadius: 999,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "900",
     color: "#f9fafb",
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
   },
   vanImageContainer: {
-    height: 180,
-    marginHorizontal: 20,
+    height: 186,
+    marginHorizontal: 18,
     borderRadius: 16,
     overflow: "hidden",
-    marginBottom: 20,
+    marginBottom: 18,
+    backgroundColor: "#0d1728",
   },
-  vanImage: {
-    width: "100%",
-    height: "100%",
-  },
-  imageGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  detailSection: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
+  vanImage: { width: "100%", height: "100%" },
+  imageGradient: { ...StyleSheet.absoluteFillObject },
+  detailSection: { paddingHorizontal: 18, marginBottom: 18 },
   vanNameLarge: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900",
     color: "#f9fafb",
-    marginBottom: 8,
+    marginBottom: 7,
   },
-  officeText: {
-    fontSize: 14,
-    color: "#9ca3af",
-  },
+  officeText: { fontSize: 12, color: "#94a3b8" },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#9ca3af",
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#94a3b8",
     textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 12,
+    letterSpacing: 0.9,
+    marginBottom: 10,
   },
-  dateRow: {
-    flexDirection: "row",
-    gap: 16,
-  },
+  dateRow: { flexDirection: "row", gap: 10 },
   dateCol: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
   },
-  dateIcon: {
-    marginBottom: 8,
-  },
+  dateIcon: { marginBottom: 7 },
   dateText: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: "700",
     color: "#f9fafb",
     marginTop: 4,
@@ -1662,209 +2633,162 @@ const styles = StyleSheet.create({
   addonRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
+    gap: 7,
+    marginBottom: 7,
   },
-  addonText: {
-    fontSize: 10,
-    color: "#e5e7eb",
-    fontWeight: "500",
-  },
+  addonText: { fontSize: 9.5, color: "#e5e7eb", fontWeight: "600" },
   priceBreakdownRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 9,
   },
-  breakdownLabel: {
-    fontSize: 14,
-    color: "#9ca3af",
-  },
-  breakdownValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#e5e7eb",
-  },
+  breakdownLabel: { fontSize: 12, color: "#9ca3af" },
+  breakdownValue: { fontSize: 12, fontWeight: "700", color: "#e5e7eb" },
   totalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingTop: 12,
+    paddingTop: 11,
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: "rgba(254,154,0,0.3)",
+    borderTopColor: "rgba(254,154,0,0.22)",
   },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#f9fafb",
-  },
-  totalValue: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#22c55e",
-  },
-  statusSection: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
+  totalLabel: { fontSize: 14, fontWeight: "800", color: "#f9fafb" },
+  totalValue: { fontSize: 21, fontWeight: "900", color: "#22c55e" },
+  statusSection: { paddingHorizontal: 18, marginBottom: 18 },
   infoRow: {
     flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    gap: 10,
+    paddingHorizontal: 18,
+    marginBottom: 18,
   },
   infoBox: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 14,
-    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
   },
   editBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(254,154,0,0.2)",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(254,154,0,0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
   editField: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    gap: 7,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
   },
-  editFieldLabel: {
-    fontSize: 12,
-    color: "#9ca3af",
-    fontWeight: "600",
-  },
+  editFieldLabel: { fontSize: 10.5, color: "#9ca3af", fontWeight: "600" },
   editFieldValue: {
-    fontSize: 13,
+    fontSize: 11.5,
     color: "#f9fafb",
     fontWeight: "700",
     flex: 1,
   },
-  saveBtn: {
-    borderRadius: 16,
-    overflow: "hidden",
-    marginTop: 12,
-  },
+  saveBtn: { borderRadius: 15, overflow: "hidden", marginTop: 11 },
   saveBtnGradient: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
-  saveBtnText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#0f172a",
-  },
+  saveBtnText: { fontSize: 14, fontWeight: "900", color: "#0f172a" },
   calendarBox: {
-    backgroundColor: "rgba(15,23,42,0.98)",
-    borderRadius: 24,
-    padding: 20,
+    backgroundColor: "rgba(8,14,26,0.99)",
+    borderRadius: 22,
+    padding: 18,
     width: "90%",
     maxHeight: height * 0.7,
     zIndex: 10000,
     elevation: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   calendarHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   timeBox: {
-    backgroundColor: "rgba(15,23,42,0.98)",
-    borderRadius: 24,
-    padding: 20,
+    backgroundColor: "rgba(8,14,26,0.99)",
+    borderRadius: 22,
+    padding: 18,
     width: "90%",
     maxHeight: height * 0.6,
     zIndex: 10000,
     elevation: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   timeSlot: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.1)",
+    paddingVertical: 11,
+    paddingHorizontal: 9,
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
-  timeSlotActive: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
-  },
-  timeSlotText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#e5e7eb",
-  },
-  timeSlotTextActive: {
-    color: "#0f172a",
-  },
+  timeSlotActive: { backgroundColor: ACCENT, borderColor: ACCENT },
+  timeSlotText: { fontSize: 11, fontWeight: "700", color: "#e5e7eb" },
+  timeSlotTextActive: { color: "#0f172a" },
   messageBox: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
   },
-  messageText: {
-    fontSize: 14,
-    color: "#e5e7eb",
-    lineHeight: 20,
-  },
+  messageText: { fontSize: 12, color: "#e5e7eb", lineHeight: 18 },
   messageInput: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: "rgba(148,163,184,0.13)",
     color: "#f9fafb",
-    fontSize: 14,
+    fontSize: 12,
     minHeight: 80,
   },
   addonEditRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 11,
     borderRadius: 12,
     marginBottom: 8,
   },
   addonEditName: {
     color: "#f9fafb",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
     flex: 1,
   },
-  addonEditControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
+  addonEditControls: { flexDirection: "row", alignItems: "center", gap: 10 },
   addonEditBtn: {
-    backgroundColor: "rgba(254,154,0,0.2)",
+    backgroundColor: "rgba(254,154,0,0.16)",
     borderRadius: 8,
     padding: 6,
   },
   addonEditQty: {
     color: "#f9fafb",
-    fontSize: 16,
-    fontWeight: "700",
-    minWidth: 30,
+    fontSize: 14,
+    fontWeight: "800",
+    minWidth: 28,
     textAlign: "center",
   },
 });

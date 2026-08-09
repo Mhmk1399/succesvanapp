@@ -1,11 +1,12 @@
 import { Reservation } from "@/types/type";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
 
 const STORAGE_KEY = "reservation_statuses";
 
 export const checkStatusChanges = async (
-  currentReservations: Reservation[]
+  currentReservations: Reservation[],
 ): Promise<Reservation[]> => {
   try {
     const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -36,21 +37,46 @@ export const checkStatusChanges = async (
 };
 
 export const showStatusNotification = async (reservation: Reservation) => {
+  if (Platform.OS === "web") {
+    console.log("[reservationNotifier] Status updated:", {
+      reservationId: reservation._id,
+      status: reservation.status,
+    });
+    return;
+  }
+
   const statusLabels: Record<string, string> = {
-    pending: "Pending",
-    confirmed: "Confirmed ✓",
+    pending: "Pending Review",
+    confirmed: "Booking Confirmed",
+    deposit_pending: "Deposit Payment",
+    deposit_paid: "Deposit Paid",
+    contract_pending: "Contract Signing",
+    contract_signed: "Contract Signed",
+    ready_for_collection: "Ready for Collection",
+    handover_in_progress: "Vehicle Handover",
+    delivered: "Rental Active",
+    vehicle_returned: "Vehicle Returned",
+    return_inspection: "Return Inspection",
+    deposit_review: "Deposit Review",
+    refund_processing: "Refund Processing",
+    refund_completed: "Refund Completed",
     completed: "Completed",
     canceled: "Cancelled",
+    expired: "Expired",
   };
 
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "Reservation Status Updated",
-      body: `${reservation.category?.name || "Your reservation"} is now ${
-        statusLabels[reservation.status] || reservation.status
-      }`,
-      data: { reservationId: reservation._id },
-    },
-    trigger: null,
-  });
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Reservation Status Updated",
+        body: `${reservation.category?.name || "Your reservation"} is now ${
+          statusLabels[reservation.status] || reservation.status
+        }`,
+        data: { reservationId: reservation._id },
+      },
+      trigger: null,
+    });
+  } catch (error) {
+    console.log("[reservationNotifier] Notification skipped:", error);
+  }
 };

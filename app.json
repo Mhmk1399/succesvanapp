@@ -4,7 +4,7 @@
     "slug": "success-van-hire",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
+    "icon": "./assets/images/apple.png",
     "scheme": "succesvanapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -25,9 +25,9 @@
       "package": "com.succesvanhire.app",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
-        "backgroundImage": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
-        "monochromeImage": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png"
+        "foregroundImage": "./assets/images/android.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -38,14 +38,14 @@
     },
     "web": {
       "output": "static",
-      "favicon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png"
+      "favicon": "./assets/images/apple.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
+          "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -54,13 +54,14 @@
       [
         "expo-notifications",
         {
-          "icon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
+          "icon": "./assets/images/icon.png",
           "color": "#fe9a00"
         }
       ],
       "@react-native-community/datetimepicker",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -9,12 +9,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 import * as Haptics from "expo-haptics";
 
-const CARD_WIDTH = 180;
-const CARD_HEIGHT = 220;
-const CARD_SPACING = 14;
+const CARD_WIDTH = 156;
+const CARD_HEIGHT = 164;
+const CARD_SPACING = 10;
 
 // Premium color palette
 const COLORS = {
@@ -96,7 +96,6 @@ export default function WhyUs() {
   const headerAnim = useRef(new Animated.Value(0)).current;
   const statsAnim = useRef(new Animated.Value(0)).current;
   const marqueeAnim = useRef(new Animated.Value(0)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<Animated.FlatList<Feature>>(null);
 
   // Auto-scroll for marquee effect
@@ -116,22 +115,6 @@ export default function WhyUs() {
         useNativeDriver: true,
       }),
     ]).start();
-
-    // Shimmer effect
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmerAnim, {
-          toValue: 0,
-          duration: 3000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
 
     // Auto-scroll marquee
     let scrollPosition = 0;
@@ -156,71 +139,15 @@ export default function WhyUs() {
     [scrollX]
   );
 
-  // Double the data for infinite scroll effect
-  const doubledFeatures = [...FEATURES];
+  const displayedFeatures = FEATURES.slice(0, 3);
 
   return (
     <View style={styles.container}>
-      {/* Background Decorations */}
-      <View style={styles.backgroundDecor}>
-        <Animated.View
-          style={[
-            styles.glowOrb,
-            styles.glowOrb1,
-            {
-              opacity: shimmerAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0.2, 0.4, 0.2],
-              }),
-            },
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.glowOrb,
-            styles.glowOrb2,
-            {
-              opacity: shimmerAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0.15, 0.3, 0.15],
-              }),
-            },
-          ]}
-        />
-      </View>
-
-      {/* Header Section */}
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            opacity: headerAnim,
-            transform: [
-              {
-                translateY: headerAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-30, 0],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <Text style={styles.title}>
-          Your Trusted{"\n"}
-          <Text style={styles.titleAccent}>Van Hire Partner</Text>
-        </Text>
-
-        <Text style={styles.subtitle}>
-          Experience the difference with London's premier van rental service
-        </Text>
-      </Animated.View>
-
       {/* Feature Cards Carousel */}
       <View style={styles.carouselContainer}>
         <Animated.FlatList
           ref={flatListRef}
-          data={doubledFeatures}
+          data={displayedFeatures}
           keyExtractor={(_, index) => index.toString()}
           renderItem={renderFeatureCard}
           horizontal
@@ -237,14 +164,14 @@ export default function WhyUs() {
 
         {/* Fade Overlays */}
         <LinearGradient
-          colors={["rgba(10,10,10,1)", "transparent"]}
+          colors={["rgba(8,11,18,1)", "transparent"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.15, y: 0 }}
           style={[styles.fadeOverlay, styles.fadeLeft]}
           pointerEvents="none"
         />
         <LinearGradient
-          colors={["transparent", "rgba(10,10,10,1)"]}
+          colors={["transparent", "rgba(8,11,18,1)"]}
           start={{ x: 0.85, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[styles.fadeOverlay, styles.fadeRight]}
@@ -252,27 +179,6 @@ export default function WhyUs() {
         />
       </View>
 
-      {/* Trust Badges */}
-      <Animated.View
-        style={[
-          styles.trustBadges,
-          {
-            opacity: statsAnim,
-            transform: [
-              {
-                translateY: statsAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [20, 0],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <TrustBadge icon="shield-checkmark" text="Verified Business" />
-        <TrustBadge icon="card" text="Secure Payments" />
-        <TrustBadge icon="thumbs-up" text="Satisfaction Guaranteed" />
-      </Animated.View>
     </View>
   );
 }
@@ -381,7 +287,7 @@ function FeatureCard({ feature, index, scrollX }: FeatureCardProps) {
         onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
         style={styles.cardPressable}
       >
-        <BlurView intensity={30} tint="dark" style={styles.card}>
+        <GlassView intensity={16} tint="dark" style={styles.card}>
           <LinearGradient
             colors={[`${feature.color}15`, `${feature.color}08`, "transparent"]}
             style={styles.cardGradient}
@@ -452,7 +358,7 @@ function FeatureCard({ feature, index, scrollX }: FeatureCardProps) {
               />
             </View>
           </LinearGradient>
-        </BlurView>
+        </GlassView>
       </Pressable>
     </Animated.View>
   );
@@ -474,7 +380,7 @@ function TrustBadge({ icon, text }: TrustBadgeProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 48,
+    paddingVertical: 2,
     position: "relative",
   },
   backgroundDecor: {
@@ -519,9 +425,9 @@ const styles = StyleSheet.create({
     }),
   },
   header: {
-    alignItems: "center",
-    marginBottom: 32,
-    paddingHorizontal: 20,
+    alignItems: "flex-start",
+    marginBottom: 8,
+    paddingHorizontal: 16,
   },
   badgeWrapper: {
     marginBottom: 16,
@@ -547,36 +453,37 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.text,
-    fontSize: 36,
+    fontSize: 18,
     fontWeight: "900",
-    textAlign: "center",
-    lineHeight: 44,
-    letterSpacing: -0.5,
-    marginBottom: 12,
+    textAlign: "left",
+    lineHeight: 23,
+    letterSpacing: 0,
+    marginBottom: 4,
   },
   titleAccent: {
     color: COLORS.accent,
   },
   subtitle: {
     color: COLORS.textSecondary,
-    fontSize: 16,
-    textAlign: "center",
-    lineHeight: 24,
-    maxWidth: 320,
+    fontSize: 12,
+    textAlign: "left",
+    lineHeight: 18,
+    maxWidth: 340,
+    fontWeight: "700",
   },
   carouselContainer: {
-    height: CARD_HEIGHT + 40,
+    height: CARD_HEIGHT + 16,
     position: "relative",
   },
   carouselContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
   },
   fadeOverlay: {
     position: "absolute",
     top: 0,
     bottom: 0,
-    width: 60,
+    width: 34,
     zIndex: 10,
   },
   fadeLeft: {
@@ -595,25 +502,26 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    borderRadius: 24,
+    borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(15,23,42,0.82)",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.18,
+        shadowRadius: 14,
       },
       android: {
-        elevation: 10,
+        elevation: 5,
       },
     }),
   },
   cardGradient: {
     flex: 1,
-    padding: 20,
+    padding: 15,
     justifyContent: "space-between",
   },
   cardGlow: {
@@ -621,7 +529,7 @@ const styles = StyleSheet.create({
     top: -50,
     left: -50,
     right: -50,
-    height: 100,
+    height: 180,
     borderRadius: 100,
   },
   iconContainer: {
@@ -630,50 +538,51 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   iconOuter: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: "center",
     alignItems: "center",
   },
   iconInner: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: "center",
     alignItems: "center",
   },
   statBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 9,
   },
   statBadgeText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "800",
   },
   cardContent: {
     flex: 1,
     justifyContent: "flex-end",
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   cardTitle: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 6,
-    letterSpacing: -0.3,
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 5,
+    letterSpacing: 0,
   },
   cardDescription: {
     color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
   },
   cardBottom: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 12,
+    marginTop: 8,
   },
   cardAccent: {
     width: 40,
@@ -743,18 +652,18 @@ const styles = StyleSheet.create({
   },
   trustBadges: {
     flexDirection: "row",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     flexWrap: "wrap",
-    gap: 12,
-    marginTop: 24,
-    paddingHorizontal: 20,
+    gap: 8,
+    marginTop: 8,
+    paddingHorizontal: 16,
   },
   trustBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 100,
     backgroundColor: COLORS.glass,
     borderWidth: 1,
@@ -762,7 +671,7 @@ const styles = StyleSheet.create({
   },
   trustBadgeText: {
     color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "800",
   },
 });

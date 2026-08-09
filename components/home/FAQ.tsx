@@ -1,828 +1,510 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
   Animated,
-  Platform,
   Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
-// Premium color palette
+const ACCENT = "#fe9a00";
+const DARK = "#0f172a";
+
 const COLORS = {
-  accent: "#FF9500",
-  accentLight: "rgba(255, 149, 0, 0.15)",
-  accentGlow: "rgba(255, 149, 0, 0.3)",
-  accentDark: "#E68900",
-  dark: "#0a0a0a",
-  card: "rgba(30, 30, 35, 0.6)",
-  cardActive: "rgba(40, 40, 45, 0.8)",
-  cardBorder: "rgba(255, 255, 255, 0.08)",
-  glass: "rgba(255, 255, 255, 0.05)",
-  glassBorder: "rgba(255, 255, 255, 0.12)",
-  text: "#FFFFFF",
-  textSecondary: "rgba(255, 255, 255, 0.7)",
-  textTertiary: "rgba(255, 255, 255, 0.4)",
-  success: "#34C759",
-  divider: "rgba(255, 255, 255, 0.06)",
+  accent: ACCENT,
+  accentSoft: "rgba(254,154,0,0.14)",
+  panel: "rgba(8,12,22,0.62)",
+  panelSoft: "rgba(255,255,255,0.06)",
+  border: "rgba(255,255,255,0.11)",
+  borderActive: "rgba(254,154,0,0.34)",
+  text: "#f8fafc",
+  textMuted: "rgba(248,250,252,0.64)",
+  textFaint: "rgba(248,250,252,0.42)",
 };
 
 type FAQItem = {
   question: string;
   answer: string;
-  icon?: keyof typeof Ionicons.glyphMap;
-  category?: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  category: string;
 };
 
 const FAQ_DATA: FAQItem[] = [
   {
-    question: "What documents do I need to hire a van?",
+    question: "What documents do I need?",
     answer:
-      "You'll need a valid UK driving licence, proof of address, and a payment method. International customers may need additional documentation such as an International Driving Permit.",
+      "Bring a valid UK driving licence, proof of address, and a payment method. International customers may need extra documentation.",
     icon: "document-text-outline",
-    category: "Requirements",
+    category: "Documents",
   },
   {
-    question: "What's included in the rental price?",
+    question: "What is included in the price?",
     answer:
-      "All rentals include comprehensive insurance, breakdown cover, and unlimited mileage within the M25. Fuel is not included but we provide a full tank which should be returned full.",
+      "Rental includes insurance, breakdown cover, and flexible hire options. Fuel is not included, so the van should be returned with the agreed fuel level.",
     icon: "pricetag-outline",
     category: "Pricing",
   },
   {
-    question: "Can I extend my rental period?",
+    question: "Can I extend my rental?",
     answer:
-      "Yes! Contact us at least 24 hours before your return time. Extensions are subject to availability and will be charged at the standard hourly rate. You can extend via the app or by calling us.",
+      "Yes. Contact us before your return time and we will check availability. Extra time is charged using the current rental rate.",
     icon: "time-outline",
     category: "Booking",
   },
   {
-    question: "What if I return the van late?",
+    question: "What if I return late?",
     answer:
-      "Late returns are charged at £15 per hour for the first 2 hours, then £25 per hour thereafter. Please contact us if you anticipate being late to avoid additional charges and discuss options.",
+      "Late returns can add extra charges. If you expect a delay, contact support as early as possible so we can help you avoid issues.",
     icon: "alarm-outline",
     category: "Returns",
   },
   {
     question: "Is there a minimum rental period?",
     answer:
-      "Yes, our minimum rental period is 4 hours. We offer flexible hourly, daily, and weekly rates with significant discounts for longer bookings. Weekly rentals save up to 30%.",
+      "Yes. The booking flow will validate the minimum rental time before showing available vans.",
     icon: "calendar-outline",
-    category: "Booking",
+    category: "Rules",
   },
   {
     question: "What happens if the van breaks down?",
     answer:
-      "All vans include 24/7 breakdown assistance. Call our emergency number and we'll arrange recovery or a replacement vehicle within 2 hours. Your rental time will be extended at no extra cost.",
+      "Our support team will arrange breakdown assistance or advise on the next step. Contact us immediately if anything goes wrong.",
     icon: "construct-outline",
     category: "Support",
   },
 ];
 
 export default function FAQ() {
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
-  const headerAnim = useRef(new Animated.Value(0)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
+  const entrance = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Header entrance animation
-    Animated.spring(headerAnim, {
+    Animated.spring(entrance, {
       toValue: 1,
-      tension: 50,
-      friction: 8,
-      useNativeDriver: true,
-    }).start();
-
-    // Shimmer loop
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 2500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmerAnim, {
-          toValue: 0,
-          duration: 2500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
-
-  const handleToggle = useCallback(
-    (index: number) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setExpandedIndex(expandedIndex === index ? null : index);
-    },
-    [expandedIndex]
-  );
-
-  return (
-    <View style={styles.container}>
-      {/* Decorative Background Elements */}
-      <View style={styles.backgroundDecor}>
-        <Animated.View
-          style={[
-            styles.glowOrb,
-            styles.glowOrb1,
-            {
-              opacity: shimmerAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0.3, 0.6, 0.3],
-              }),
-            },
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.glowOrb,
-            styles.glowOrb2,
-            {
-              opacity: shimmerAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0.2, 0.4, 0.2],
-              }),
-            },
-          ]}
-        />
-      </View>
-
-      {/* Header Section */}
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            opacity: headerAnim,
-            transform: [
-              {
-                translateY: headerAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-30, 0],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <Text style={styles.title}>
-          Frequently Asked{"\n"}
-          <Text style={styles.titleAccent}>Questions</Text>
-        </Text>
-
-        <Text style={styles.subtitle}>
-          Find answers to common questions about our van rental service
-        </Text>
-      </Animated.View>
-
-      {/* FAQ List */}
-      <View style={styles.list}>
-        {FAQ_DATA.map((item, index) => (
-          <FAQCard
-            key={index}
-            item={item}
-            index={index}
-            isExpanded={expandedIndex === index}
-            onToggle={() => handleToggle(index)}
-            totalItems={FAQ_DATA.length}
-          />
-        ))}
-      </View>
-
-      {/* Bottom CTA */}
-      <Animated.View
-        style={[
-          styles.ctaContainer,
-          {
-            opacity: headerAnim,
-            transform: [
-              {
-                translateY: headerAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [30, 0],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <BlurView intensity={30} tint="dark" style={styles.ctaBlur}>
-          <View style={styles.ctaContent}>
-            <View style={styles.ctaLeft}>
-              <View style={styles.ctaIconWrapper}>
-                <Ionicons name="chatbubbles" size={16} color={COLORS.accent} />
-              </View>
-              <View>
-                <Text style={styles.ctaTitle}>Still have questions?</Text>
-                <Text style={styles.ctaSubtitle}>
-                  Our support team is here to help
-                </Text>
-              </View>
-            </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.ctaButton,
-                pressed && styles.ctaButtonPressed,
-              ]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                Linking.openURL("tel:+442030111198");
-              }}
-            >
-              <Text style={styles.ctaButtonText}>Contact Us</Text>
-            </Pressable>
-          </View>
-        </BlurView>
-      </Animated.View>
-    </View>
-  );
-}
-
-type FAQCardProps = {
-  item: FAQItem;
-  index: number;
-  isExpanded: boolean;
-  onToggle: () => void;
-  totalItems: number;
-};
-
-function FAQCard({ item, index, isExpanded, onToggle }: FAQCardProps) {
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const expandAnim = useRef(new Animated.Value(0)).current;
-  const pressAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-
-  // Entrance animation
-  useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      delay: index * 100,
-      tension: 50,
-      friction: 8,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  // Expand/Collapse animation
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(rotateAnim, {
-        toValue: isExpanded ? 1 : 0,
-        tension: 120,
-        friction: 14,
-        useNativeDriver: true,
-      }),
-      Animated.spring(expandAnim, {
-        toValue: isExpanded ? 1 : 0,
-        tension: 100,
-        friction: 12,
-        useNativeDriver: false, // Height animation can't use native driver
-      }),
-      Animated.timing(glowAnim, {
-        toValue: isExpanded ? 1 : 0,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [isExpanded]);
-
-  const rotate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "180deg"],
-  });
-
-  const answerHeight = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 150], // Adjust based on content
-  });
-
-  const answerOpacity = expandAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0, 0, 1],
-  });
-
-  const borderColor = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["rgba(255, 255, 255, 0.08)", "rgba(255, 149, 0, 0.3)"],
-  });
-
-  const backgroundColor = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["rgba(30, 30, 35, 0.6)", "rgba(40, 40, 45, 0.8)"],
-  });
-
-  const handlePressIn = () => {
-    Animated.spring(pressAnim, {
-      toValue: 0.98,
-      useNativeDriver: true,
-      tension: 100,
+      tension: 52,
       friction: 10,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(pressAnim, {
-      toValue: 1,
       useNativeDriver: true,
-      tension: 100,
-      friction: 10,
     }).start();
-  };
+  }, [entrance]);
+
+  const handleToggle = useCallback((index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExpandedIndex((current) => (current === index ? null : index));
+  }, []);
 
   return (
     <Animated.View
       style={[
-        styles.cardWrapper,
+        styles.container,
         {
-          opacity: scaleAnim,
+          opacity: entrance,
           transform: [
-            { scale: Animated.multiply(scaleAnim, pressAnim) },
             {
-              translateY: scaleAnim.interpolate({
+              translateY: entrance.interpolate({
                 inputRange: [0, 1],
-                outputRange: [50, 0],
+                outputRange: [18, 0],
               }),
             },
           ],
         },
       ]}
     >
-      <Animated.View
-        style={[
-          styles.card,
-          {
-            borderColor,
-            backgroundColor,
-          },
-        ]}
-      >
-        {/* Card Glow Effect when expanded */}
-        {isExpanded && (
-          <Animated.View
-            style={[
-              styles.cardGlow,
-              {
-                opacity: glowAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.5],
-                }),
-              },
-            ]}
-          />
-        )}
+      <GlassView intensity={12} tint="dark" style={styles.shell}>
+        <View style={styles.header}>
+          <View style={styles.headerIcon}>
+            <Ionicons name="help-buoy-outline" size={19} color={ACCENT} />
+          </View>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>Help center</Text>
+            <Text style={styles.subtitle}>Quick answers before you book</Text>
+          </View>
+        </View>
+
+        <View style={styles.topicRow}>
+          <TopicPill icon="flash-outline" label="Fast" />
+          <TopicPill icon="shield-checkmark-outline" label="Covered" />
+          <TopicPill icon="call-outline" label="Support" />
+        </View>
+
+        <View style={styles.list}>
+          {FAQ_DATA.map((item, index) => (
+            <FAQRow
+              key={item.question}
+              item={item}
+              isExpanded={expandedIndex === index}
+              onToggle={() => handleToggle(index)}
+            />
+          ))}
+        </View>
 
         <Pressable
-          onPress={onToggle}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          style={styles.cardPressable}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            Linking.openURL("tel:+442030111198");
+          }}
+          style={({ pressed }) => [
+            styles.supportAction,
+            pressed && styles.supportActionPressed,
+          ]}
         >
-          {/* Question Header */}
-          <View style={styles.cardHeader}>
-            <View style={styles.questionRow}>
-              {/* Number Badge */}
-              <View
-                style={[
-                  styles.numberBadge,
-                  isExpanded && styles.numberBadgeActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.numberText,
-                    isExpanded && styles.numberTextActive,
-                  ]}
-                >
-                  {String(index + 1).padStart(2, "0")}
-                </Text>
-              </View>
-
-              {/* Question Text */}
-              <View style={styles.questionContent}>
-                {item.category && (
-                  <Text style={styles.categoryText}>{item.category}</Text>
-                )}
-                <Text
-                  style={[styles.question, isExpanded && styles.questionActive]}
-                >
-                  {item.question}
-                </Text>
-              </View>
+          <View style={styles.supportLeft}>
+            <View style={styles.supportIcon}>
+              <Ionicons name="headset-outline" size={17} color={COLORS.text} />
             </View>
+            <View style={styles.supportTextWrap}>
+              <Text style={styles.supportTitle}>Need more help?</Text>
+              <Text style={styles.supportSubtitle}>Call our rental team</Text>
+            </View>
+          </View>
+          <View style={styles.supportCta}>
+            <Ionicons name="call" size={15} color={DARK} />
+          </View>
+        </Pressable>
+      </GlassView>
+    </Animated.View>
+  );
+}
 
-            {/* Expand Icon */}
-            <Animated.View
-              style={[
-                styles.expandIconWrapper,
-                isExpanded && styles.expandIconWrapperActive,
-                { transform: [{ rotate }] },
-              ]}
-            >
-              <Ionicons
-                name="chevron-down"
-                size={18}
-                color={isExpanded ? COLORS.dark : COLORS.accent}
-              />
-            </Animated.View>
+function TopicPill({
+  icon,
+  label,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+}) {
+  return (
+    <View style={styles.topicPill}>
+      <Ionicons name={icon} size={13} color={ACCENT} />
+      <Text style={styles.topicText}>{label}</Text>
+    </View>
+  );
+}
+
+function FAQRow({
+  item,
+  isExpanded,
+  onToggle,
+}: {
+  item: FAQItem;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const expand = useRef(new Animated.Value(isExpanded ? 1 : 0)).current;
+  const press = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.spring(expand, {
+      toValue: isExpanded ? 1 : 0,
+      tension: 110,
+      friction: 14,
+      useNativeDriver: false,
+    }).start();
+  }, [expand, isExpanded]);
+
+  const answerHeight = expand.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 118],
+  });
+
+  const answerOpacity = expand.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [0, 0, 1],
+  });
+
+  const rotate = expand.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "45deg"],
+  });
+
+  const handlePressIn = () => {
+    Animated.spring(press, {
+      toValue: 0.985,
+      tension: 160,
+      friction: 12,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(press, {
+      toValue: 1,
+      tension: 160,
+      friction: 12,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <Animated.View style={{ transform: [{ scale: press }] }}>
+      <Pressable
+        onPress={onToggle}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={[styles.rowCard, isExpanded && styles.rowCardActive]}
+      >
+        <View style={styles.rowHeader}>
+          <View style={[styles.rowIcon, isExpanded && styles.rowIconActive]}>
+            <Ionicons
+              name={item.icon}
+              size={17}
+              color={isExpanded ? DARK : ACCENT}
+            />
           </View>
 
-          {/* Answer Section */}
+          <View style={styles.rowCopy}>
+            <Text style={styles.category}>{item.category}</Text>
+            <Text style={styles.question} numberOfLines={2}>
+              {item.question}
+            </Text>
+          </View>
+
           <Animated.View
             style={[
-              styles.answerWrapper,
-              {
-                maxHeight: answerHeight,
-                opacity: answerOpacity,
-              },
+              styles.plusButton,
+              isExpanded && styles.plusButtonActive,
+              { transform: [{ rotate }] },
             ]}
           >
-            <View style={styles.answerContainer}>
-              <View style={styles.answerDivider} />
-              <View style={styles.answerContent}>
-                <View style={styles.answerIconWrapper}>
-                  <Ionicons
-                    name={item.icon || "information-circle-outline"}
-                    size={20}
-                    color={COLORS.accent}
-                  />
-                </View>
-                <Text style={styles.answer}>{item.answer}</Text>
-              </View>
-            </View>
+            <Ionicons
+              name="add"
+              size={18}
+              color={isExpanded ? DARK : COLORS.textMuted}
+            />
           </Animated.View>
-        </Pressable>
-      </Animated.View>
+        </View>
+
+        <Animated.View
+          style={[
+            styles.answerWrap,
+            { maxHeight: answerHeight, opacity: answerOpacity },
+          ]}
+        >
+          <View style={styles.answerDivider} />
+          <Text style={styles.answer}>{item.answer}</Text>
+        </Animated.View>
+      </Pressable>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    position: "relative",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  backgroundDecor: {
-    position: "absolute",
-    top: 100,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  glowOrb: {
-    position: "absolute",
-    borderRadius: 999,
-  },
-  glowOrb1: {
-    width: 300,
-    height: 200,
-    top: -100,
-    right: -100,
-    backgroundColor: COLORS.accentGlow,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.accent,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 100,
-      },
-    }),
-  },
-  glowOrb2: {
-    width: 200,
-    height: 200,
-    bottom: 100,
-    left: -80,
-    backgroundColor: "rgba(99, 102, 241, 0.2)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#6366f1",
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 80,
-      },
-    }),
+  shell: {
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(15,23,42,0.84)",
   },
   header: {
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  headerBadge: {
-    marginBottom: 16,
-    borderRadius: 100,
-    overflow: "hidden",
-  },
-  badgeBlur: {
+    minHeight: 62,
+    paddingHorizontal: 14,
+    paddingTop: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 100,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    overflow: "hidden",
+    gap: 12,
   },
-  badgeText: {
-    color: COLORS.accent,
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 1,
+  headerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.accentSoft,
+    borderWidth: 1,
+    borderColor: COLORS.borderActive,
+  },
+  headerCopy: {
+    flex: 1,
   },
   title: {
     color: COLORS.text,
-    fontSize: 36,
-    fontWeight: "800",
-    textAlign: "center",
-    lineHeight: 44,
-    marginBottom: 12,
-    letterSpacing: -0.5,
-  },
-  titleAccent: {
-    color: COLORS.accent,
+    fontSize: 17,
+    fontWeight: "900",
   },
   subtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 16,
-    textAlign: "center",
-    lineHeight: 24,
-    maxWidth: 300,
-    marginBottom: 2,
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
   },
-  statsRow: {
+  topicRow: {
+    flexDirection: "row",
+    gap: 7,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  topicPill: {
+    flex: 1,
+    minHeight: 30,
+    borderRadius: 15,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.glass,
-    borderRadius: 16,
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: COLORS.panelSoft,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    gap: 20,
+    borderColor: COLORS.border,
   },
-  statItem: {
-    alignItems: "center",
-  },
-  statNumber: {
-    color: COLORS.accent,
-    fontSize: 20,
+  topicText: {
+    color: COLORS.textMuted,
+    fontSize: 11,
     fontWeight: "800",
   },
-  statLabel: {
-    color: COLORS.textTertiary,
-    fontSize: 12,
-    fontWeight: "500",
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: COLORS.divider,
-  },
   list: {
-    gap: 12,
+    gap: 7,
+    paddingHorizontal: 8,
   },
-  cardWrapper: {
-    position: "relative",
-  },
-  card: {
-    borderRadius: 20,
+  rowCard: {
+    borderRadius: 16,
+    padding: 10,
+    backgroundColor: "rgba(255,255,255,0.035)",
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  rowCardActive: {
+    backgroundColor: "rgba(254,154,0,0.075)",
+    borderColor: COLORS.borderActive,
+  },
+  rowHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  rowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.accentSoft,
+  },
+  rowIconActive: {
+    backgroundColor: ACCENT,
+  },
+  rowCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  category: {
+    color: ACCENT,
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  question: {
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
+  },
+  plusButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  plusButtonActive: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+  },
+  answerWrap: {
     overflow: "hidden",
+  },
+  answerDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.09)",
+    marginTop: 12,
+    marginBottom: 10,
+    marginLeft: 42,
+  },
+  answer: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    lineHeight: 19,
+    fontWeight: "600",
+    paddingLeft: 42,
+    paddingRight: 4,
+    paddingBottom: 2,
+  },
+  supportAction: {
+    minHeight: 56,
+    margin: 8,
+    marginTop: 12,
+    borderRadius: 17,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.15,
-        shadowRadius: 20,
+        shadowOpacity: 0.16,
+        shadowRadius: 14,
       },
       android: {
-        elevation: 8,
+        elevation: 5,
       },
     }),
   },
-  cardGlow: {
-    position: "absolute",
-    top: -50,
-    left: -50,
-    right: -50,
-    bottom: -50,
-    backgroundColor: COLORS.accentGlow,
-    borderRadius: 100,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.accent,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 1,
-        shadowRadius: 50,
-      },
-    }),
+  supportActionPressed: {
+    opacity: 0.86,
+    transform: [{ scale: 0.985 }],
   },
-  cardPressable: {
-    padding: 0,
-  },
-  cardHeader: {
+  supportLeft: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: 18,
-    gap: 14,
+    gap: 11,
   },
-  questionRow: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-  },
-  numberBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.glass,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+  supportIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
-  numberBadgeActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-  },
-  numberText: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  numberTextActive: {
-    color: COLORS.dark,
-  },
-  questionContent: {
+  supportTextWrap: {
     flex: 1,
-    paddingTop: 2,
+    minWidth: 0,
   },
-  categoryText: {
-    color: COLORS.accent,
-    fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  question: {
+  supportTitle: {
     color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "600",
-    lineHeight: 22,
+    fontSize: 13,
+    fontWeight: "900",
   },
-  questionActive: {
-    color: COLORS.text,
+  supportSubtitle: {
+    color: COLORS.textFaint,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
   },
-  expandIconWrapper: {
+  supportCta: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.glass,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
-  },
-  expandIconWrapperActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-  },
-  answerWrapper: {
-    overflow: "hidden",
-  },
-  answerContainer: {
-    paddingHorizontal: 18,
-    paddingBottom: 18,
-  },
-  answerDivider: {
-    height: 1,
-    backgroundColor: COLORS.divider,
-    marginBottom: 16,
-    marginLeft: 54,
-  },
-  answerContent: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  answerIconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.accentLight,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  answer: {
-    flex: 1,
-    color: COLORS.textSecondary,
-    fontSize: 15,
-    lineHeight: 24,
-  },
-  helpfulRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 16,
-    marginLeft: 54,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
-  },
-  helpfulText: {
-    color: COLORS.textTertiary,
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  helpfulButtons: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  helpfulButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 100,
-    backgroundColor: COLORS.glass,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-  },
-  helpfulButtonPressed: {
-    backgroundColor: COLORS.accentLight,
-  },
-  helpfulButtonText: {
-    color: COLORS.textTertiary,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  ctaContainer: {
-    marginTop: 32,
-    borderRadius: 24,
-    overflow: "hidden",
-  },
-  ctaBlur: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    overflow: "hidden",
-  },
-  ctaContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 20,
-    gap: 16,
-  },
-  ctaLeft: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  ctaIconWrapper: {
-    width: 30,
-    height: 30,
-    borderRadius: 14,
-    backgroundColor: COLORS.accentLight,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  ctaTitle: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  ctaSubtitle: {
-    color: COLORS.textTertiary,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  ctaButton: {
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-  ctaButtonPressed: {
-    transform: [{ scale: 0.96 }],
-  },
-  ctaButtonGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 14,
-  },
-  ctaButtonText: {
-    color: COLORS.accent,
-    fontSize: 15,
-    fontWeight: "700",
+    backgroundColor: ACCENT,
   },
 });

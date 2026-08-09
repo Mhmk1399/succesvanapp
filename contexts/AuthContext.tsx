@@ -28,8 +28,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const storedToken = await AsyncStorage.getItem("authToken");
       const storedUser = await AsyncStorage.getItem("user");
-      if (storedToken && storedUser) {
+      if (storedToken) {
         setToken(storedToken);
+      }
+      if (storedUser) {
         setUser(JSON.parse(storedUser));
       }
     } catch (error) {
@@ -41,6 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = async () => {
     try {
+      const storedToken = await AsyncStorage.getItem("authToken");
+      if (storedToken) {
+        setToken(storedToken);
+      }
+
       const result = await authService.getUser();
       if (result.success) {
         setUser(result.data);
@@ -48,6 +55,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.log("Refresh user error:", error);
+      const storedToken = await AsyncStorage.getItem("authToken");
+      const storedUser = await AsyncStorage.getItem("user");
+      if (storedToken) setToken(storedToken);
+      if (storedUser) setUser(JSON.parse(storedUser));
     }
   };
 

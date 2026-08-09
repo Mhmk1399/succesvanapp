@@ -1,11 +1,14 @@
 import { AddOnOption, CategorySuggestion, SelectedAddOn, useFastAgent } from "@/hooks/useFastAgent";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
+import GlassView from "@/components/global/GlassView";
+import { useToast } from "@/components/global/AppToast";
+import { formatDateInputInLondon, syncServerClock } from "@/utils/londonTime";
+import { getAddonImageUri } from "@/utils/addonImage";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -33,6 +36,13 @@ export default function AIBookingFlow({
   onClose,
   onComplete,
 }: AIBookingFlowProps) {
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    if (visible) {
+      syncServerClock().catch(() => {});
+    }
+  }, [visible]);
   const {
     isLoading,
     isRecording,
@@ -66,7 +76,9 @@ export default function AIBookingFlow({
     endTime: "10:00",
     driverAge: 25,
   });
-  const [addOnQuantities, setAddOnQuantities] = useState<Record<string, number>>({});
+  const [selectedAddOns, setSelectedAddOns] = useState<Record<string, boolean>>(
+    {},
+  );
   const [selectedGearType, setSelectedGearType] = useState<"manual" | "automatic">("manual");
 
   const translateY = useRef(new Animated.Value(height)).current;
@@ -169,7 +181,11 @@ export default function AIBookingFlow({
   const handleBookingSubmit = async (e?: any) => {
     e?.preventDefault?.();
     if (!bookingForm.officeId || !bookingForm.startDate || !bookingForm.endDate) {
-      Alert.alert("Missing Information", "Please fill in all required fields");
+      showToast({
+        type: "error",
+        title: "Missing information",
+        message: "Please fill in all required fields.",
+      });
       return;
     }
     await submitBooking(bookingForm);
@@ -210,39 +226,40 @@ export default function AIBookingFlow({
     return 0;
   };
 
-  // Handle add-on quantity change
-  const handleAddOnQuantityChange = (addOnId: string, delta: number) => {
-    setAddOnQuantities(prev => {
-      const current = prev[addOnId] || 0;
-      const newVal = Math.max(0, current + delta);
-      return { ...prev, [addOnId]: newVal };
-    });
+  const handleAddOnToggle = (addOnId: string) => {
+    setSelectedAddOns((prev) => ({
+      ...prev,
+      [addOnId]: !prev[addOnId],
+    }));
   };
 
   // Handle confirm add-ons
   const handleConfirmAddOns = async () => {
-    const selectedAddOns: SelectedAddOn[] = [];
+    const selectedPayload: SelectedAddOn[] = [];
     
     for (const addOn of agentState.availableAddOns || []) {
-      const quantity = addOnQuantities[addOn._id] || 0;
-      if (quantity > 0) {
+      if (selectedAddOns[addOn._id]) {
         const pricePerUnit = getAddOnPrice(addOn);
-        selectedAddOns.push({
+        selectedPayload.push({
           addOnId: addOn._id,
           name: addOn.name,
-          quantity,
+          quantity: 1,
           pricePerUnit,
-          totalPrice: pricePerUnit * quantity,
+          totalPrice: pricePerUnit,
         });
       }
     }
     
-    await confirmAddOns(selectedAddOns);
+    await confirmAddOns(selectedPayload);
   };
 
   const handlePhoneSubmit = async () => {
     if (phoneInput.length < 10) {
-      Alert.alert("Invalid Phone", "Please enter a valid phone number");
+      showToast({
+        type: "error",
+        title: "Invalid phone",
+        message: "Please enter a valid phone number.",
+      });
       return;
     }
     await sendCode(phoneInput);
@@ -250,7 +267,11 @@ export default function AIBookingFlow({
 
   const handleCodeSubmit = async () => {
     if (codeInput.length < 6) {
-      Alert.alert("Invalid Code", "Please enter the 6-digit code");
+      showToast({
+        type: "error",
+        title: "Invalid code",
+        message: "Please enter the 6-digit code.",
+      });
       return;
     }
     await verifyCode(codeInput);
@@ -301,7 +322,7 @@ export default function AIBookingFlow({
     }
   };
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = formatDateInputInLondon();
 
   // Convert CategorySuggestion to Van type
   const convertToVan = (suggestion: CategorySuggestion): Van => {
@@ -557,50 +578,88 @@ export default function AIBookingFlow({
             <View style={styles.addonsList}>
               {agentState.availableAddOns?.map((addOn) => {
                 const price = getAddOnPrice(addOn);
-                const quantity = addOnQuantities[addOn._id] || 0;
+                const isSelected = Boolean(selectedAddOns[addOn._id]);
+                const addonImageUri = getAddonImageUri(addOn);
                 
                 return (
-                  <View key={addOn._id} style={styles.addonItem}>
+                  <Pressable
+                    key={addOn._id}
+                    onPress={() => handleAddOnToggle(addOn._id)}
+                    style={[
+                      styles.addonItem,
+                      isSelected && styles.addonItemSelected,
+                    ]}
+                  >
+                    <View style={styles.addonMedia}>
+                      {addonImageUri ? (
+                        <Image
+                          source={{ uri: addonImageUri }}
+                          style={styles.addonImage}
+                          contentFit="cover"
+                          transition={180}
+                        />
+                      ) : (
+                        <View style={styles.addonImageFallback}>
+                          <Ionicons
+                            name="add-circle-outline"
+                            size={24}
+                            color={ACCENT}
+                          />
+                        </View>
+                      )}
+                      {isSelected ? (
+                        <View style={styles.addonSelectedBadge}>
+                          <Ionicons name="checkmark" size={12} color={DARK} />
+                        </View>
+                      ) : null}
+                    </View>
+
                     <View style={styles.addonInfo}>
-                      <Text style={styles.addonName}>{addOn.name}</Text>
+                      <Text style={styles.addonName} numberOfLines={2}>
+                        {addOn.name}
+                      </Text>
                       {addOn.description && (
-                        <Text style={styles.addonDescription}>{addOn.description}</Text>
+                        <Text style={styles.addonDescription} numberOfLines={2}>
+                          {addOn.description}
+                        </Text>
                       )}
                       <Text style={styles.addonPrice}>
                         £{price.toFixed(2)} {addOn.pricingType === "flat" ? "" : "/ rental"}
                       </Text>
                     </View>
                     
-                    {/* Quantity Controls */}
-                    <View style={styles.quantityControls}>
-                      <Pressable
-                        style={[styles.quantityButton, quantity === 0 && styles.quantityButtonDisabled]}
-                        onPress={() => handleAddOnQuantityChange(addOn._id, -1)}
-                        disabled={quantity === 0}
+                    <View
+                      style={[
+                        styles.addonSelectButton,
+                        isSelected && styles.addonSelectButtonActive,
+                      ]}
+                    >
+                      <Ionicons
+                        name={isSelected ? "checkmark-circle" : "add-circle-outline"}
+                        size={16}
+                        color={isSelected ? "#0f172a" : ACCENT}
+                      />
+                      <Text
+                        style={[
+                          styles.addonSelectText,
+                          isSelected && styles.addonSelectTextActive,
+                        ]}
                       >
-                        <Ionicons name="remove" size={16} color={quantity === 0 ? "#666" : "#fff"} />
-                      </Pressable>
-                      <Text style={styles.quantityText}>{quantity}</Text>
-                      <Pressable
-                        style={styles.quantityButton}
-                        onPress={() => handleAddOnQuantityChange(addOn._id, 1)}
-                      >
-                        <Ionicons name="add" size={16} color="#fff" />
-                      </Pressable>
+                        {isSelected ? "Selected" : "Select"}
+                      </Text>
                     </View>
-                  </View>
+                  </Pressable>
                 );
               })}
             </View>
             
             {/* Total for selected add-ons */}
-            {Object.values(addOnQuantities).some(q => q > 0) && (
+            {Object.values(selectedAddOns).some(Boolean) && (
               <View style={styles.addonsTotal}>
                 <Text style={styles.addonsTotalLabel}>Add-ons Total:</Text>
                 <Text style={styles.addonsTotalValue}>
                   £{(agentState.availableAddOns || []).reduce((sum, addOn) => {
-                    const qty = addOnQuantities[addOn._id] || 0;
-                    return sum + (getAddOnPrice(addOn) * qty);
+                    return sum + (selectedAddOns[addOn._id] ? getAddOnPrice(addOn) : 0);
                   }, 0).toFixed(2)}
                 </Text>
               </View>
@@ -732,13 +791,13 @@ export default function AIBookingFlow({
   return (
     <Modal visible={visible} transparent animationType="none">
       <Animated.View style={[styles.backdrop, { opacity }]}>
-        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+        <GlassView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
       </Animated.View>
 
       <Animated.View
         style={[styles.container, { transform: [{ translateY }, { scale: scaleAnim }] }]}
       >
-        <BlurView intensity={80} tint="dark" style={styles.content}>
+        <GlassView intensity={80} tint="dark" style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
             <View>
@@ -832,7 +891,7 @@ export default function AIBookingFlow({
               </Pressable>
             </View>
           )}
-        </BlurView>
+        </GlassView>
       </Animated.View>
     </Modal>
   );
@@ -1131,15 +1190,59 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 12,
-    padding: 16,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    gap: 12,
+  },
+  addonItemSelected: {
+    backgroundColor: "rgba(254,154,0,0.1)",
+    borderColor: "rgba(254,154,0,0.42)",
+  },
+  addonMedia: {
+    width: 74,
+    height: 66,
+    borderRadius: 12,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  addonImage: {
+    width: "100%",
+    height: "100%",
+  },
+  addonImageFallback: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(254,154,0,0.08)",
+  },
+  addonSelectedBadge: {
+    position: "absolute",
+    right: 5,
+    bottom: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: ACCENT,
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.88)",
   },
   addonInfo: {
     flex: 1,
+    minWidth: 0,
   },
   addonName: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
+    lineHeight: 20,
   },
   addonDescription: {
     color: "#9ca3af",
@@ -1152,28 +1255,30 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 4,
   },
-  quantityControls: {
+  addonSelectButton: {
+    minHeight: 34,
+    minWidth: 92,
+    borderRadius: 17,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-  },
-  quantityButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: ACCENT,
-    alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(254,154,0,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(254,154,0,0.28)",
   },
-  quantityButtonDisabled: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+  addonSelectButtonActive: {
+    backgroundColor: ACCENT,
+    borderColor: ACCENT,
   },
-  quantityText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-    minWidth: 24,
-    textAlign: "center",
+  addonSelectText: {
+    color: ACCENT,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  addonSelectTextActive: {
+    color: "#0f172a",
   },
   addonsTotal: {
     flexDirection: "row",

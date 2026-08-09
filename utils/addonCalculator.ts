@@ -1,4 +1,9 @@
 import { AddOn } from "@/types/type";
+import {
+  calculateBillableDuration,
+  getAddonPriceForDays,
+  getMatchingAddonTierIndex,
+} from "@/utils/bookingPrice";
 
 export const calculateAddonPrice = (
   addon: AddOn,
@@ -17,24 +22,10 @@ export const calculateAddonPrice = (
   start.setHours(pH, pM, 0, 0);
   end.setHours(rH, rM, 0, 0);
 
-  const diffMs = end.getTime() - start.getTime();
-  const totalHours = diffMs / (1000 * 60 * 60);
-  const totalDays = Math.max(1, Math.ceil(totalHours / 24));
-
-  if (addon.pricingType === "flat" && addon.flatPrice?.amount !== undefined) {
-    const amount = addon.flatPrice.amount;
-    const price = addon.flatPrice.isPerDay ? amount * totalDays * quantity : amount * quantity;
-    return price;
-  } else if (addon.pricingType === "tiered" && addon.tieredPrice?.tiers) {
-    const tier = addon.tieredPrice.tiers.find(
-      (t) => totalDays >= t.minDays && totalDays <= t.maxDays
-    );
-    
-    if (!tier) return 0;
-
-    const price = addon.tieredPrice.isPerDay ? tier.price * totalDays * quantity : tier.price * quantity;
-    return price;
-  }
+  const { totalDays } = calculateBillableDuration(start, end);
+  const selectedTierIndex = getMatchingAddonTierIndex(addon, totalDays);
+  const price = getAddonPriceForDays(addon, totalDays, quantity, selectedTierIndex);
+  if (price > 0) return price;
 
   console.warn(`[addonCalculator] Addon "${addon.name}" has invalid pricing:`, {
     pricingType: addon.pricingType,
@@ -66,8 +57,7 @@ export const getAddonDisplayPrice = (
         const [rH, rM] = returnTime.split(":").map(Number);
         start.setHours(pH, pM, 0, 0);
         end.setHours(rH, rM, 0, 0);
-        const diffMs = end.getTime() - start.getTime();
-        const totalDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+        const { totalDays } = calculateBillableDuration(start, end);
         return `£${amount}/day × ${totalDays}d`;
       }
       return `£${amount}/day`;
@@ -87,8 +77,7 @@ export const getAddonDisplayPrice = (
     start.setHours(pH, pM, 0, 0);
     end.setHours(rH, rM, 0, 0);
 
-    const diffMs = end.getTime() - start.getTime();
-    const totalDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    const { totalDays } = calculateBillableDuration(start, end);
 
     const tier = addon.tieredPrice.tiers.find(
       (t) => totalDays >= t.minDays && totalDays <= t.maxDays

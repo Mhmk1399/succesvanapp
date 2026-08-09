@@ -1,3 +1,6 @@
+import { safeFetch } from "./apiClient";
+import { getTrustedNow, syncServerClock } from "@/utils/londonTime";
+
 const API_URL = process.env.EXPO_PUBLIC_DISCOUNTS_API;
 
 export const discountService = {
@@ -20,7 +23,8 @@ export const discountService = {
         return { success: false, message: "Invalid discount code" };
       }
 
-      const now = new Date();
+      await syncServerClock().catch(() => {});
+      const now = getTrustedNow();
       const validFrom = new Date(discount.validFrom);
       const validTo = new Date(discount.validTo);
       console.log('Date check:', { now, validFrom, validTo });
@@ -69,8 +73,9 @@ export const discountService = {
 
   async applyDiscount(discountId: string, userId: string) {
     try {
-      const response = await fetch(`${API_URL}?id=${discountId}`, {
+      const response = await safeFetch(`${API_URL}?id=${discountId}`, {
         method: "PATCH",
+        toast: { silent: true },
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ addUserToUsedBy: userId }),
       });

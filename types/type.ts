@@ -1,4 +1,72 @@
-// Office ----------------------------------------------------------------------------
+type ApiDate = string | Date;
+type EntityStatus = "active" | "inactive";
+type ReservationStatus =
+  | "pending"
+  | "confirmed"
+  | "deposit_pending"
+  | "deposit_paid"
+  | "contract_pending"
+  | "contract_signed"
+  | "ready_for_collection"
+  | "handover_in_progress"
+  | "canceled"
+  | "delivered"
+  | "vehicle_returned"
+  | "return_inspection"
+  | "deposit_review"
+  | "refund_processing"
+  | "refund_completed"
+  | "expired"
+  | "completed";
+type FuelType = "gas" | "diesel" | "electric" | "hybrid";
+type GearType = "manual" | "automatic";
+type UserRole =
+  | "user"
+  | "admin"
+  | "owner"
+  | "Secretary"
+  | "Consultant"
+  | "Accountant";
+
+// Shared -------------------------------------------------------------------------------------
+export interface MongoTimestamps {
+  createdAt?: ApiDate;
+  updatedAt?: ApiDate;
+}
+
+export interface Property {
+  _id?: string;
+  name?: string;
+  key?: string;
+  value: string;
+}
+
+export interface Rule {
+  _id?: string;
+  key?: string;
+  value?: string;
+}
+
+// Office -------------------------------------------------------------------------------------
+export interface WorkingTimeWindow {
+  isOpen?: boolean;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface WorkingTimeExtension {
+  startTime?: string;
+  endTime?: string;
+  hoursBefore: number;
+  hoursAfter: number;
+  flatPrice: number;
+}
+
+export interface SpecialDayTimeWindow {
+  startTime?: string;
+  endTime?: string;
+}
+
 export interface WorkingTime {
   day:
     | "monday"
@@ -11,16 +79,10 @@ export interface WorkingTime {
   isOpen: boolean;
   startTime?: string;
   endTime?: string;
-  pickupExtension?: {
-    hoursBefore: number;
-    hoursAfter: number;
-    flatPrice: number;
-  };
-  returnExtension?: {
-    hoursBefore: number;
-    hoursAfter: number;
-    flatPrice: number;
-  };
+  pickupTime?: WorkingTimeWindow;
+  returnTime?: WorkingTimeWindow;
+  pickupExtension?: WorkingTimeExtension;
+  returnExtension?: WorkingTimeExtension;
 }
 
 export interface SpecialDay {
@@ -29,113 +91,142 @@ export interface SpecialDay {
   isOpen: boolean;
   startTime?: string;
   endTime?: string;
+  pickupTime?: SpecialDayTimeWindow;
+  returnTime?: SpecialDayTimeWindow;
+  pickupExtension?: SpecialDayTimeWindow;
+  returnExtension?: SpecialDayTimeWindow;
   reason?: string;
+  extraPrice?: number;
 }
 
-export interface Office {
+export interface OfficeVehicleInventory {
+  _id?: string;
+  vehicle: Vehicle;
+  inventory: number;
+}
+
+export interface Office extends MongoTimestamps {
   _id: string;
   name: string;
   location: {
     latitude: number;
     longitude: number;
   };
+  status?: EntityStatus;
+  categories: Category[];
   address: string;
   phone: string;
   workingTime: WorkingTime[];
   specialDays: SpecialDay[];
-  vehicles: Vehicle[];
-  createdAt?: Date;
-  updatedAt?: Date;
-  categories: Category;
+  vehicles: OfficeVehicleInventory[];
 }
 
-// Vehicle --------------------------------------------------------------------------------
+// Vehicle ------------------------------------------------------------------------------------
 export interface ServiceHistory {
-  tire: Date;
-  oil: Date;
-  battery: Date;
-  air: Date;
-  service: Date;
+  tyre?: ApiDate;
+  tire?: ApiDate;
+  oil?: ApiDate;
+  coolant?: ApiDate;
+  breakes?: ApiDate;
+  battery?: ApiDate;
+  air?: ApiDate;
+  service?: ApiDate;
+  adBlue?: ApiDate;
 }
 
-export interface Property {
-  name: string;
-  value: string;
-}
-
-export interface Vehicle {
+export interface Vehicle extends MongoTimestamps {
   _id?: string;
   title: string;
   description: string;
-  images: string[];
-  category: string;
-  pricePerHour: number;
-  fuel: "gas" | "diesel" | "electric" | "hybrid";
-  gear: "automatic" | "manual" | "manual,automatic";
-  seats: number;
-  doors: number;
+  category: Category;
+  office?: Office;
+  reservation?: Reservation;
+  available?: boolean;
+  gear: {
+    availableTypes: Array<{ gearType: GearType }>;
+  };
+  status?: EntityStatus;
+  brand?: string;
+  keyNumber?: string;
+  number: string | number;
   properties: Property[];
   serviceHistory: ServiceHistory;
   needsService: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
-  number: number;
+  pricePerHour?: number;
+  fuel?: FuelType;
+  seats?: number;
+  doors?: number;
+  images?: string[];
 }
 
 // Category -----------------------------------------------------------------------------------
 export interface ServicesPeriod {
-  tire: number;
-  oil: number;
-  battery: number;
-  air: number;
-  service: number;
+  tyre?: number;
+  tire?: number;
+  oil?: number;
+  coolant?: number;
+  breakes?: number;
+  battery?: number;
+  air?: number;
+  service?: number;
+  adBlue?: number;
 }
 
 export interface PricingTier {
+  _id?: string;
   minDays: number;
   maxDays: number;
   pricePerDay: number;
 }
 
-export interface Category {
-  _id?: string;
+export interface Category extends MongoTimestamps {
+  _id: string;
   name: string;
-  expert: string;
   description?: string;
+  purpose?: string;
+  expert?: string;
   image?: string;
   video?: string;
   type: Type;
   showPrice: number;
-  servicesPeriod: ServicesPeriod;
+  selloffer?: number;
+  status?: EntityStatus;
+  properties: Property[];
+  rules?: Rule[];
+  requiredLicense: string;
   pricingTiers: PricingTier[];
+  extrahoursRate: number;
   extraHoursRate?: number;
-  extrahoursRate?: number;
-  fuel: "gas" | "diesel" | "electric" | "hybrid";
-  gear?: {
-    availableTypes: ("manual" | "automatic")[];
+  fuel: FuelType;
+  gear: {
+    availableTypes: GearType[];
     automaticExtraCost: number;
   };
-  purpose: string;
   seats: number;
   doors: number;
-  selloffer?: number;
-  createdAt?: Date;
-  updatedAt?: Date;
-  properties: Property[];
+  servicesPeriod?: ServicesPeriod;
+  deposit?: {
+    amount?: number;
+    fullPayDiscountPercent?: number;
+    securePayPrice?: number;
+    officePayPrice?: number;
+  };
+  amount?: number;
+  fullPayDiscountPercent?: number;
+  securePayPrice?: number;
+  officePayPrice?: number;
 }
 
-// Type -------------------------------------------------------------------------------------------
-
-export interface Type {
-  _id?: string;
+// Type ---------------------------------------------------------------------------------------
+export interface Type extends MongoTimestamps {
+  _id: string;
   name: string;
   description?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  offices: Office[] ;
+  offices: Office[];
+  status?: EntityStatus;
 }
 
-// dashboard
+// Dashboard ----------------------------------------------------------------------------------
 export interface MenuItem {
   id: string;
   label: string;
@@ -150,50 +241,189 @@ export interface Stats {
   categories: number;
 }
 
-// AddOn ------------------------------------------------------------------------------------------
-export interface AddOn {
+// AddOn --------------------------------------------------------------------------------------
+export interface AddOnTier {
+  _id?: string;
+  minDays: number;
+  maxDays: number;
+  price: number;
+}
+
+export interface AddOn extends MongoTimestamps {
   _id: string;
   name: string;
   description?: string;
+  image?: string;
+  imageUrl?: string;
+  thumbnail?: string;
+  photo?: string;
+  picture?: string;
+  images?: string[];
+  type?: string;
+  icon?: string;
   pricingType: "flat" | "tiered";
-  flatPrice: {
+  flatPrice?: {
     amount?: number;
     isPerDay: boolean;
   };
-  tieredPrice: {
+  tieredPrice?: {
     isPerDay: boolean;
-    tiers: Array<{
-      _id?: string;
-      minDays: number;
-      maxDays: number;
-      price: number;
-    }>;
+    tiers: AddOnTier[];
   };
-  createdAt?: string;
-  updatedAt?: string;
+  status?: EntityStatus;
+  categoryId?: Category | null;
 }
 
-// Reservation ------------------------------------------------------------------------------------------
-export interface Reservation {
+// Reservation --------------------------------------------------------------------------------
+export interface ReservationAddOn {
   _id?: string;
+  addOn?: AddOn;
+  quantity: number;
+  selectedTierIndex?: number;
+}
+
+export interface Reservation extends MongoTimestamps {
+  _id?: string;
+  reservationCode?: string;
   user?: User;
-  office?: { _id: string; name: string; workingTime?: WorkingTime[] };
+  office?: Office;
   category?: Category;
+  vehicle?: Vehicle;
   startDate: string;
   endDate: string;
+  startDateDisplay?: string;
+  endDateDisplay?: string;
+  pickupTime?: string;
+  returnTime?: string;
   totalPrice: number;
-  status: "pending" | "confirmed" | "canceled" | "completed";
-  dirverAge: number;
-  messege?: string;
-  addOns?: Array<{
-    addOn?: AddOn;
-    quantity: number;
+  status: ReservationStatus;
+  statusHistory?: Array<{
+    status: ReservationStatus | string;
+    changedAt: string;
+    source?: string;
+    note?: string;
   }>;
-  createdAt?: Date;
-  updatedAt?: Date;
+  deposit?: {
+    amount?: number;
+    originalAmount?: number;
+    option?: "full" | "secure" | "office";
+    status?:
+      | "not_paid"
+      | "pending"
+      | "paid"
+      | "failed"
+      | "held"
+      | "refund_processing"
+      | "refunded"
+      | "partially_refunded";
+    dueAt?: string;
+    paidAt?: string;
+    method?: string;
+    transactionRef?: string;
+    receiptUrl?: string;
+    receiptUploadedAt?: string;
+    failureReason?: string;
+    discountPercent?: number;
+    discountAmount?: number;
+    priceAdjustment?: {
+      status?: "payment_due" | "credit_due" | "balanced";
+      paidAmount?: number;
+      revisedTotal?: number;
+      balanceDue?: number;
+      creditAmount?: number;
+    };
+  };
+  collectionCode?: string;
+  handover?: {
+    startedAt?: string;
+    startMileage?: number;
+    startFuelLevel?: string;
+    conditionNotes?: string;
+    existingDamages?: string[];
+    photos?: string[];
+    customerSignature?: string;
+    staffSignature?: string;
+    staff?: {
+      user?: string;
+      name?: string;
+      role?: "admin" | "owner";
+    };
+    keyCount?: number;
+    equipment?: string[];
+    customFields?: {
+      templateFieldId?: string;
+      label?: string;
+      fieldType?: "input" | "file";
+      inputType?: string;
+      value?: string;
+      files?: string[];
+      helpText?: string;
+    }[];
+    completedAt?: string;
+  };
+  inspection?: {
+    receivedAt?: string;
+    returnMileage?: number;
+    returnFuelLevel?: string;
+    newDamages?: string[];
+    lateReturn?: boolean;
+    lateMinutes?: number;
+    cleaningIssue?: boolean;
+    missingEquipment?: string[];
+    photos?: string[];
+    notes?: string;
+    staff?: {
+      user?: string;
+      name?: string;
+      role?: "admin" | "owner";
+    };
+    customFields?: {
+      templateFieldId?: string;
+      label?: string;
+      fieldType?: "input" | "file";
+      inputType?: string;
+      value?: string;
+      files?: string[];
+      helpText?: string;
+    }[];
+    completedAt?: string;
+  };
+  refund?: {
+    depositPaid?: number;
+    deductionsTotal?: number;
+    refundAmount?: number;
+    status?: "not_started" | "under_review" | "approved" | "processing" | "completed" | "failed";
+    reference?: string;
+    expectedBy?: string;
+    chargeReason?: string;
+    otherChargeReason?: string;
+    charges?: {
+      fuel?: number;
+      late?: number;
+      damage?: number;
+      cleaning?: number;
+      missingEquipment?: number;
+      other?: number;
+    };
+    additionalCharges?: Array<{ reason?: string; amount?: number }>;
+  };
+  cancelReason?: string;
+  driverAge?: number;
+  dirverAge?: number;
+  selectedGear?: GearType;
+  messege?: string;
+  addOns?: ReservationAddOn[];
+  discountCode?: string;
+  pickupExtensionPrice?: number;
+  returnExtensionPrice?: number;
+  isManualPrice?: boolean;
+  manualPricePerDay?: number;
+  manualPriceNote?: string;
+  perInvoice?: boolean;
+  reservationType?: "Office" | "Website" | "App";
 }
 
-// custom Select -------------------------------------------------------------------
+// Custom Select ------------------------------------------------------------------------------
 interface Option {
   _id?: string;
   name: string;
@@ -206,9 +436,11 @@ export interface CustomSelectProps {
   placeholder?: string;
   icon?: React.ReactNode;
   isInline?: boolean;
+  disabled?: boolean;
+  id?: string;
 }
 
-// Testimonial -------------------------------------------------------------------------------
+// Testimonial --------------------------------------------------------------------------------
 export interface Testimonial {
   id: number;
   name: string;
@@ -219,6 +451,7 @@ export interface Testimonial {
   image?: string;
   date?: string;
   location?: string;
+  link?: string;
 }
 
 export interface TestimonialsProps {
@@ -230,8 +463,8 @@ export interface TestimonialsProps {
   accentColor?: string;
 }
 
-// User -----------------------------------------------------------------------------------------
-export interface User {
+// User ---------------------------------------------------------------------------------------
+export interface User extends MongoTimestamps {
   _id: string;
   name: string;
   lastName: string;
@@ -243,48 +476,83 @@ export interface User {
     phoneNumber: string;
     isVerified: boolean;
   };
-  address?: string;
-  city?: string;
-  postalCode?: string;
+  role?: UserRole;
   licenceAttached?: {
     front?: string;
     back?: string;
   };
-  role?: string;
-  createdAt: Date;
+  licenceDetails?: {
+    isFrontSide?: boolean;
+    sourceSide?: "front" | "back" | "unknown";
+    firstName?: string | null;
+    lastName?: string | null;
+    fullName?: string | null;
+    dateOfBirth?: string | null;
+    address?: string | null;
+    postcode?: string | null;
+    licenseNumber?: string | null;
+    licenceNumber?: string | null;
+    issueDate?: string | null;
+    expirationDate?: string | null;
+    expiryDate?: string | null;
+    issuingCountry?: string | null;
+    issuingAuthority?: string | null;
+    licenceCategories?: string[];
+    extractedAt?: string | Date;
+  };
+  avatar?: string;
+  address?: string;
+  postalCode?: string;
+  city?: string;
 }
 
-// van --------------------------------------------------------------------------------------------
-// Van data type
+// Van ----------------------------------------------------------------------------------------
 export interface VanData {
   _id?: string;
   name: string;
   description?: string;
   image: string;
-  type?: string;
-  servicesPeriod?: {
-    tire: number;
-    oil: number;
-    battery: number;
-    air: number;
-    service: number;
-  };
+  video?: string;
+  requiredLicense?: string;
+  type?: string | Type;
+  purpose?: string;
+  expert?: string;
+  servicesPeriod?: ServicesPeriod;
   pricingTiers?: PricingTier[];
-  fuel: "gas" | "diesel" | "electric" | "hybrid";
-  gear?: {
-    availableTypes: ("manual" | "automatic")[];
-    automaticExtraCost: number;
-  };
+  showPrice?: number;
+  selloffer?: number;
+  pricePerHour?: number;
+  extrahoursRate?: number;
+  extraHoursRate?: number;
+  fuel: FuelType;
+  gear:
+    | "automatic"
+    | "manual"
+    | "manual,automatic"
+    | {
+        availableTypes: GearType[];
+        automaticExtraCost?: number;
+      };
   seats: number;
   doors: number;
-  id?: number;
-  category?: string;
+  id?: number | string;
+  category?: Category;
   transmission?: "Manual" | "Automatic";
   cargo?: string;
   features?: string[];
+  properties?: Property[];
+  rules?: Rule[];
   popular?: boolean;
   available?: boolean;
   deposit?: number;
   mileage?: string;
   priceUnit?: string;
+  status?: EntityStatus;
+}
+
+export interface Pagination {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
 }

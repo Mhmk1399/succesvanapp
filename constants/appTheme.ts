@@ -1,0 +1,33 @@
+export const appTheme = {
+  color: {
+    accent: "#fe9a00",
+    accentSoft: "rgba(254,154,0,0.16)",
+    accentStrong: "#ffb84d",
+    bg: "#080b12",
+    bgElevated: "#101827",
+    panel: "rgba(8,12,22,0.72)",
+    panelSoft: "rgba(255,255,255,0.07)",
+    border: "rgba(255,255,255,0.12)",
+    borderStrong: "rgba(255,255,255,0.18)",
+    text: "#f8fafc",
+    textMuted: "rgba(248,250,252,0.66)",
+    textFaint: "rgba(248,250,252,0.44)",
+    success: "#22c55e",
+    warning: "#f59e0b",
+    danger: "#fb7185",
+  },
+  radius: {
+    sm: 12,
+    md: 16,
+    lg: 22,
+    xl: 28,
+    pill: 999,
+  },
+  space: {
+    xs: 6,
+    sm: 10,
+    md: 14,
+    lg: 20,
+    xl: 28,
+  },
+};

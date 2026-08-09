@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const FIRST_LAUNCH_KEY = "hasLaunched";
 
@@ -11,13 +11,7 @@ export function useFirstLaunch() {
     (async () => {
       try {
         const hasLaunched = await AsyncStorage.getItem(FIRST_LAUNCH_KEY);
-
-        if (hasLaunched === null) {
-          await AsyncStorage.setItem(FIRST_LAUNCH_KEY, "true");
-          setIsFirstLaunch(true);
-        } else {
-          setIsFirstLaunch(false);
-        }
+        setIsFirstLaunch(hasLaunched === null);
       } catch (error) {
         console.log("Error checking first launch:", error);
         setIsFirstLaunch(false);
@@ -27,5 +21,15 @@ export function useFirstLaunch() {
     })();
   }, []);
 
-  return { isFirstLaunch, isLoading };
+  const completeFirstLaunch = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem(FIRST_LAUNCH_KEY, "true");
+    } catch (error) {
+      console.log("Error saving first launch:", error);
+    } finally {
+      setIsFirstLaunch(false);
+    }
+  }, []);
+
+  return { isFirstLaunch, isLoading, completeFirstLaunch };
 }

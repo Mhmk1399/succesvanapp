@@ -1,6 +1,6 @@
+import { useToast } from "@/components/global/AppToast";
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -44,6 +44,13 @@ export interface AddOnOption {
   _id: string;
   name: string;
   description?: string;
+  image?: string;
+  imageUrl?: string;
+  thumbnail?: string;
+  photo?: string;
+  picture?: string;
+  images?: string[];
+  icon?: string;
   pricingType: "flat" | "tiered";
   flatPrice?: {
     amount: number;
@@ -132,6 +139,7 @@ export interface FastAgentResponse {
 // ============================================================================
 
 export function useFastAgent() {
+  const { showToast } = useToast();
   // State
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -220,7 +228,11 @@ export function useFastAgent() {
       console.log("Recording started");
     } catch (error) {
       console.log("Failed to start recording:", error);
-      Alert.alert("Recording Error", "Failed to start recording");
+      showToast({
+        type: "error",
+        title: "Recording error",
+        message: "Failed to start recording.",
+      });
     }
   }, []);
 
@@ -397,13 +409,17 @@ export function useFastAgent() {
         const message =
           error instanceof Error ? error.message : "Unknown error";
         console.log("Agent error:", error);
-        Alert.alert("Error", message || "Something went wrong");
+        showToast({
+          type: "error",
+          title: "Assistant error",
+          message: message || "Something went wrong",
+        });
         return null;
       } finally {
         setIsLoading(false);
       }
     },
-    [playAudio, stopAudio]
+    [playAudio, showToast, stopAudio]
   );
 
   // Send voice message

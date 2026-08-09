@@ -15,6 +15,8 @@ export type BookingModalProps = {
     calculatedPrice?: number;
     pickupExtensionFee?: number;
     returnExtensionFee?: number;
+    startDateDisplay?: string;
+    endDateDisplay?: string;
   };
   onReservationComplete?: () => void;
 };

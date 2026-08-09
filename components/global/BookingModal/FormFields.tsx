@@ -3,6 +3,13 @@ import {
     calculateAddonPrice,
     getAddonDisplayPrice,
 } from "@/utils/addonCalculator";
+import {
+  calculateBillableDuration,
+  getMatchingAddonTierIndex,
+  getMinDriverAge,
+  isAddonAvailableForCategory,
+  isAddonAvailableForDays,
+} from "@/utils/bookingPrice";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React from "react";
@@ -42,9 +49,15 @@ type FormFieldsProps = {
   openDatePicker: () => void;
   openTimePicker: (field: "pickupTime" | "returnTime") => void;
   addons: AddOn[];
-  addonSelections: Record<string, { quantity: number; tierId?: string }>;
+  addonSelections: Record<
+    string,
+    { quantity: number; tierId?: string; selectedTierIndex?: number }
+  >;
   setAddonSelections: (
-    v: Record<string, { quantity: number; tierId?: string }>
+    v: Record<
+      string,
+      { quantity: number; tierId?: string; selectedTierIndex?: number }
+    >
   ) => void;
   isLoadingData: boolean;
   message: string;
@@ -86,77 +99,120 @@ export const FormFields = ({
   selectedGear,
   setSelectedGear,
   van,
-}: FormFieldsProps) => (
-  <>
-    <View style={styles.inputGroup}>
-      <Text style={styles.label}>Full Name</Text>
-      <View
-        style={[
-          styles.inputWrapper,
-          focusedInput === "name" && styles.inputFocused,
-          user && styles.inputDisabled,
-        ]}
-      >
-        <Ionicons
-          name="person-outline"
-          size={18}
-          color={focusedInput === "name" ? ACCENT : "#9ca3af"}
-        />
-        <TextInput
-          placeholder="Enter your name"
-          placeholderTextColor="#6b7280"
-          value={name}
-          onChangeText={(text) => {
-            setName(text);
-            if (errors.name) setErrors({ ...errors, name: "" });
-          }}
-          onFocus={() => {
-            Haptics.selectionAsync();
-            setFocusedInput("name");
-          }}
-          onBlur={() => setFocusedInput(null)}
-          style={styles.input}
-          editable={!user}
-        />
-      </View>
-      {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
-    </View>
+}: FormFieldsProps) => {
+  const minDriverAge = React.useMemo(
+    () => getMinDriverAge((van as any)?.type?.name || van?.name),
+    [van],
+  );
 
-    <View style={styles.inputGroup}>
-      <Text style={styles.label}>Email Address</Text>
-      <View
-        style={[
-          styles.inputWrapper,
-          focusedInput === "email" && styles.inputFocused,
-          user && styles.inputDisabled,
-        ]}
-      >
-        <Ionicons
-          name="mail-outline"
-          size={18}
-          color={focusedInput === "email" ? ACCENT : "#9ca3af"}
-        />
-        <TextInput
-          placeholder="your@email.com"
-          placeholderTextColor="#6b7280"
-          value={email}
-          onChangeText={(text) => {
-            setEmail(text);
-            if (errors.email) setErrors({ ...errors, email: "" });
-          }}
-          onFocus={() => {
-            Haptics.selectionAsync();
-            setFocusedInput("email");
-          }}
-          onBlur={() => setFocusedInput(null)}
-          style={styles.input}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          editable={!user}
-        />
+  const rentalDays = React.useMemo(() => {
+    if (!pickupDate || !returnDate || !pickupTime || !returnTime) return 1;
+    const start = new Date(pickupDate);
+    const end = new Date(returnDate);
+    const [pickupHour, pickupMinute] = pickupTime.split(":").map(Number);
+    const [returnHour, returnMinute] = returnTime.split(":").map(Number);
+    start.setHours(pickupHour, pickupMinute, 0, 0);
+    end.setHours(returnHour, returnMinute, 0, 0);
+    return calculateBillableDuration(start, end).totalDays || 1;
+  }, [pickupDate, pickupTime, returnDate, returnTime]);
+
+  const accountName = React.useMemo(() => {
+    const fullName = [user?.name, user?.lastName].filter(Boolean).join(" ");
+    return fullName || name || "Your account";
+  }, [name, user?.lastName, user?.name]);
+
+  const accountEmail = user?.emaildata?.emailAddress || email || "No email";
+
+  return (
+  <>
+    {user ? (
+      <View style={styles.accountSummary}>
+        <View style={styles.accountSummaryIcon}>
+          <Ionicons name="checkmark-circle" size={18} color={ACCENT} />
+        </View>
+        <View style={styles.accountSummaryText}>
+          <Text style={styles.accountSummaryLabel}>Booking as</Text>
+          <Text style={styles.accountSummaryName} numberOfLines={1}>
+            {accountName}
+          </Text>
+          <Text style={styles.accountSummaryEmail} numberOfLines={1}>
+            {accountEmail}
+          </Text>
+        </View>
+        <View style={styles.accountLockedPill}>
+          <Ionicons name="lock-closed" size={11} color="#94a3b8" />
+          <Text style={styles.accountLockedText}>Account</Text>
+        </View>
       </View>
-      {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-    </View>
+    ) : (
+      <>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Full Name</Text>
+          <View
+            style={[
+              styles.inputWrapper,
+              focusedInput === "name" && styles.inputFocused,
+            ]}
+          >
+            <Ionicons
+              name="person-outline"
+              size={18}
+              color={focusedInput === "name" ? ACCENT : "#9ca3af"}
+            />
+            <TextInput
+              placeholder="Enter your name"
+              placeholderTextColor="#6b7280"
+              value={name}
+              onChangeText={(text) => {
+                setName(text);
+                if (errors.name) setErrors({ ...errors, name: "" });
+              }}
+              onFocus={() => {
+                Haptics.selectionAsync();
+                setFocusedInput("name");
+              }}
+              onBlur={() => setFocusedInput(null)}
+              style={styles.input}
+            />
+          </View>
+          {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email Address</Text>
+          <View
+            style={[
+              styles.inputWrapper,
+              focusedInput === "email" && styles.inputFocused,
+            ]}
+          >
+            <Ionicons
+              name="mail-outline"
+              size={18}
+              color={focusedInput === "email" ? ACCENT : "#9ca3af"}
+            />
+            <TextInput
+              placeholder="your@email.com"
+              placeholderTextColor="#6b7280"
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (errors.email) setErrors({ ...errors, email: "" });
+              }}
+              onFocus={() => {
+                Haptics.selectionAsync();
+                setFocusedInput("email");
+              }}
+              onBlur={() => setFocusedInput(null)}
+              style={styles.input}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+          {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+        </View>
+      </>
+    )}
 
     {!hasPrefilledData && (
       <>
@@ -193,7 +249,7 @@ export const FormFields = ({
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Driver Age (23-80)</Text>
+          <Text style={styles.label}>Driver Age ({minDriverAge}-80)</Text>
           <View
             style={[
               styles.inputWrapper,
@@ -206,11 +262,11 @@ export const FormFields = ({
               color={focusedInput === "driverAge" ? ACCENT : "#9ca3af"}
             />
             <TextInput
-              placeholder="23-80"
+              placeholder={`${minDriverAge}-80`}
               placeholderTextColor="#6b7280"
               value={driverAge}
               onChangeText={(text) => {
-                setDriverAge(text);
+                setDriverAge(text.replace(/\D/g, "").slice(0, 2));
                 if (errors.driverAge) setErrors({ ...errors, driverAge: "" });
               }}
               onFocus={() => {
@@ -290,7 +346,7 @@ export const FormFields = ({
     })() && (
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Gearbox</Text>
-        <View style={{ flexDirection: "row", gap: 12 }}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
           <Pressable
             onPress={() => {
               Haptics.selectionAsync();
@@ -302,20 +358,20 @@ export const FormFields = ({
                 selectedGear === "manual"
                   ? "rgba(254,154,0,0.15)"
                   : "rgba(255,255,255,0.05)",
-              borderRadius: 16,
-              padding: 16,
-              borderWidth: 2,
+              borderRadius: 13,
+              padding: 9,
+              borderWidth: 1.5,
               borderColor:
                 selectedGear === "manual" ? ACCENT : "rgba(255,255,255,0.1)",
               alignItems: "center",
-              gap: 8,
+              gap: 5,
             }}
           >
             <View
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
+                width: 30,
+                height: 30,
+                borderRadius: 15,
                 backgroundColor:
                   selectedGear === "manual"
                     ? "rgba(254,154,0,0.2)"
@@ -326,21 +382,21 @@ export const FormFields = ({
             >
               <Ionicons
                 name="hand-left"
-                size={24}
+                size={16}
                 color={selectedGear === "manual" ? ACCENT : "#9ca3af"}
               />
             </View>
             <Text
               style={{
                 color: selectedGear === "manual" ? ACCENT : "#e5e7eb",
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: "700",
               }}
             >
               Manual
             </Text>
             <Text
-              style={{ color: "#9ca3af", fontSize: 11, textAlign: "center" }}
+              style={{ color: "#9ca3af", fontSize: 10, textAlign: "center" }}
             >
               Standard
             </Text>
@@ -357,20 +413,20 @@ export const FormFields = ({
                 selectedGear === "automatic"
                   ? "rgba(254,154,0,0.15)"
                   : "rgba(255,255,255,0.05)",
-              borderRadius: 16,
-              padding: 16,
-              borderWidth: 2,
+              borderRadius: 13,
+              padding: 9,
+              borderWidth: 1.5,
               borderColor:
                 selectedGear === "automatic" ? ACCENT : "rgba(255,255,255,0.1)",
               alignItems: "center",
-              gap: 8,
+              gap: 5,
             }}
           >
             <View
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
+                width: 30,
+                height: 30,
+                borderRadius: 15,
                 backgroundColor:
                   selectedGear === "automatic"
                     ? "rgba(254,154,0,0.2)"
@@ -381,14 +437,14 @@ export const FormFields = ({
             >
               <Ionicons
                 name="settings"
-                size={24}
+                size={16}
                 color={selectedGear === "automatic" ? ACCENT : "#9ca3af"}
               />
             </View>
             <Text
               style={{
                 color: selectedGear === "automatic" ? ACCENT : "#e5e7eb",
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: "700",
               }}
             >
@@ -402,15 +458,15 @@ export const FormFields = ({
                     selectedGear === "automatic"
                       ? "rgba(254,154,0,0.2)"
                       : "rgba(255,255,255,0.05)",
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 8,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 999,
                 }}
               >
                 <Text
                   style={{
                     color: selectedGear === "automatic" ? ACCENT : "#9ca3af",
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: "600",
                   }}
                 >
@@ -418,7 +474,7 @@ export const FormFields = ({
                 </Text>
               </View>
             ) : (
-              <Text style={{ color: "#9ca3af", fontSize: 11 }}>
+              <Text style={{ color: "#9ca3af", fontSize: 10 }}>
                 No extra cost
               </Text>
             )}
@@ -435,19 +491,14 @@ export const FormFields = ({
         <Text style={[styles.label, { marginTop: 8 }]}>Loading add-ons...</Text>
       </View>
     ) : addons.length > 0 ? (
-      <View style={{ marginTop: 10 }}>
+      <View style={{ marginTop: 8 }}>
         <Text style={styles.sectionLabel}>Add-ons (Optional)</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
           {addons
             .filter((addon) => {
-              if (addon.pricingType === "flat") {
-                return (
-                  addon.flatPrice?.amount !== undefined &&
-                  addon.flatPrice?.amount !== null
-                );
-              }
               return (
-                addon.tieredPrice?.tiers && addon.tieredPrice.tiers.length > 0
+                isAddonAvailableForCategory(addon, van?.id) &&
+                isAddonAvailableForDays(addon, rentalDays)
               );
             })
             .map((addon) => {
@@ -501,7 +552,13 @@ export const FormFields = ({
                     } else {
                       setAddonSelections({
                         ...addonSelections,
-                        [addon._id]: { quantity: 1 },
+                        [addon._id]: {
+                          quantity: 1,
+                          selectedTierIndex: getMatchingAddonTierIndex(
+                            addon,
+                            rentalDays,
+                          ),
+                        },
                       });
                     }
                   }}
@@ -511,8 +568,8 @@ export const FormFields = ({
                     backgroundColor: isSelected
                       ? "rgba(254,154,0,0.15)"
                       : "rgba(255,255,255,0.05)",
-                    borderRadius: 12,
-                    padding: 12,
+                    borderRadius: 11,
+                    padding: 10,
                     borderWidth: 1.5,
                     borderColor: isSelected ? ACCENT : "rgba(255,255,255,0.1)",
                     opacity: isTypeDisabled ? 0.4 : 1,
@@ -523,13 +580,13 @@ export const FormFields = ({
                       flexDirection: "row",
                       justifyContent: "space-between",
                       alignItems: "flex-start",
-                      marginBottom: 6,
+                      marginBottom: 4,
                     }}
                   >
                     <Text
                       style={{
                         color: "#f9fafb",
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: "700",
                         flex: 1,
                       }}
@@ -538,9 +595,9 @@ export const FormFields = ({
                     </Text>
                     <View
                       style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 10,
+                        width: 18,
+                        height: 18,
+                        borderRadius: 9,
                         backgroundColor: isSelected
                           ? ACCENT
                           : "rgba(255,255,255,0.1)",
@@ -554,13 +611,13 @@ export const FormFields = ({
                     </View>
                   </View>
                   <Text
-                    style={{ color: "#9ca3af", fontSize: 10, marginBottom: 6 }}
+                    style={{ color: "#9ca3af", fontSize: 10, marginBottom: 4 }}
                     numberOfLines={2}
                   >
                     {addon.description}
                   </Text>
                   <Text
-                    style={{ color: ACCENT, fontSize: 12, fontWeight: "700" }}
+                    style={{ color: ACCENT, fontSize: 11, fontWeight: "800" }}
                   >
                     {displayPrice}
                   </Text>
@@ -569,14 +626,14 @@ export const FormFields = ({
                       style={{
                         backgroundColor: "rgba(254,154,0,0.1)",
                         borderRadius: 6,
-                        padding: 6,
-                        marginTop: 8,
+                        padding: 5,
+                        marginTop: 6,
                       }}
                     >
                       <Text
                         style={{
                           color: "#f9fafb",
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: "600",
                           textAlign: "center",
                         }}
@@ -598,14 +655,14 @@ export const FormFields = ({
         style={[
           styles.inputWrapper,
           focusedInput === "message" && styles.inputFocused,
-          { minHeight: 80, alignItems: "flex-start" },
+          { minHeight: 64, alignItems: "flex-start" },
         ]}
       >
         <Ionicons
           name="chatbox-outline"
           size={18}
           color={focusedInput === "message" ? ACCENT : "#9ca3af"}
-          style={{ marginTop: 8 }}
+          style={{ marginTop: 7 }}
         />
         <TextInput
           placeholder="Add any special requests or notes..."
@@ -617,11 +674,12 @@ export const FormFields = ({
             setFocusedInput("message");
           }}
           onBlur={() => setFocusedInput(null)}
-          style={[styles.input, { minHeight: 60, textAlignVertical: "top" }]}
+          style={[styles.input, { minHeight: 48, textAlignVertical: "top" }]}
           multiline
           numberOfLines={3}
         />
       </View>
     </View>
   </>
-);
+  );
+};
