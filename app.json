@@ -57,7 +57,10 @@
           "icon": "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
           "color": "#fe9a00"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
