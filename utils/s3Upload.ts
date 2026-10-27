@@ -1,5 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { normalizeUrl } from "@/services/apiClient";
 
 const UPLOAD_API = process.env.EXPO_PUBLIC_UPLOAD_API;
 
@@ -21,6 +23,7 @@ const mimeByExtension: Record<string, string> = {
   heif: "image/heif",
   mp4: "video/mp4",
   mov: "video/quicktime",
+  pdf: "application/pdf",
 };
 
 function inferMimeType(file: ImagePicker.ImagePickerAsset) {
@@ -35,6 +38,7 @@ function inferMimeType(file: ImagePicker.ImagePickerAsset) {
 }
 
 function fileExtension(mimeType: string) {
+  if (mimeType === "application/pdf") return "pdf";
   if (mimeType === "image/jpeg") return "jpg";
   if (mimeType === "image/png") return "png";
   if (mimeType === "image/webp") return "webp";
@@ -48,7 +52,7 @@ function fileExtension(mimeType: string) {
 
 async function buildUploadFormData(
   file: ImagePicker.ImagePickerAsset,
-  fileType: "license-front" | "license-back" | "deposit-receipt" | "avatar",
+  fileType: "license-front" | "license-back" | "deposit-receipt" | "avatar" | "vehicle-issue" | "cancellation-request",
 ) {
   const formData = new FormData();
   const mimeType = inferMimeType(file);
@@ -68,13 +72,15 @@ async function buildUploadFormData(
     formData.append("file", fileData as any);
   }
 
-  formData.append("fileType", fileType);
+  const purpose = fileType.startsWith("license-") ? "licence" : fileType.replace(/-/g, "_");
+  formData.append("purpose", purpose);
   return formData;
 }
 
 function uploadFormDataWithProgress(
   formData: FormData,
   onProgress: UploadProgressCallback,
+  token: string,
 ): Promise<string> {
   if (!UPLOAD_API) {
     return Promise.reject(new Error("Upload API not configure"));
@@ -111,14 +117,15 @@ function uploadFormDataWithProgress(
 
     xhr.onerror = () => reject(new Error("Upload failed. Please try again."));
     xhr.onabort = () => reject(new Error("Upload was cancelled."));
-    xhr.open("POST", UPLOAD_API);
+    xhr.open("POST", normalizeUrl(UPLOAD_API));
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(formData);
   });
 }
 
 export const uploadToS3 = async (
   file: ImagePicker.ImagePickerAsset,
-  fileType: "license-front" | "license-back" | "deposit-receipt" | "avatar",
+  fileType: "license-front" | "license-back" | "deposit-receipt" | "avatar" | "vehicle-issue" | "cancellation-request",
   onProgress?: UploadProgressCallback,
 ): Promise<string> => {
   try {
@@ -131,18 +138,22 @@ export const uploadToS3 = async (
     }
 
     const formData = await buildUploadFormData(file, fileType);
+    const token = await AsyncStorage.getItem("authToken");
+    if (!token) throw new Error("Please log in again before uploading.");
 
     if (onProgress) {
-      return uploadFormDataWithProgress(formData, onProgress);
+      return uploadFormDataWithProgress(formData, onProgress, token);
     }
 
-    const response = await fetch(UPLOAD_API, {
+    const response = await fetch(normalizeUrl(UPLOAD_API), {
       method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.status}`);
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.error || `Upload failed: ${response.status}`);
     }
 
     const data = await response.json();

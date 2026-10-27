@@ -381,6 +381,7 @@ export default function DynamicIsland() {
 
   return (
     <Animated.View
+      pointerEvents="box-none"
       style={[
         st.container,
         {
@@ -392,7 +393,7 @@ export default function DynamicIsland() {
         },
       ]}
     >
-      <View style={[st.wrapper, { width: ISLAND_W, height: SVG_H + 8 }]}>
+      <View pointerEvents="box-none" style={[st.wrapper, { width: ISLAND_W, height: SVG_H + 8 }]}>
         {/* ═══ گلو محیطی پشت دایره (پشت‌زمینه) ═══ */}
         {activeIndex >= 0 && (
           <Animated.View
@@ -429,8 +430,8 @@ export default function DynamicIsland() {
         )}
 
         {/* ═══ نوار اصلی با برآمدگی متصل به آیکون فعال ═══ */}
-        <View style={[st.barSvgContainer, { width: SVG_W, height: SVG_H }]}>
-          <Svg width={SVG_W} height={SVG_H} style={StyleSheet.absoluteFill}>
+        <View pointerEvents="box-none" style={[st.barSvgContainer, { width: SVG_W, height: SVG_H }]}>
+          <Svg pointerEvents="none" width={SVG_W} height={SVG_H} style={StyleSheet.absoluteFill}>
             <Defs>
               <SvgLinearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
                 <Stop offset="0%" stopColor="rgba(38,38,46,0.96)" />
@@ -468,6 +469,7 @@ export default function DynamicIsland() {
 
           {/* محتوای نوار (آیکون‌ها) */}
           <View
+            pointerEvents="box-none"
             style={[
               st.contentRow,
               {

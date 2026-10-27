@@ -33,13 +33,12 @@ import {
   scheduleNotification,
 } from "./utils";
 import { discountService } from "@/services/discountService";
+import { safeFetch } from "@/services/apiClient";
+import { PENDING_BOOKING_KEY, type PendingBookingDraft } from "@/utils/pendingBooking";
 
 const buildLocalDateTime = (date: Date | null, time: string) => {
   if (!date || !time) return null;
-  const [hour, minute] = time.split(":").map(Number);
-  const result = new Date(date);
-  result.setHours(hour, minute, 0, 0);
-  return result;
+  return new Date(createLondonDateTime(date, time));
 };
 
 const parseStoredDate = (displayDate?: string, isoDate?: string) => {
@@ -75,16 +74,19 @@ export const useBookingModal = (
     endDateDisplay?: string;
   },
   onReservationComplete?: () => void,
-  discountData?: any
+  discountData?: any,
+  discountCode = "",
+  resumeDraft?: PendingBookingDraft | null,
+  onAuthRedirect?: () => void,
 ) => {
   const hasPrefilledData = !!prefilledData;
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { showToast } = useToast();
   const router = useRouter();
   const translateY = useRef(new Animated.Value(height)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const redirectingToAuth = useRef(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [loginRequiredVisible, setLoginRequiredVisible] = useState(false);
   const [name, setName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -278,7 +280,7 @@ export const useBookingModal = (
     }
   }, [visible]);
 
-  const handleClose = () => {
+  const animateClose = (afterClose?: () => void) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Animated.parallel([
       Animated.timing(translateY, {
@@ -291,8 +293,13 @@ export const useBookingModal = (
         duration: 300,
         useNativeDriver: true,
       }),
-    ]).start(() => onClose());
+    ]).start(({ finished }) => {
+      if (!finished) return;
+      onClose();
+      afterClose?.();
+    });
   };
+  const handleClose = () => animateClose();
 
   const panResponder = useRef(
     PanResponder.create({
@@ -327,16 +334,10 @@ export const useBookingModal = (
 
   useEffect(() => {
     if (prefilledData?.pickupDate) {
-      const d = new Date(prefilledData.pickupDate);
-      const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-      setPickupDate(localDate);
+      setPickupDate(parseStoredDate(prefilledData.startDateDisplay, prefilledData.pickupDate));
     }
     if (prefilledData?.returnDate) {
-      const d = new Date(prefilledData.returnDate);
-      const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-      setReturnDate(localDate);
+      setReturnDate(parseStoredDate(prefilledData.endDateDisplay, prefilledData.returnDate));
     }
     if (prefilledData?.driverAge) {
       setDriverAge(sanitizeDriverAge(prefilledData.driverAge));
@@ -350,7 +351,25 @@ export const useBookingModal = (
     if (prefilledData?.returnTime) {
       setReturnTime(prefilledData.returnTime);
     }
-  }, [prefilledData]);
+  }, [prefilledData?.pickupDate, prefilledData?.returnDate, prefilledData?.startDateDisplay, prefilledData?.endDateDisplay, prefilledData?.driverAge, prefilledData?.office, prefilledData?.pickupTime, prefilledData?.returnTime]);
+
+  useEffect(() => {
+    if (!visible || !resumeDraft) return;
+    setPickupDate(parseStoredDate(resumeDraft.pickupDate));
+    setPickupTime(resumeDraft.pickupTime);
+    setReturnDate(parseStoredDate(resumeDraft.returnDate));
+    setReturnTime(resumeDraft.returnTime);
+    setSelectedOffice(resumeDraft.selectedOffice);
+    setDriverAge(sanitizeDriverAge(resumeDraft.driverAge));
+    setSelectedGear(resumeDraft.selectedGear);
+    setAddonSelections(resumeDraft.addonSelections);
+    setMessage(resumeDraft.message);
+    if (resumeDraft.name) setName(resumeDraft.name);
+    if (resumeDraft.lastName) setLastName(resumeDraft.lastName);
+    if (resumeDraft.email) setEmail(resumeDraft.email);
+    if (resumeDraft.phone) setPhone(resumeDraft.phone);
+    setTermsAccepted(resumeDraft.termsAccepted);
+  }, [resumeDraft, visible]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -400,7 +419,7 @@ export const useBookingModal = (
       if (!dateToFetch) return;
 
       try {
-        const dateStr = dateToFetch.toISOString().split("T")[0];
+        const dateStr = formatDateForStorage(dateToFetch);
         const type = timeModalField === "pickupTime" ? "start" : "end";
         const EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API =
           process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API;
@@ -411,7 +430,7 @@ export const useBookingModal = (
           timeModalField,
         });
 
-        const response = await fetch(
+        const response = await safeFetch(
           `${EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API}?office=${selectedOffice}&${
             type === "start" ? "startDate" : "endDate"
           }=${dateStr}&type=${type}`
@@ -508,7 +527,8 @@ export const useBookingModal = (
   };
 
   const handleDateSelect = (dateString: string) => {
-    const date = new Date(dateString);
+    const [year, month, day] = dateString.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
     const office = getSelectedOffice(offices, selectedOffice);
     if (checkDateDisabled(date, office)) {
       Alert.alert(
@@ -554,12 +574,8 @@ export const useBookingModal = (
 
       // Check if total rental is less than 6 hours
       if (pickupDate && returnDate && pickupTime) {
-        const start = new Date(pickupDate);
-        const end = new Date(returnDate);
-        const [pH, pM] = pickupTime.split(":").map(Number);
-        const [rH, rM] = time.split(":").map(Number);
-        start.setHours(pH, pM, 0, 0);
-        end.setHours(rH, rM, 0, 0);
+        const start = new Date(createLondonDateTime(pickupDate, pickupTime));
+        const end = new Date(createLondonDateTime(returnDate, time));
 
         const diffMs = end.getTime() - start.getTime();
         const diffHours = diffMs / (1000 * 60 * 60);
@@ -578,18 +594,27 @@ export const useBookingModal = (
   };
 
   const handleSubmit = async () => {
-    if (!user) {
-      await AsyncStorage.setItem("pendingBookingVan", JSON.stringify(van));
-      handleClose();
-      setLoginRequiredVisible(true);
+    if (isSubmitting || isLoadingData || redirectingToAuth.current) return;
+    const unavailableAddon = Object.entries(addonSelections).some(
+      ([id, selection]) =>
+        selection.quantity > 0 && !addons.some((addon) => addon._id === id),
+    );
+    if (unavailableAddon) {
+      showToast({
+        type: "error",
+        title: "Add-ons unavailable",
+        message: "Selected add-ons could not be verified. Please start a new booking or try again later.",
+      });
       return;
     }
 
     const newErrors: Record<string, string> = {};
-    if (!name.trim()) newErrors.name = "Please enter your name";
-    if (!email.trim()) newErrors.email = "Please enter your email";
-    else if (!email.includes("@"))
-      newErrors.email = "Please enter a valid email";
+    if (user && token) {
+      if (!name.trim()) newErrors.name = "Please enter your name";
+      if (!email.trim()) newErrors.email = "Please enter your email";
+      else if (!email.includes("@"))
+        newErrors.email = "Please enter a valid email";
+    }
 
     if (!hasPrefilledData) {
       if (!selectedOffice) newErrors.office = "Please select an office";
@@ -612,12 +637,8 @@ export const useBookingModal = (
 
     // Check minimum 6 hours rental
     if (pickupDate && returnDate && pickupTime && returnTime) {
-      const start = new Date(pickupDate);
-      const end = new Date(returnDate);
-      const [pH, pM] = pickupTime.split(":").map(Number);
-      const [rH, rM] = returnTime.split(":").map(Number);
-      start.setHours(pH, pM, 0, 0);
-      end.setHours(rH, rM, 0, 0);
+      const start = new Date(createLondonDateTime(pickupDate, pickupTime));
+      const end = new Date(createLondonDateTime(returnDate, returnTime));
       const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
       if (diffHours < 6) {
         Alert.alert(
@@ -634,6 +655,46 @@ export const useBookingModal = (
       return;
     }
     setErrors({});
+
+    if (!user || !token) {
+      if (!van || !pickupDate || !returnDate) return;
+      redirectingToAuth.current = true;
+      setIsSubmitting(true);
+      const draft: PendingBookingDraft = {
+        version: 1,
+        van,
+        prefilledData,
+        pickupDate: formatDateForStorage(pickupDate),
+        pickupTime,
+        returnDate: formatDateForStorage(returnDate),
+        returnTime,
+        selectedOffice,
+        driverAge,
+        selectedGear,
+        addonSelections,
+        message,
+        name,
+        lastName,
+        email,
+        phone,
+        termsAccepted,
+        discountCode,
+      };
+      try {
+        await AsyncStorage.setItem(PENDING_BOOKING_KEY, JSON.stringify(draft));
+        await AsyncStorage.multiRemove(["pendingBookingVan", "pendingReservationForm"]);
+        animateClose(() => {
+          onAuthRedirect?.();
+          setTimeout(() => router.push("/register"), 400);
+        });
+      } catch {
+        redirectingToAuth.current = false;
+        showToast({ type: "error", title: "Could not save booking", message: "Please try again before signing in." });
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
 
     Keyboard.dismiss();
     setIsSubmitting(true);
@@ -698,6 +759,7 @@ export const useBookingModal = (
       const result = await reservationService.create(userData, reservationData);
 
       if (result.success) {
+        await AsyncStorage.removeItem(PENDING_BOOKING_KEY).catch(() => {});
         console.log("Reservation successful, checking discount:", {
           discountData,
           userId: user._id,
@@ -796,12 +858,5 @@ export const useBookingModal = (
     setSelectedGear,
     termsAccepted,
     setTermsAccepted,
-    loginRequiredVisible,
-    setLoginRequiredVisible,
-    handleLoginRequiredLogin: () => {
-      setLoginRequiredVisible(false);
-      router.push("/register");
-    },
-    handleLoginRequiredCancel: () => setLoginRequiredVisible(false),
   };
 };

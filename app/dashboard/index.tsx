@@ -44,7 +44,13 @@ const tabOrder: TabKey[] = ["reservations", "contracts", "profile"];
 export default function ProfileScreen() {
   const tabsRowRef = useRef<View>(null);
   const [tabsRowWidth, setTabsRowWidth] = useState<number>(0);
-  const { user, token, isLoading: authLoading, logout, refreshUser } = useAuth();
+  const {
+    user,
+    token,
+    isLoading: authLoading,
+    logout,
+    refreshUser,
+  } = useAuth();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -171,6 +177,7 @@ export default function ProfileScreen() {
     <>
       <DashboardHeader
         name={user?.name || "Customer"}
+        familyName={user?.lastName || ""}
         avatar={user?.avatar}
         onProfilePress={() => handleTabChange("profile")}
         onBack={() => {
@@ -497,12 +504,14 @@ function DashboardFloatingHeader({
 
 function DashboardHeader({
   name,
+  familyName,
   avatar,
   onProfilePress,
   onBack,
   onLogout,
 }: {
   name: string;
+  familyName: string;
   avatar?: string;
   onProfilePress: () => void;
   onBack: () => void;
@@ -571,7 +580,7 @@ function DashboardHeader({
         <View style={styles.accountCopy}>
           <Text style={styles.accountKicker}>WELCOME BACK</Text>
           <Text style={styles.accountName} numberOfLines={1}>
-            {name}
+            {name} {familyName}
           </Text>
         </View>
 

@@ -145,13 +145,7 @@ export default function ContractsContent({
     setBusyId(contract._id);
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const returnUrl = Linking.createURL("dashboard", {
-        queryParams: {
-          contractSigned: "1",
-          contractId: contract._id,
-          bookingId: contract.bookingId,
-        },
-      });
+      const returnUrl = Linking.createURL("dashboard");
       const url = await customerJourneyService.startSigning(
         contract._id,
         returnUrl,

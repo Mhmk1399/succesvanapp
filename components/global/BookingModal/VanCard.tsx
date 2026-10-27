@@ -28,7 +28,7 @@ export const VanCard = ({ van }: { van: Van }) => {
         </View>
         <View style={styles.vanImagePrice}>
           <Text style={styles.vanImagePriceValue}>
-            £{van?.showPrice || 0}
+            £{Number(van?.showPrice || 0).toFixed(2)}
           </Text>
           <Text style={styles.vanImagePriceUnit}>/day</Text>
         </View>

@@ -1,5 +1,7 @@
 import type { AddOn, PricingTier } from "@/types/type";
 
+export const DEFAULT_SERVICE_CHARGE = 0.99;
+
 export type AddOnSelection = {
   quantity: number;
   selectedTierIndex?: number;
@@ -30,6 +32,7 @@ export type BookingPriceResult = {
   gearExtraCostPerDay: number;
   gearExtraPrice: number;
   addOnsPrice: number;
+  serviceCharge: number;
   discountAmount: number;
   subtotal: number;
   totalPrice: number;
@@ -152,6 +155,7 @@ export const calculateBookingPrice = ({
   returnExtensionPrice = 0,
   gearExtraCostPerDay = 0,
   addOnsPrice = 0,
+  serviceCharge = DEFAULT_SERVICE_CHARGE,
   sellOffer = 0,
   discountPercentage = 0,
 }: {
@@ -163,6 +167,7 @@ export const calculateBookingPrice = ({
   returnExtensionPrice?: number;
   gearExtraCostPerDay?: number;
   addOnsPrice?: number;
+  serviceCharge?: number;
   sellOffer?: number;
   discountPercentage?: number;
 }): BookingPriceResult | null => {
@@ -186,13 +191,15 @@ export const calculateBookingPrice = ({
   const extraHoursPrice = duration.extraHours * extraHoursRate;
   const gearExtraPrice = duration.totalDays * gearExtraCostPerDay;
 
-  const subtotal =
+  const subtotalRaw =
     daysPrice +
     extraHoursPrice +
     pickupExtensionPrice +
     returnExtensionPrice +
     gearExtraPrice +
-    addOnsPrice;
+    addOnsPrice +
+    serviceCharge;
+  const subtotal = Math.round((subtotalRaw + Number.EPSILON) * 100) / 100;
   const discountAmount = discountPercentage
     ? (subtotal * discountPercentage) / 100
     : 0;
@@ -209,6 +216,7 @@ export const calculateBookingPrice = ({
     gearExtraCostPerDay,
     gearExtraPrice,
     addOnsPrice,
+    serviceCharge,
     subtotal,
     discountAmount,
     totalPrice: parseFloat((subtotal - discountAmount).toFixed(2)),

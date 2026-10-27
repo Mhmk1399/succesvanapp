@@ -8,9 +8,10 @@ import {
   Platform,
 } from "react-native";
 import { Image } from "expo-image";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import GlassView from "@/components/global/GlassView";
+import { BRAND_LOGO_URI } from "@/constants/branding";
 
 const { width, height } = Dimensions.get("window");
 const ACCENT = "#fe9a00";
@@ -86,19 +87,18 @@ export default function AppSplash({ onFinish }: Props) {
   const loadGlow = useRef(new Animated.Value(0.4)).current;
 
   // Particles
-  const particles = Array.from({ length: 6 }, () => ({
-    y: useRef(new Animated.Value(height * 0.5 + Math.random() * height * 0.4))
-      .current,
-    x: useRef(new Animated.Value(Math.random() * width)).current,
-    opacity: useRef(new Animated.Value(0)).current,
-    scale: useRef(new Animated.Value(0)).current,
-  }));
+  const [particles] = useState(() => Array.from({ length: 6 }, () => ({
+    y: new Animated.Value(height * 0.5 + Math.random() * height * 0.4),
+    x: new Animated.Value(Math.random() * width),
+    opacity: new Animated.Value(0),
+    scale: new Animated.Value(0),
+  })));
 
   // Stars
-  const stars = Array.from({ length: 8 }, () => ({
-    opacity: useRef(new Animated.Value(0)).current,
-    scale: useRef(new Animated.Value(0)).current,
-  }));
+  const [stars] = useState(() => Array.from({ length: 8 }, () => ({
+    opacity: new Animated.Value(0),
+    scale: new Animated.Value(0),
+  })));
 
   // Bottom dots
   const dot1 = useRef(new Animated.Value(0)).current;
@@ -832,9 +832,7 @@ export default function AppSplash({ onFinish }: Props) {
               />
               <View style={styles.logoInner}>
                 <Image
-                  source={{
-                    uri: "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
-                  }}
+                  source={{ uri: BRAND_LOGO_URI }}
                   style={styles.logoImage}
                   contentFit="contain"
                   transition={200}

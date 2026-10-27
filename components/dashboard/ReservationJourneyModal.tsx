@@ -20,8 +20,14 @@ import {
 } from "@/utils/londonTime";
 import { useToast } from "@/components/global/AppToast";
 import LicenseUploadModal from "@/components/dashboard/LicenseUploadModal";
+import JourneyCustomerActions from "@/components/dashboard/JourneyCustomerActions";
+import JourneyDepositPolicies from "@/components/dashboard/JourneyDepositPolicies";
+import { ImageViewerProvider, useImageViewer } from "@/components/global/ImageViewer";
+import { getRentalFeeQuote, hasCancellationProtection } from "@/utils/rentalFeePolicy";
+import { getReservationPriceBreakdown } from "@/utils/reservationPriceBreakdown";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -46,6 +52,7 @@ const SECOND = 1_000;
 const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+type PaymentDetails = { bankName: string; accountName: string; sortCode: string; accountNumber: string };
 WebBrowser.maybeCompleteAuthSession();
 
 type SectionId =
@@ -136,10 +143,10 @@ type TimeRemaining = {
   reached: boolean;
 };
 
-const countdownUnits: Array<{
+const countdownUnits: {
   key: keyof Omit<TimeRemaining, "reached">;
   label: string;
-}> = [
+}[] = [
   { key: "days", label: "Days" },
   { key: "hours", label: "Hours" },
   { key: "minutes", label: "Minutes" },
@@ -175,6 +182,8 @@ export default function ReservationJourneyModal({
     null,
   );
   const [contract, setContract] = useState<SafeContractSummary | null>(null);
+  const [contracts, setContracts] = useState<SafeContractSummary[]>([]);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [openSection, setOpenSection] = useState<SectionId>("summary");
@@ -207,6 +216,8 @@ export default function ReservationJourneyModal({
       );
       setRemoteReservation(data.data.reservation);
       setContract(data.data.contract || null);
+      setContracts(data.data.contracts || []);
+      setPaymentDetails(data.data.paymentDetails || null);
     } catch (error) {
       setRemoteReservation(reservation);
       console.log("[ReservationJourneyModal] using local reservation:", error);
@@ -236,12 +247,14 @@ export default function ReservationJourneyModal({
         const nextContract = data.data.contract || null;
         setRemoteReservation(nextReservation);
         setContract(nextContract);
+        setContracts(data.data.contracts || []);
+        setPaymentDetails(data.data.paymentDetails || null);
 
         if (
           nextContract?.status === "completed" ||
-          ["contract_signed", "ready_for_collection"].includes(
+          (contract?.contractType !== "reservation_extension" && ["contract_signed", "ready_for_collection"].includes(
             String(nextReservation.status),
-          )
+          ))
         ) {
           showToast({
             type: "success",
@@ -273,7 +286,7 @@ export default function ReservationJourneyModal({
       setCheckingSignature(false);
       signingRefreshActive.current = false;
     }
-  }, [onUpdated, reservation?._id, showToast]);
+  }, [contract?.contractType, onUpdated, reservation?._id, showToast]);
 
   useEffect(() => {
     if (!visible) return;
@@ -289,6 +302,8 @@ export default function ReservationJourneyModal({
     if (!visible || !reservation) return;
     setRemoteReservation(null);
     setContract(null);
+    setContracts([]);
+    setPaymentDetails(null);
     const startingSection =
       initialSection ||
       (!isReservationLicenceReady(reservation) ? "documents" : undefined) ||
@@ -331,13 +346,7 @@ export default function ReservationJourneyModal({
     if (!contract?._id || !reservation?._id) return;
     setBusy(true);
     try {
-      const returnUrl = Linking.createURL("dashboard", {
-        queryParams: {
-          contractSigned: "1",
-          reservationId: reservation._id,
-          contractId: contract._id,
-        },
-      });
+      const returnUrl = Linking.createURL("dashboard");
       const url = await customerJourneyService.startSigning(
         contract._id,
         returnUrl,
@@ -408,6 +417,7 @@ export default function ReservationJourneyModal({
       presentationStyle="overFullScreen"
       onRequestClose={onClose}
     >
+      <ImageViewerProvider>
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           <LinearGradient
@@ -460,6 +470,7 @@ export default function ReservationJourneyModal({
                   reservation={activeReservation}
                   journey={journey}
                   contract={contract}
+                  paymentDetails={paymentDetails}
                   busy={busy}
                   documentBusy={documentBusy}
                   checkingSignature={checkingSignature}
@@ -476,6 +487,15 @@ export default function ReservationJourneyModal({
                 reservation={activeReservation}
                 activeSection={openSection}
               />
+              <JourneyCustomerActions reservation={activeReservation} onUpdated={async () => { await fetchJourney(); onUpdated?.(); }} />
+              {contracts.length > 0 && <CollapsibleRecord title="Agreements" subtitle={`${contracts.length} document${contracts.length === 1 ? "" : "s"}`} icon="document-text-outline">
+                {contracts.map((item) => <View key={item._id} style={{ paddingVertical: 10, gap: 6 }}>
+                  <Row label={item.contractType === "reservation_extension" ? "Rental extension" : "Rental agreement"} value={`${item.contractNumber} · ${item.status.replace(/_/g, " ")}`} />
+                  {item.extension?.newReturnDateTime ? <Row label="New return" value={formatDateTime(item.extension.newReturnDateTime)} /> : null}
+                  {item.extension?.agreedPrice !== undefined ? <Row label="Extension price" value={formatMoney(item.extension.agreedPrice)} /> : null}
+                  {(["source", "signed", "certificate"] as ContractDocumentKind[]).filter((kind) => item.files?.[kind]).map((kind) => <Pressable key={kind} accessibilityRole="button" disabled={Boolean(documentBusy)} onPress={async () => { setDocumentBusy(kind); try { await customerJourneyService.downloadContractDocument(item, kind); } catch (error) { showToast({ type: "error", title: "Download failed", message: error instanceof Error ? error.message : "Could not download agreement." }); } finally { setDocumentBusy(null); } }}><Text style={{ color: ACCENT, paddingVertical: 5 }}>{kind === "source" ? "Download unsigned agreement" : kind === "signed" ? "Download signed agreement" : "Download certificate"}</Text></Pressable>)}
+                </View>)}
+              </CollapsibleRecord>}
               <TimelineAccordion
                 reservation={activeReservation}
                 open={timelineOpen}
@@ -495,6 +515,7 @@ export default function ReservationJourneyModal({
           />
         </View>
       </View>
+      </ImageViewerProvider>
     </Modal>
   );
 }
@@ -778,7 +799,7 @@ function SectionTabs({
   openSection: SectionId;
   onOpen: (section: SectionId) => void;
 }) {
-  const entries = (Object.entries(sectionLabels) as Array<[SectionId, string]>)
+  const entries = (Object.entries(sectionLabels) as [SectionId, string][])
     .filter(([id]) => id !== "timeline");
   return (
     <ScrollView
@@ -844,6 +865,7 @@ function SectionContent({
   reservation,
   journey,
   contract,
+  paymentDetails,
   busy,
   documentBusy,
   checkingSignature,
@@ -856,6 +878,7 @@ function SectionContent({
   reservation: Reservation;
   journey: ReservationJourneyViewModel;
   contract: SafeContractSummary | null;
+  paymentDetails: PaymentDetails | null;
   busy: boolean;
   documentBusy: ContractDocumentKind | null;
   checkingSignature: boolean;
@@ -875,7 +898,7 @@ function SectionContent({
         />
       )}
       {section === "deposit" && (
-        <DepositSection reservation={reservation} onUpdated={onDepositUpdated} />
+        <DepositSection reservation={reservation} paymentDetails={paymentDetails} onUpdated={onDepositUpdated} />
       )}
       {section === "contract" && (
         <ContractSection
@@ -904,20 +927,15 @@ function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value || "-"}</Text>
+      <Text selectable style={styles.infoValue}>{value || "-"}</Text>
     </View>
   );
 }
 
 function SummarySection({ reservation }: { reservation: Reservation }) {
-  const addOnsTotal = (reservation.addOns || []).reduce((sum, item) => {
-    const addOn = item.addOn;
-    const flat =
-      typeof addOn?.flatPrice === "object"
-        ? Number(addOn.flatPrice.amount || 0)
-        : 0;
-    return sum + flat * Math.max(1, Number(item.quantity) || 1);
-  }, 0);
+  const price = getReservationPriceBreakdown(reservation);
+  const showAmount = (value: number | null) =>
+    price.perInvoice ? "Per Invoice" : price.manualPrice || value === null ? "-" : formatMoney(value);
 
   return (
     <>
@@ -928,13 +946,22 @@ function SummarySection({ reservation }: { reservation: Reservation }) {
       <Row label="Pickup" value={formatDateTime(reservation.startDate)} />
       <Row label="Return" value={formatDateTime(reservation.endDate)} />
       <Row label="Add-ons" value={reservation.addOns?.length ? String(reservation.addOns.length) : "None"} />
-      {addOnsTotal > 0 && <Row label="Add-ons total" value={formatMoney(addOnsTotal)} />}
+      <Row label={price.rentalLabel} value={showAmount(price.rental)} />
+      {price.addOns.map((item, index) => <Row key={`${item.label}-${index}`} label={item.label} value={showAmount(item.amount)} />)}
+      {price.pickupExtension > 0 && <Row label="Pickup extension" value={showAmount(price.pickupExtension)} />}
+      {price.returnExtension > 0 && <Row label="Return extension" value={showAmount(price.returnExtension)} />}
+      <Row label="Service charge" value={showAmount(price.serviceCharge)} />
+      {price.adminDiscount > 0 && <Row label="Admin discount" value={`-${showAmount(price.adminDiscount)}`} />}
+      {price.fullPaymentDiscount > 0 && <Row label="Full-payment discount" value={`-${showAmount(price.fullPaymentDiscount)}`} />}
+      {reservation.additionalDriver?.name && <Row label="Additional driver" value={reservation.additionalDriver.name} />}
+      {(reservation.rentalExtensions || []).map((extension, index) => <Row key={extension.contractNumber || index} label={`Extension ${extension.contractNumber || index + 1} (included)`} value={`${formatDateTime(extension.newReturnDateTime)} · ${formatMoney(extension.agreedPrice)}`} />)}
+      {price.addOnPricesEstimated && <Text style={styles.infoLabel}>Add-on prices are based on current rates.</Text>}
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Final total</Text>
         <Text style={styles.totalValue}>
-          {reservation.perInvoice && !reservation.totalPrice
+          {price.perInvoice
             ? "Per Invoice"
-            : formatMoney(reservation.totalPrice)}
+            : formatMoney(price.total)}
         </Text>
       </View>
       {reservation.messege ? <Row label="Notes" value={reservation.messege} /> : null}
@@ -1020,7 +1047,7 @@ function LicenceDetailsCard({
   return (
     <View style={styles.licenceDetailsCard}>
       <View style={styles.licenceDetailsHeader}>
-        <View>
+        <View style={styles.licenceDetailsHeaderCopy}>
           <Text style={styles.licenceDetailsTitle}>Saved licence details</Text>
           <Text style={styles.licenceDetailsSub}>
             Confirmed details used on your rental agreement.
@@ -1047,13 +1074,20 @@ function DocumentRow({
   title,
   url,
   helper,
+  preview,
 }: {
   title: string;
   url?: string;
   helper?: string;
+  preview?: boolean;
 }) {
+  const { openDocument } = useImageViewer();
+  const canOpen = Boolean(url && /^https?:\/\//i.test(url));
   return (
-    <View style={styles.documentRow}>
+    <Pressable accessibilityRole={canOpen ? "link" : undefined} disabled={!canOpen} onPress={() => {
+      if (url) openDocument({ uri: url, title });
+    }} style={styles.documentRow}>
+      {preview && canOpen ? <Image source={{ uri: url }} style={{ width: 48, height: 48, borderRadius: 6 }} contentFit="cover" /> : null}
       <View style={styles.documentIcon}>
         <Ionicons
           name={url ? "checkmark-circle" : "document-attach-outline"}
@@ -1063,77 +1097,72 @@ function DocumentRow({
       </View>
       <View style={styles.documentCopy}>
         <Text style={styles.documentTitle}>{title}</Text>
-        <Text style={styles.documentSub}>{url ? "Uploaded" : helper || "Required"}</Text>
+        <Text style={styles.documentSub}>{canOpen ? "Tap to view" : url ? "Uploaded" : helper || "Required"}</Text>
       </View>
-    </View>
+      {canOpen ? <Ionicons name="open-outline" size={17} color={ACCENT} /> : null}
+    </Pressable>
   );
 }
 
 function DepositSection({
   reservation,
+  paymentDetails,
   onUpdated,
 }: {
   reservation: Reservation;
+  paymentDetails: PaymentDetails | null;
   onUpdated: () => void;
 }) {
   const { showToast } = useToast();
+  const { openDocument } = useImageViewer();
   const deposit = reservation.deposit;
   const settled = ["paid", "held", "refunded", "partially_refunded", "refund_processing"].includes(
     String(deposit?.status),
   );
-  const categoryDeposit = reservation.category?.deposit || reservation.category;
-  const [selected, setSelected] = useState<"full" | "secure" | "office">(
-    deposit?.option || "secure",
-  );
+  const [selected, setSelected] = useState<"full" | "secure" | null>(null);
+  const [depositPoliciesAccepted, setDepositPoliciesAccepted] = useState(false);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [now, setNow] = useState(getTrustedNowMs);
+  const [clockReady, setClockReady] = useState(false);
   const [receipt, setReceipt] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const canSubmitDeposit = selected === "office" || Boolean(receipt);
+  const transferAvailable = Boolean(paymentDetails?.sortCode && paymentDetails?.accountNumber);
+  const canSubmitDeposit = Boolean(selected && receipt && depositPoliciesAccepted && policyAccepted && transferAvailable && clockReady);
+  const quote = getRentalFeeQuote(reservation, now);
+  const fullOriginal = quote.originalAmount;
+  const fullDiscount = quote.discountPercent;
+  const fullDiscountAmount = quote.discountAmount;
+  const fullAmount = quote.fullAmount;
 
-  const fullOriginal = deposit?.originalAmount ?? reservation.totalPrice ?? 0;
-  const fullDiscount = Math.min(
-    100,
-    Math.max(
-      0,
-      Number(
-        deposit?.discountPercent ?? categoryDeposit?.fullPayDiscountPercent,
-      ) || 0,
-    ),
-  );
-  const fullDiscountAmount =
-    deposit?.discountAmount !== undefined
-      ? Number(deposit.discountAmount) || 0
-      : Math.round(fullOriginal * (fullDiscount / 100) * 100) / 100;
-  const fullAmount = Math.max(0, fullOriginal - fullDiscountAmount);
+  useEffect(() => {
+    const update = () => setNow(getTrustedNowMs());
+    void syncServerClock().then(() => { update(); setClockReady(true); }).catch(() => setClockReady(false));
+    const timer = setInterval(update, 30000);
+    return () => clearInterval(timer);
+  }, []);
   const options = [
     {
       key: "full" as const,
-      label: DEPOSIT_OPTION_LABELS.full,
+      label: "Pay full rental fee (bank transfer)",
       amount: fullAmount,
       originalAmount: fullDiscount > 0 ? fullOriginal : undefined,
       discountPercent: fullDiscount,
       discountAmount: fullDiscountAmount,
       note:
         fullDiscount > 0
-          ? "Pay the full deposit now by bank transfer."
+          ? "Pay the full rental fee now by bank transfer."
+          : quote.within48Hours && quote.configuredDiscount > 0
+            ? "The early-payment discount is available only when paying at least 48 hours before pickup."
           : "Pay the full booking total now by bank transfer.",
     },
     {
       key: "secure" as const,
-      label: DEPOSIT_OPTION_LABELS.secure,
-      amount: Number(categoryDeposit?.securePayPrice || 0),
+      label: "Pay safe & secure rental fee",
+      amount: quote.secureAmount,
       originalAmount: undefined,
       discountPercent: 0,
       discountAmount: 0,
-      note: "Smaller non-refundable deposit option.",
-    },
-    {
-      key: "office" as const,
-      label: DEPOSIT_OPTION_LABELS.office,
-      amount: Number(categoryDeposit?.officePayPrice || 0),
-      originalAmount: undefined,
-      discountPercent: 0,
-      discountAmount: 0,
-      note: "Pay the deposit when you collect the van.",
+      note: "A smaller, non-refundable rental fee instead of paying in full.",
     },
   ];
 
@@ -1148,8 +1177,16 @@ function DepositSection({
     }
   };
 
+  const pickReceiptPdf = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
+    if (!result.canceled && result.assets[0]) {
+      const file = result.assets[0];
+      setReceipt({ uri: file.uri, fileName: file.name, mimeType: file.mimeType || "application/pdf", fileSize: file.size, width: 0, height: 0 });
+    }
+  };
+
   const submit = async () => {
-    if (!canSubmitDeposit) {
+    if (!canSubmitDeposit || !selected) {
       showToast({
         type: "error",
         title: "Receipt needed",
@@ -1164,6 +1201,7 @@ function DepositSection({
         reservation._id || "",
         selected,
         receipt,
+        policyAccepted,
       );
       onUpdated();
     } catch (error) {
@@ -1177,7 +1215,11 @@ function DepositSection({
     }
   };
 
-  if (settled || deposit?.status === "pending" || deposit?.option === "office") {
+  if (reservation.perInvoice) {
+    return <InfoBanner tone="neutral" text="This booking is billed per invoice and has no online rental fee step." />;
+  }
+
+  if (settled || (deposit?.status === "pending" && Boolean(deposit.receiptUrl)) || deposit?.option === "office") {
     return (
       <>
         <InfoBanner
@@ -1197,9 +1239,20 @@ function DepositSection({
         <Row label="Amount" value={formatMoney(deposit?.amount)} />
         <Row label="Status" value={String(deposit?.status || "not_paid").replace(/_/g, " ")} />
         {deposit?.paidAt ? <Row label="Paid on" value={formatDateTime(deposit.paidAt)} /> : null}
+        {deposit?.transactionRef ? <Row label="Transaction reference" value={deposit.transactionRef} /> : null}
+        {deposit?.priceAdjustment?.status ? <>
+          <Row label="Amount already paid" value={formatMoney(deposit.priceAdjustment.paidAmount)} />
+          <Row label="Revised booking total" value={formatMoney(deposit.priceAdjustment.revisedTotal)} />
+          <Row label={deposit.priceAdjustment.status === "payment_due" ? "Additional payment due" : deposit.priceAdjustment.status === "credit_due" ? "Customer credit" : "Payment adjustment"} value={deposit.priceAdjustment.status === "payment_due" ? formatMoney(deposit.priceAdjustment.balanceDue) : deposit.priceAdjustment.status === "credit_due" ? formatMoney(deposit.priceAdjustment.creditAmount) : "No adjustment required"} />
+          {deposit.priceAdjustment.status !== "balanced" ? <InfoBanner tone="neutral" text="Success Van Hire will contact you with the next steps." /> : null}
+        </> : null}
         {deposit?.receiptUrl ? <DocumentRow title="Payment receipt" url={deposit.receiptUrl} /> : null}
       </>
     );
+  }
+
+  if (!["confirmed", "deposit_pending"].includes(reservation.status)) {
+    return <InfoBanner tone="neutral" text="Rental fee payment will be available after your booking is confirmed." />;
   }
 
   return (
@@ -1211,29 +1264,42 @@ function DepositSection({
           text={deposit.failureReason || "The uploaded receipt could not be verified."}
         />
       ) : null}
+      <JourneyDepositPolicies mode="deposit" disabled={submitting} depositAccepted={depositPoliciesAccepted} onDepositAccepted={(accepted) => {
+        setDepositPoliciesAccepted(accepted);
+        if (!accepted) { setSelected(null); setPolicyAccepted(false); }
+      }} cancellationAccepted={policyAccepted} onCancellationAccepted={setPolicyAccepted} cancellationProtected={hasCancellationProtection(reservation)} showCancellation={false} />
+      <Text style={styles.sectionTitle}>Choose your rental-fee option</Text>
+      {!clockReady ? <>
+        <InfoBanner tone="warn" text="Connect to verify the current time and see the correct payment options." />
+        <Pressable accessibilityRole="button" onPress={() => { void syncServerClock(true).then(() => { setNow(getTrustedNowMs()); setClockReady(true); }).catch(() => showToast({ type: "error", title: "Time unavailable", message: "Check your connection and try again." })); }} style={styles.receiptButton}><Ionicons name="refresh-outline" size={17} color={ACCENT} /><Text style={styles.receiptButtonText}>Retry</Text></Pressable>
+      </> : null}
       {options.map((option) => (
         <Pressable
           key={option.key}
+          disabled={!depositPoliciesAccepted || !clockReady || submitting}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: selected === option.key, disabled: !depositPoliciesAccepted || !clockReady || submitting }}
           onPress={() => setSelected(option.key)}
           style={[
             styles.depositOption,
             selected === option.key && styles.depositOptionSelected,
+            (!depositPoliciesAccepted || !clockReady || submitting) && styles.disabledButton,
           ]}
         >
           <View style={styles.depositOptionTop}>
             <Text style={styles.depositOptionTitle}>{option.label}</Text>
             <View style={styles.depositAmountStack}>
-              {option.originalAmount !== undefined && (
+              {clockReady && option.originalAmount !== undefined && (
                 <Text style={styles.depositOriginalAmount}>
                   {formatMoney(option.originalAmount)}
                 </Text>
               )}
               <Text style={styles.depositOptionAmount}>
-                {formatMoney(option.amount)}
+                {clockReady ? formatMoney(option.amount) : "--"}
               </Text>
             </View>
           </View>
-          {option.discountPercent > 0 && option.discountAmount > 0 && (
+          {clockReady && option.discountPercent > 0 && option.discountAmount > 0 && (
             <View style={styles.depositDiscountBadge}>
               <Ionicons name="pricetag-outline" size={12} color="#34d399" />
               <Text style={styles.depositDiscountText}>
@@ -1242,31 +1308,45 @@ function DepositSection({
               </Text>
             </View>
           )}
-          <Text style={styles.depositOptionNote}>{option.note}</Text>
+          <Text style={styles.depositOptionNote}>{clockReady ? option.note : "Available after time verification."}</Text>
         </Pressable>
       ))}
-      {selected !== "office" && (
+      <JourneyDepositPolicies mode="cancellation" disabled={submitting} depositAccepted={depositPoliciesAccepted} onDepositAccepted={setDepositPoliciesAccepted} cancellationAccepted={policyAccepted} onCancellationAccepted={setPolicyAccepted} cancellationProtected={hasCancellationProtection(reservation)} showCancellation={Boolean(selected)} />
+      {selected && policyAccepted && (
         <>
+          {transferAvailable && paymentDetails ? <>
+            <Text style={styles.sectionTitle}>Pay by bank transfer</Text>
+            <Row label="Amount to transfer" value={formatMoney(selected === "full" ? quote.fullAmount : quote.secureAmount)} />
+            <Row label="Bank" value={paymentDetails.bankName} />
+            <Row label="Account holder" value={paymentDetails.accountName} />
+            <Row label="Sort code" value={paymentDetails.sortCode} />
+            <Row label="Account number" value={paymentDetails.accountNumber} />
+            <InfoBanner tone="neutral" text="Use these details in your banking app, then upload a screenshot, photo or PDF of your payment." />
+          </> : <InfoBanner tone="warn" text="Payment details are unavailable. Please contact the office before making a transfer." />}
+          {reservation.office?.phone ? <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(`tel:${reservation.office?.phone.replace(/[^\d+]/g, "")}`).catch(() => showToast({ type: "error", title: "Could not open phone", message: "Please call the office directly." })); }} style={styles.receiptButton}><Ionicons name="call-outline" size={17} color={ACCENT} /><Text style={styles.receiptButtonText}>Call office: {reservation.office.phone}</Text></Pressable> : null}
           {receipt ? (
             <View style={styles.receiptPreviewCard}>
-              <Image source={{ uri: receipt.uri }} style={styles.receiptPreviewImage} />
+              {receipt.mimeType === "application/pdf" ? <View style={[styles.receiptPreviewImage, { alignItems: "center", justifyContent: "center" }]}><Ionicons name="document-text-outline" size={40} color={ACCENT} /></View> : <Image source={{ uri: receipt.uri }} style={styles.receiptPreviewImage} />}
               <LinearGradient
                 colors={["transparent", "rgba(2,6,23,0.8)"]}
                 style={StyleSheet.absoluteFill}
+                pointerEvents="none"
               />
+              <Pressable accessibilityRole="button" accessibilityLabel="View payment receipt" onPress={() => openDocument({ uri: receipt.uri, title: "Payment receipt", mimeType: receipt.mimeType })} style={StyleSheet.absoluteFill} />
               <View style={styles.receiptPreviewMeta}>
                 <View style={styles.receiptPreviewCopy}>
                   <Text style={styles.receiptPreviewTitle}>Payment receipt</Text>
                   <Text style={styles.receiptPreviewText} numberOfLines={1}>
-                    Ready to submit
+                    {receipt.mimeType === "application/pdf" ? receipt.fileName || "PDF document" : "Ready to submit"}
                   </Text>
                 </View>
-                <Pressable onPress={pickReceipt} style={styles.receiptPreviewAction}>
+                <Pressable disabled={submitting} onPress={pickReceipt} style={styles.receiptPreviewAction}>
                   <Ionicons name="refresh-outline" size={14} color="#f8fafc" />
                   <Text style={styles.receiptPreviewActionText}>Change</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setReceipt(null)}
+                  disabled={submitting}
                   style={styles.receiptRemoveAction}
                 >
                   <Ionicons name="trash-outline" size={14} color="#fb7185" />
@@ -1274,13 +1354,17 @@ function DepositSection({
               </View>
             </View>
           ) : (
-            <Pressable onPress={pickReceipt} style={styles.receiptButton}>
+            <Pressable disabled={submitting || !transferAvailable} onPress={pickReceipt} style={styles.receiptButton}>
               <Ionicons name="cloud-upload-outline" size={17} color={ACCENT} />
               <Text style={styles.receiptButtonText}>
                 Upload payment receipt
               </Text>
             </Pressable>
           )}
+          <Pressable disabled={submitting || !transferAvailable} onPress={pickReceiptPdf} style={styles.receiptButton}>
+            <Ionicons name="document-attach-outline" size={17} color={ACCENT} />
+            <Text style={styles.receiptButtonText}>Choose PDF receipt</Text>
+          </Pressable>
         </>
       )}
       <Pressable
@@ -1295,7 +1379,7 @@ function DepositSection({
           <ActivityIndicator size="small" color="#111827" />
         ) : (
           <Text style={styles.primaryButtonText}>
-            {selected === "office" ? "Confirm pay at office" : "Submit receipt"}
+            Submit receipt
           </Text>
         )}
       </Pressable>
@@ -1644,6 +1728,8 @@ function HandoverSection({ reservation }: { reservation: Reservation }) {
           { label: "Completed", value: formatDateTime(handover.completedAt) },
         ]}
       />
+      {(handover.photos || []).map((url, index) => <DocumentRow key={`pickup-${index}`} title={`Pickup photo ${index + 1}`} url={url} preview />)}
+      {(handover.customFields || []).flatMap((field, fieldIndex) => (field.files || []).map((url, index) => <DocumentRow key={`pickup-field-${fieldIndex}-${index}`} title={`${field.label || "Pickup file"} ${index + 1}`} url={url} />))}
     </>
   );
 }
@@ -1675,6 +1761,8 @@ function InspectionSection({ reservation }: { reservation: Reservation }) {
           { label: "Completed", value: formatDateTime(inspection.completedAt) },
         ]}
       />
+      {(inspection.photos || []).map((url, index) => <DocumentRow key={`return-${index}`} title={`Return photo ${index + 1}`} url={url} preview />)}
+      {(inspection.customFields || []).flatMap((field, fieldIndex) => (field.files || []).map((url, index) => <DocumentRow key={`return-field-${fieldIndex}-${index}`} title={`${field.label || "Return file"} ${index + 1}`} url={url} />))}
     </>
   );
 }
@@ -1851,6 +1939,9 @@ function RefundSection({
         <Row key={`${label}-${index}`} label={String(label)} value={`-${formatMoney(Number(amount))}`} />
       ))}
       <Row label="Total deductions" value={`-${formatMoney(journey.refund.deductionsTotal)}`} />
+      {refund.chargeReason ? <Row label="Deduction reason" value={refund.chargeReason} /> : null}
+      {(refund.additionalCharges || []).filter((charge) => charge.evidenceUrl).map((charge, index) => <DocumentRow key={index} title={`Evidence: ${charge.ticketReference || charge.reason || "Additional charge"}`} url={charge.evidenceUrl} />)}
+      {journey.refund.deductionsTotal > journey.refund.depositPaid ? <Row label="Outstanding balance" value={formatMoney(journey.refund.deductionsTotal - journey.refund.depositPaid)} /> : null}
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Refund amount</Text>
         <Text style={[styles.totalValue, { color: "#34d399" }]}>
@@ -2604,6 +2695,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 10,
   },
+  licenceDetailsHeaderCopy: { flex: 1, minWidth: 0 },
   licenceDetailsTitle: {
     color: "#f8fafc",
     fontSize: 12,
@@ -2617,6 +2709,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   licenceDetailsBadge: {
+    flexShrink: 0,
     minHeight: 25,
     borderRadius: 999,
     paddingHorizontal: 8,

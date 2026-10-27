@@ -1,5 +1,7 @@
 import { safeFetch } from "./apiClient";
 import { getTrustedNow, syncServerClock } from "@/utils/londonTime";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { buildUrl } from "./apiClient";
 
 const API_URL = process.env.EXPO_PUBLIC_DISCOUNTS_API;
 
@@ -7,16 +9,19 @@ export const discountService = {
   async validateCode(code: string, userId: string, categoryId: string) {
     try {
       console.log('Validating discount:', { code, userId, categoryId });
-      const response = await fetch(`${API_URL}?code=${code}&status=active`);
+      const token = await AsyncStorage.getItem("authToken");
+      const response = await safeFetch(buildUrl(API_URL || "", { validate: true, code }), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const result = await response.json();
       console.log('API Response:', result);
 
-      if (!result.success || !result.data?.data || result.data.data.length === 0) {
+      if (!result.success || !Array.isArray(result.data) || result.data.length === 0) {
         console.log('No discount found');
         return { success: false, message: "Invalid discount code" };
       }
 
-      const discount = result.data.data[0];
+      const discount = result.data[0];
       console.log('Discount found:', discount);
       
       if (!discount) {
@@ -73,10 +78,11 @@ export const discountService = {
 
   async applyDiscount(discountId: string, userId: string) {
     try {
+      const token = await AsyncStorage.getItem("authToken");
       const response = await safeFetch(`${API_URL}?id=${discountId}`, {
         method: "PATCH",
         toast: { silent: true },
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ addUserToUsedBy: userId }),
       });
       const result = await response.json();

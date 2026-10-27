@@ -470,7 +470,7 @@ export const FormFields = ({
                     fontWeight: "600",
                   }}
                 >
-                  +£{van?.gear && typeof van.gear === 'object' ? van.gear.automaticExtraCost : 0}/day
+                  +£{Number(van?.gear && typeof van.gear === 'object' ? van.gear.automaticExtraCost : 0).toFixed(2)}/day
                 </Text>
               </View>
             ) : (

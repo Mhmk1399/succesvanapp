@@ -32,7 +32,6 @@ import {
 import { WorkingTime } from "@/types/type";
 import { discountService } from "@/services/discountService";
 import { useAuth } from "@/contexts/AuthContext";
-import LoginRequiredModal from "@/components/global/LoginRequiredModal";
 import VanRulesModal, { hasVanRules } from "@/components/global/VanRulesModal";
 import BookingCalendarChrome, {
   BOOKING_CALENDAR_THEME,
@@ -83,8 +82,10 @@ export default function BookingModal({
   onClose,
   prefilledData,
   onReservationComplete,
+  onAuthRedirect,
+  resumeDraft,
 }: BookingModalProps) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const insets = useSafeAreaInsets();
   const [detailsExpanded, setDetailsExpanded] = React.useState(false);
   const [discountExpanded, setDiscountExpanded] = React.useState(false);
@@ -95,6 +96,39 @@ export default function BookingModal({
   const [rulesModalVisible, setRulesModalVisible] = React.useState(false);
   const [termsModalVisible, setTermsModalVisible] = React.useState(false);
   const previousRulesVanId = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (visible && resumeDraft) {
+      setDiscountCode(resumeDraft.discountCode || "");
+      setDiscountExpanded(Boolean(resumeDraft.discountCode));
+      previousRulesVanId.current = resumeDraft.van.id;
+    }
+  }, [resumeDraft, visible]);
+
+  React.useEffect(() => {
+    const code = resumeDraft?.discountCode.trim();
+    if (!visible || !code || !user?._id || !van?.id) return;
+
+    let cancelled = false;
+    setDiscountLoading(true);
+    setDiscountError("");
+    discountService.validateCode(code, user._id, van.id)
+      .then((result) => {
+        if (cancelled) return;
+        setDiscountData(result.success ? result.data : null);
+        setDiscountError(result.success ? "" : result.message || "Invalid code");
+        setDiscountLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDiscountError("Could not validate the discount code. Please try again.");
+        setDiscountLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeDraft, user?._id, van?.id, visible]);
 
   React.useEffect(() => {
     if (visible) {
@@ -194,7 +228,6 @@ export default function BookingModal({
     timeModalField,
     setTimeModalField,
     reservedSlots,
-    dynamicVanPrice,
     bookingPrice,
     addonLineItems,
     minDriverAge,
@@ -202,9 +235,6 @@ export default function BookingModal({
     setSelectedGear,
     termsAccepted,
     setTermsAccepted,
-    loginRequiredVisible,
-    handleLoginRequiredLogin,
-    handleLoginRequiredCancel,
   } = useBookingModal(
     visible,
     van,
@@ -212,6 +242,9 @@ export default function BookingModal({
     prefilledData,
     onReservationComplete,
     discountData,
+    discountCode,
+    resumeDraft,
+    onAuthRedirect,
   );
 
   React.useEffect(() => {
@@ -258,9 +291,12 @@ export default function BookingModal({
           price: item.price,
         })),
         discountAmount: bookingPrice.discountAmount,
+        serviceCharge: bookingPrice.serviceCharge,
         total: bookingPrice.totalPrice,
         isSubmitDisabled:
           isSubmitting ||
+          isLoadingData ||
+          discountLoading ||
           !termsAccepted ||
           !pickupDate ||
           !returnDate ||
@@ -271,7 +307,7 @@ export default function BookingModal({
     : null;
 
   const selectedOfficeData = getSelectedOffice(offices, selectedOffice);
-  const dailyPrice = Number(dynamicVanPrice || van.showPrice || 0);
+  const dailyPrice = bookingPrice?.pricePerDay ?? Number(van.showPrice || 0);
   const totalPrice = priceSummary?.total ?? 0;
   const rentalDaysForAddons = bookingPrice?.totalDays || 1;
   const normalizedAddons = (
@@ -456,7 +492,7 @@ export default function BookingModal({
                     <View style={localStyles.priceMetaRow}>
                       <View style={localStyles.dayPriceRow}>
                         <Text style={localStyles.dayPrice}>
-                          £{dailyPrice.toFixed(0)}
+                          £{dailyPrice.toFixed(2)}
                         </Text>
                         <Text style={localStyles.dayPriceSuffix}>/ day</Text>
                         <Text style={localStyles.gearMeta}>
@@ -640,7 +676,9 @@ export default function BookingModal({
                     {
                       key: "automatic",
                       title: "Automatic",
-                      meta: "+ £20 / day",
+                      meta: van.gear && typeof van.gear === "object" && van.gear.availableTypes?.includes("automatic") && van.gear.availableTypes?.includes("manual") && Number(van.gear.automaticExtraCost) > 0
+                        ? `+ £${Number(van.gear.automaticExtraCost).toFixed(2)} / day`
+                        : "Included",
                       icon: "settings-outline",
                     },
                   ].map((gear) => {
@@ -930,7 +968,7 @@ export default function BookingModal({
                                   </Text>
                                 ) : null}
                                 <Text style={localStyles.addonPrice}>
-                                  £{addonPrice.toFixed(0)}
+                                  £{addonPrice.toFixed(2)}
                                 </Text>
                               </View>
                               <Pressable
@@ -1023,7 +1061,7 @@ export default function BookingModal({
                             }}
                             placeholder="Enter code"
                             placeholderTextColor="#647282"
-                            editable={!discountData}
+                            editable={!discountData && !discountLoading}
                             autoCapitalize="characters"
                             style={localStyles.discountInput}
                           />
@@ -1083,7 +1121,7 @@ export default function BookingModal({
                             Price breakdown
                           </Text>
                           <Text style={localStyles.breakdownTotal}>
-                            £{priceSummary.total.toFixed(0)}
+                            £{priceSummary.total.toFixed(2)}
                           </Text>
                         </View>
                         <BreakdownRow
@@ -1095,31 +1133,34 @@ export default function BookingModal({
                             (priceSummary.hasSellOffer
                               ? priceSummary.discountedPricePerDay
                               : priceSummary.pricePerDay)
-                          ).toFixed(0)}`}
+                          ).toFixed(2)}`}
                         />
                         {priceSummary.extraHoursPrice > 0 && (
                           <BreakdownRow
                             label={`Extra hours • ${priceSummary.extraHours}h`}
-                            value={`£${priceSummary.extraHoursPrice.toFixed(0)}`}
+                            value={`£${priceSummary.extraHoursPrice.toFixed(2)}`}
                           />
                         )}
                         {priceSummary.automaticGearCost > 0 && (
                           <BreakdownRow
                             label="Automatic gearbox"
-                            value={`£${priceSummary.automaticGearCost.toFixed(0)}`}
+                            value={`£${priceSummary.automaticGearCost.toFixed(2)}`}
                           />
                         )}
+                        {priceSummary.pickupExtFee > 0 && <BreakdownRow label="Pickup extension" value={`£${priceSummary.pickupExtFee.toFixed(2)}`} />}
+                        {priceSummary.returnExtFee > 0 && <BreakdownRow label="Return extension" value={`£${priceSummary.returnExtFee.toFixed(2)}`} />}
                         {priceSummary.addonItems.map((item) => (
                           <BreakdownRow
                             key={item.id}
                             label={item.label}
-                            value={`£${item.price.toFixed(0)}`}
+                            value={`£${item.price.toFixed(2)}`}
                           />
                         ))}
+                        <BreakdownRow label="Service charge" value={`£${priceSummary.serviceCharge.toFixed(2)}`} />
                         {discountData && (
                           <BreakdownRow
                             label={`Discount • ${discountData.percentage}%`}
-                            value={`-£${priceSummary.discountAmount.toFixed(0)}`}
+                            value={`-£${priceSummary.discountAmount.toFixed(2)}`}
                             positive
                           />
                         )}
@@ -1201,7 +1242,9 @@ export default function BookingModal({
                   <ActivityIndicator color={DARK} size="small" />
                 ) : (
                   <>
-                    <Text style={localStyles.confirmText}>Confirm Booking</Text>
+                    <Text style={localStyles.confirmText}>
+                      {user && token ? "Confirm Booking" : "Sign in to book"}
+                    </Text>
                     <View style={localStyles.confirmArrow}>
                       <Ionicons name="chevron-forward" size={16} color={DARK} />
                     </View>
@@ -1737,7 +1780,7 @@ export default function BookingModal({
                                       styles.timePickerExtensionPriceSelected,
                                   ]}
                                 >
-                                  +£{extensionPrice}
+                                  +£{extensionPrice.toFixed(2)}
                                 </Text>
                               )}
                             </View>
@@ -1834,12 +1877,6 @@ export default function BookingModal({
         </Modal>
       </Modal>
 
-      <LoginRequiredModal
-        visible={loginRequiredVisible}
-        message="Please login or register to book this van."
-        onLogin={handleLoginRequiredLogin}
-        onCancel={handleLoginRequiredCancel}
-      />
 
       <VanRulesModal
         visible={rulesModalVisible}

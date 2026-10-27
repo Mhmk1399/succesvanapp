@@ -1,4 +1,5 @@
 import { Van } from "../vanlist";
+import type { PendingBookingDraft } from "@/utils/pendingBooking";
 
 export type BookingModalProps = {
   visible: boolean;
@@ -19,6 +20,8 @@ export type BookingModalProps = {
     endDateDisplay?: string;
   };
   onReservationComplete?: () => void;
+  onAuthRedirect?: () => void;
+  resumeDraft?: PendingBookingDraft | null;
 };
 
 export type PickerField = "pickupDate" | "pickupTime" | "returnDate" | "returnTime" | null;

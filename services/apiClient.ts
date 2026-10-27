@@ -30,7 +30,7 @@ export function buildUrl(base: string, params?: string | Record<string, any>) {
   const search = Object.keys(params)
     .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
     .join("&");
-  return search ? `${base}?${search}` : base;
+  return search ? `${base}${base.includes("?") ? "&" : "?"}${search}` : base;
 }
 
 export async function safeFetch(url: string, opts?: ApiRequestInit) {

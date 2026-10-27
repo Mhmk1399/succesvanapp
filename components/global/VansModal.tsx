@@ -73,6 +73,7 @@ type VansModalProps = {
   onEditForm: () => void;
   prefilledData?: PrefilledData;
   onReservationComplete?: () => void;
+  onAuthRedirect?: () => void;
 };
 
 export default function VansModal({
@@ -83,6 +84,7 @@ export default function VansModal({
   onEditForm,
   prefilledData,
   onReservationComplete,
+  onAuthRedirect,
 }: VansModalProps) {
   const insets = useSafeAreaInsets();
   const [selectedVan, setSelectedVan] = React.useState<Van | null>(null);
@@ -238,6 +240,7 @@ export default function VansModal({
           prefilledData ? { ...prefilledData, calculatedPrice } : undefined
         }
         onReservationComplete={onReservationComplete}
+        onAuthRedirect={onAuthRedirect}
       />
     </>
   );
@@ -433,12 +436,12 @@ function VanCard({ van, index, onBook, prefilledData }: VanCardProps) {
                       </Text>
                     </View>
                     <Text style={styles.originalPrice}>
-                      £{originalPrice.toFixed(0)}
+                      £{originalPrice.toFixed(2)}
                     </Text>
                   </View>
                 )}
 
-                <Text style={styles.price}>£{calculatedPrice.toFixed(0)}</Text>
+                <Text style={styles.price}>£{calculatedPrice.toFixed(2)}</Text>
               </View>
 
               <Pressable

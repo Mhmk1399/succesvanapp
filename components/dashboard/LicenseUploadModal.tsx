@@ -1,4 +1,5 @@
 import { useToast } from "@/components/global/AppToast";
+import { ImageViewerProvider, useImageViewer } from "@/components/global/ImageViewer";
 import {
   customerJourneyService,
   type LicenceDetailsReview,
@@ -7,6 +8,7 @@ import { uploadToS3 } from "@/utils/s3Upload";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
+import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo, useState } from "react";
@@ -126,6 +128,21 @@ export default function LicenseUploadModal({
     }
   };
 
+  const pickPdf = async (side: LicenceSide) => {
+    if (isUploading) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
+      if (!result.canceled && result.assets[0]) {
+        const file = result.assets[0];
+        const asset: ImagePicker.ImagePickerAsset = { uri: file.uri, fileName: file.name, mimeType: file.mimeType || "application/pdf", fileSize: file.size, width: 0, height: 0 };
+        if (side === "front") { setLicenseFront(asset); setFrontProgress(0); }
+        else { setLicenseBack(asset); setBackProgress(0); }
+      }
+    } catch {
+      showToast({ type: "error", title: "File not selected", message: "Could not select the PDF." });
+    }
+  };
+
   const removeImage = (side: LicenceSide) => {
     if (isUploading) return;
     if (side === "front") {
@@ -162,7 +179,7 @@ export default function LicenseUploadModal({
     try {
       setUploadPhase("scanning");
       const licenceDetails =
-        await customerJourneyService.extractLicenceDetails(licenseFront);
+        await customerJourneyService.extractLicenceDetails(licenseFront, licenseBack);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setPendingReview({
         previewUri: licenseFront.uri,
@@ -274,6 +291,7 @@ export default function LicenseUploadModal({
       presentationStyle="overFullScreen"
       onRequestClose={() => handleClose()}
     >
+      <ImageViewerProvider>
       <Pressable style={styles.overlay} onPress={() => handleClose()}>
         <Pressable onPress={(e) => e.stopPropagation()} style={styles.sheet}>
           <LinearGradient
@@ -337,6 +355,7 @@ export default function LicenseUploadModal({
                 active={uploadPhase === "front"}
                 uploading={isUploading}
                 onPick={() => pickImage("front")}
+                onPickPdf={() => pickPdf("front")}
                 onRemove={() => removeImage("front")}
               />
               <LicenceCard
@@ -348,6 +367,7 @@ export default function LicenseUploadModal({
                 active={uploadPhase === "back"}
                 uploading={isUploading}
                 onPick={() => pickImage("back")}
+                onPickPdf={() => pickPdf("back")}
                 onRemove={() => removeImage("back")}
               />
             </View>
@@ -388,6 +408,7 @@ export default function LicenseUploadModal({
           <LicenceDetailsReviewModal
             visible={Boolean(pendingReview)}
             imagePreview={pendingReview?.previewUri}
+            previewIsPdf={licenseFront?.mimeType === "application/pdf"}
             details={pendingReview?.details ?? null}
             saving={isUploading}
             onCancel={() => setPendingReview(null)}
@@ -395,6 +416,7 @@ export default function LicenseUploadModal({
           />
         </Pressable>
       </Pressable>
+      </ImageViewerProvider>
     </Modal>
   );
 }
@@ -457,9 +479,10 @@ function toDetails(form: EditableLicenceDetails): LicenceDetailsReview {
   };
 }
 
-function LicenceDetailsReviewModal({
+export function LicenceDetailsReviewModal({
   visible,
   imagePreview,
+  previewIsPdf,
   details,
   saving,
   onCancel,
@@ -467,12 +490,14 @@ function LicenceDetailsReviewModal({
 }: {
   visible: boolean;
   imagePreview?: string;
+  previewIsPdf?: boolean;
   details: LicenceDetailsReview | null;
   saving: boolean;
   onCancel: () => void;
   onConfirm: (details: LicenceDetailsReview) => void;
 }) {
   const [form, setForm] = useState<EditableLicenceDetails>(emptyDetails);
+  const { openImage } = useImageViewer();
 
   React.useEffect(() => {
     if (details) setForm(toForm(details));
@@ -512,9 +537,9 @@ function LicenceDetailsReviewModal({
             </Pressable>
           </View>
 
-          {imagePreview ? (
-            <Image source={{ uri: imagePreview }} style={styles.reviewImage} />
-          ) : null}
+          {imagePreview && !previewIsPdf && !/\.pdf(?:\?|$)/i.test(imagePreview) ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="View licence image" onPress={() => openImage({ uri: imagePreview, title: "Driving licence" })}><Image source={{ uri: imagePreview }} style={styles.reviewImage} /></Pressable>
+          ) : imagePreview ? <View style={[styles.reviewImage, { alignItems: "center", justifyContent: "center" }]}><Ionicons name="document-text-outline" size={42} color={ACCENT} /></View> : null}
 
           <View style={styles.scanHint}>
             <Ionicons name="information-circle-outline" size={16} color={ACCENT} />
@@ -635,6 +660,7 @@ function LicenceCard({
   active,
   uploading,
   onPick,
+  onPickPdf,
   onRemove,
 }: {
   side: LicenceSide;
@@ -645,8 +671,10 @@ function LicenceCard({
   active: boolean;
   uploading: boolean;
   onPick: () => void;
+  onPickPdf: () => void;
   onRemove: () => void;
 }) {
+  const { openDocument } = useImageViewer();
   return (
     <View style={[styles.licenceCard, active && styles.licenceCardActive]}>
       <View style={styles.licenceCardHeader}>
@@ -665,11 +693,13 @@ function LicenceCard({
 
       {image ? (
         <View style={styles.preview}>
-          <Image source={{ uri: image.uri }} style={styles.image} />
+          {image.mimeType === "application/pdf" ? <View style={[styles.image, { alignItems: "center", justifyContent: "center" }]}><Ionicons name="document-text-outline" size={42} color={ACCENT} /></View> : <Image source={{ uri: image.uri }} style={styles.image} />}
           <LinearGradient
             colors={["transparent", "rgba(2,6,23,0.78)"]}
             style={StyleSheet.absoluteFill}
+            pointerEvents="none"
           />
+          <Pressable accessibilityRole="button" accessibilityLabel={`View ${title}`} onPress={() => openDocument({ uri: image.uri, title, mimeType: image.mimeType })} style={StyleSheet.absoluteFill} />
           <View style={styles.previewActions}>
             <Pressable
               disabled={uploading}
@@ -703,6 +733,8 @@ function LicenceCard({
           <Text style={styles.uploadSubText}>JPG, PNG or WebP</Text>
         </Pressable>
       )}
+
+      <Pressable disabled={uploading} onPress={onPickPdf} style={{ paddingVertical: 10, alignItems: "center" }}><Text style={{ color: ACCENT, fontWeight: "600" }}>Choose PDF</Text></Pressable>
 
       {active && (
         <View style={styles.cardProgress}>

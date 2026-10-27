@@ -4,20 +4,21 @@ import { safeFetch } from "./apiClient";
 const API_URL = process.env.EXPO_PUBLIC_AUTH_API || " ";
 
 export const authService = {
-  async sendCode(phoneNumber: string) {
+  async sendCode(phoneNumber: string, turnstileToken: string) {
     if (!API_URL || API_URL.trim() === "") {
       throw new Error("API URL not configured");
     }
 
     const response = await safeFetch(API_URL, {
       method: "POST",
+      credentials: "include",
       toast: {
         successTitle: "Code sent",
         successMessage: "Check your SMS for the verification code.",
         errorTitle: "Code not sent",
       },
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "send-code", phoneNumber }),
+      body: JSON.stringify({ action: "send-code", phoneNumber, turnstileToken }),
     });
 
     console.log("Response status:", response.status);
@@ -27,7 +28,7 @@ export const authService = {
     try {
       const data = JSON.parse(text);
       if (!response.ok) {
-        throw new Error(data.message || `Server error: ${response.status}`);
+        throw new Error(data.message || data.error || `Server error: ${response.status}`);
       }
       return data;
     } catch (error) {
@@ -41,6 +42,7 @@ export const authService = {
   async verifyCode(phoneNumber: string, code: string) {
     const response = await safeFetch(API_URL, {
       method: "POST",
+      credentials: "include",
       toast: {
         successTitle: "Verified",
         successMessage: "Your phone number has been confirmed.",
@@ -74,6 +76,7 @@ export const authService = {
   ) {
     const response = await safeFetch(API_URL, {
       method: "POST",
+      credentials: "include",
       toast: {
         successTitle: "Account ready",
         successMessage: "Welcome to Success Van Hire.",
@@ -109,8 +112,9 @@ export const authService = {
     const token = await AsyncStorage.getItem("authToken");
     if (!token) throw new Error("No token");
 
-    const response = await fetch(API_URL, {
+    const response = await safeFetch(API_URL, {
       method: "GET",
+      credentials: "include",
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.json();

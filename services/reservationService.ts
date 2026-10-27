@@ -36,8 +36,7 @@ export const reservationService = {
     userData: { userId: string },
     reservationData: ReservationCreate
   ) {
-    console.log("Posting to:", API_URL);
-    console.log("Body:", JSON.stringify({ userData, reservationData }));
+    const token = await AsyncStorage.getItem("authToken");
     const response = await safeFetch(API_URL, {
       method: "POST",
       toast: {
@@ -45,7 +44,10 @@ export const reservationService = {
         successMessage: "Your van reservation has been created.",
         errorTitle: "Booking failed",
       },
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ userData, reservationData }),
     });
     console.log("Response status:", response.status);

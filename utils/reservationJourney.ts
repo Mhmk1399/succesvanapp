@@ -179,7 +179,11 @@ const buildSteps = (
 const buildNextAction = (
   reservation: Reservation,
   status: ReservationStatus,
+  contract?: SafeContractSummary | null,
 ): ReservationNextAction => {
+  if (contract?.contractType === "reservation_extension" && ["sent", "delivered", "viewed", "signing"].includes(contract.status)) {
+    return { type: "sign_contract", title: "Sign your rental extension", description: "Review and sign the agreement to confirm your new return date.", buttonLabel: "Review extension", href: "#contract" };
+  }
   const officeDepositSelected = reservation.deposit?.option === "office";
   if (
     LICENCE_REQUIRED_STATUSES.includes(status) &&
@@ -363,7 +367,7 @@ export function buildReservationJourney(
     publicStatusLabel: RESERVATION_STATUS_LABELS[status],
     mainStatus: status,
     steps: buildSteps(reservation, status),
-    nextAction: buildNextAction(reservation, status),
+    nextAction: buildNextAction(reservation, status, contract),
     deposit:
       deposit || reservation.totalPrice !== undefined
         ? {

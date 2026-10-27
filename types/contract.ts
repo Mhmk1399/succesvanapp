@@ -24,6 +24,8 @@ export type SafeContractSummary = {
   customerEmail?: string;
   customerPhone?: string;
   contractNumber: string;
+  contractType?: "rental_agreement" | "reservation_extension";
+  extension?: { newReturnDateTime?: string; agreedPrice?: number };
   status: ContractStatus;
   bookingReference?: string;
   vehicleLabel?: string;

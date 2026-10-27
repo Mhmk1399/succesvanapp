@@ -117,8 +117,30 @@ async function imageAssetToBase64(asset: ImagePicker.ImagePickerAsset) {
 }
 
 export const customerJourneyService = {
-  async extractLicenceDetails(asset: ImagePicker.ImagePickerAsset) {
+  async getCancellationPreview(reservationId: string) {
+    const response = await safeFetch(apiBase(`/customer/reservations/${reservationId}/cancellation-request`), { headers: await authHeaders() });
+    return (await readJson(response)).data as {
+      eligible: boolean;
+      calculation: null | import("@/types/type").CancellationCalculation;
+    };
+  },
+
+  async requestCancellation(reservationId: string, payload: { reason: string; cancellationPolicyAccepted: boolean; attachmentUrl?: string; attachmentName?: string; attachmentContentType?: string }) {
+    const response = await safeFetch(apiBase(`/customer/reservations/${reservationId}/cancellation-request`), {
+      method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify(payload), toast: { silent: true },
+    });
+    return readJson(response);
+  },
+
+  async submitVehicleIssue(reservationId: string, note: string, imageUrl: string) {
+    const response = await safeFetch(apiBase(`/reservations/${reservationId}/vehicle-issues`), {
+      method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify({ note, imageUrl }), toast: { silent: true },
+    });
+    return readJson(response);
+  },
+  async extractLicenceDetails(asset: ImagePicker.ImagePickerAsset, backAsset?: ImagePicker.ImagePickerAsset) {
     const image = await imageAssetToBase64(asset);
+    const backImage = backAsset ? await imageAssetToBase64(backAsset) : undefined;
     const response = await safeFetch(apiBase("/extract-license"), {
       method: "POST",
       toast: { silent: true },
@@ -128,6 +150,7 @@ export const customerJourneyService = {
       },
       body: JSON.stringify({
         image,
+        ...(backImage ? { backImage } : {}),
         mimeType: asset.mimeType || "image/jpeg",
       }),
     });
@@ -140,6 +163,17 @@ export const customerJourneyService = {
     }
 
     return (await response.json()) as LicenceDetailsReview;
+  },
+
+  async extractStoredLicence(frontImage: string, backImage: string) {
+    const response = await safeFetch(apiBase("/extract-license"), {
+      method: "POST", toast: { silent: true },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+      body: JSON.stringify({ frontImage, backImage }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || "Could not scan the licence.");
+    return data as LicenceDetailsReview;
   },
 
   async updateUserLicence(
@@ -186,6 +220,8 @@ export const customerJourneyService = {
       data: {
         reservation: Reservation;
         contract: SafeContractSummary | null;
+        contracts?: SafeContractSummary[];
+        paymentDetails?: { bankName: string; accountName: string; sortCode: string; accountNumber: string };
       };
     }>;
   },
@@ -211,7 +247,7 @@ export const customerJourneyService = {
         "Content-Type": "application/json",
         ...(await authHeaders()),
       },
-      body: JSON.stringify({ returnUrl }),
+      body: JSON.stringify(Platform.OS === "web" ? {} : { returnSource: "app" }),
     });
     const data = await readJson(response);
     return data.data?.url as string;
@@ -278,14 +314,13 @@ export const customerJourneyService = {
 
   async submitDeposit(
     reservationId: string,
-    option: "full" | "secure" | "office",
+    option: "full" | "secure",
     receipt?: ImagePicker.ImagePickerAsset | null,
+    cancellationPolicyAccepted = false,
   ) {
-    let receiptUrl: string | undefined;
-    if (option !== "office") {
-      if (!receipt) throw new Error("Please upload your payment receipt");
-      receiptUrl = await uploadToS3(receipt, "deposit-receipt");
-    }
+    if (!cancellationPolicyAccepted) throw new Error("Please accept the cancellation policy");
+    if (!receipt) throw new Error("Please upload your payment receipt");
+    const receiptUrl = await uploadToS3(receipt, "deposit-receipt");
 
     const base = API_BASE_URL
       ? apiBase(`/reservations/${reservationId}/deposit`)
@@ -293,18 +328,15 @@ export const customerJourneyService = {
     const response = await safeFetch(base, {
       method: "POST",
       toast: {
-        successTitle: option === "office" ? "Deposit noted" : "Receipt sent",
-        successMessage:
-          option === "office"
-            ? "You'll pay the deposit at the office."
-            : "We'll verify your payment shortly.",
+        successTitle: "Receipt sent",
+        successMessage: "We'll verify your payment shortly.",
         errorTitle: "Deposit update failed",
       },
       headers: {
         "Content-Type": "application/json",
         ...(await authHeaders()),
       },
-      body: JSON.stringify({ option, receiptUrl }),
+      body: JSON.stringify({ option, receiptUrl, cancellationPolicyAccepted }),
     });
     return readJson(response);
   },

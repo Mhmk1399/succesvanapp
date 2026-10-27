@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BRAND_LOGO_URI } from "@/constants/branding";
 
 const ACCENT = "#ff9f0a";
 const NAVY = "#081523";
@@ -221,11 +222,9 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
         >
           <View style={styles.brand}>
             <Image
-              source={
-                "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png"
-              }
+              source={{ uri: BRAND_LOGO_URI }}
               style={styles.logo}
-              contentFit="fill"
+              contentFit="contain"
             />
           </View>
 
@@ -426,8 +425,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logo: {
-    width: 100,
-    height: 100,
+    width: 150,
+    height: 64,
   },
   brandText: {
     color: "#f8fafc",

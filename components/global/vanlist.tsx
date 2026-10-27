@@ -20,10 +20,7 @@ import HeaderBackButton from "@/components/global/HeaderBackButton";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "@/contexts/AuthContext";
 import { ResizeMode, Video } from "expo-av";
-import LoginRequiredModal from "@/components/global/LoginRequiredModal";
 
 const { width, height } = Dimensions.get("window");
 const CARD_WIDTH = width - 32;
@@ -158,7 +155,7 @@ export default function VanList({
             </View>
             <Text style={styles.emptyTitle}>No Vans Available</Text>
             <Text style={styles.emptySubtitle}>
-              We couldn't find any vans matching your criteria.{"\n"}Try a
+              We couldn&apos;t find any vans matching your criteria.{"\n"}Try a
               different filter.
             </Text>
           </View>
@@ -489,14 +486,14 @@ type VanCardProps = {
   onBook?: () => void;
 };
 
-function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
-  if (!van || typeof van !== "object") return null;
+function VanCard(props: VanCardProps) {
+  if (!props.van || typeof props.van !== "object") return null;
+  return <ValidVanCard {...props} />;
+}
 
-  const { user } = useAuth();
-  const router = useRouter();
+function ValidVanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
   const [showDetails, setShowDetails] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const [activeTab, setActiveTab] = useState<"features" | "purpose">(
     "features",
@@ -827,17 +824,9 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
 
               {/* Right: Book Now */}
               <Pressable
-                onPress={async (e) => {
+                onPress={(e) => {
                   e.stopPropagation();
-                  if (!user) {
-                    await AsyncStorage.setItem(
-                      "pendingBookingVan",
-                      JSON.stringify(van),
-                    );
-                    setShowLoginPrompt(true);
-                    return;
-                  }
-                  await onBook?.();
+                  onBook?.();
                 }}
                 style={({ pressed }) => [
                   styles.bookBtn,
@@ -880,15 +869,6 @@ function VanCard({ van, index, isHighlighted, onPress, onBook }: VanCardProps) {
         />
       </BottomSheet>
 
-      <LoginRequiredModal
-        visible={showLoginPrompt}
-        message="Please login or register to book this van."
-        onLogin={() => {
-          setShowLoginPrompt(false);
-          router.push("/register");
-        }}
-        onCancel={() => setShowLoginPrompt(false)}
-      />
     </Animated.View>
   );
 }

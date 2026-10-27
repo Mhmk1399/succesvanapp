@@ -1,11 +1,10 @@
 import { useAlert } from "@/components/global/CustomAlert";
 import { useToast } from "@/components/global/AppToast";
-import LoginRequiredModal from "@/components/global/LoginRequiredModal";
 import BookingCalendarChrome, {
   BOOKING_CALENDAR_THEME,
 } from "@/components/global/BookingCalendarChrome";
-import { useAuth } from "@/contexts/AuthContext";
 import { officeService } from "@/services/officeService";
+import { buildUrl, safeFetch } from "@/services/apiClient";
 import { typeService } from "@/services/typeService";
 import { Category, Type, Office, WorkingTime } from "@/types/type";
 import {
@@ -29,7 +28,6 @@ import GlassView from "@/components/global/GlassView";
 import { appTheme } from "@/constants/appTheme";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -147,8 +145,8 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
     outputRange: [-400, 800],
   });
 
-  const openSheet = async () => {
-    await Haptics.selectionAsync();
+  const openSheet = () => {
+    void Haptics.selectionAsync().catch(() => {});
     setSheetVisible(true);
     Animated.parallel([
       Animated.timing(backdropOpacity, {
@@ -165,8 +163,8 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
     ]).start();
   };
 
-  const closeSheet = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const closeSheet = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         toValue: 0,
@@ -200,6 +198,7 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
           style={styles.mainButtonGradient}
         >
           <Animated.View
+            pointerEvents="none"
             style={[
               styles.shineEffect,
               { transform: [{ translateX: shineTranslate }] },
@@ -226,7 +225,12 @@ export default function ReservationForm({ onCompleted }: ReservationFormProps) {
       </Pressable>
 
       {/* BOTTOM SHEET MODAL */}
-      <Modal visible={sheetVisible} transparent animationType="none">
+      <Modal
+        visible={sheetVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeSheet}
+      >
         {/* Backdrop */}
         <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet}>
           <Animated.View
@@ -299,8 +303,6 @@ function ReservationSheetContent({
   isSheetOpen = false,
 }: SheetContentProps) {
   const colorScheme = useColorScheme();
-  const { user } = useAuth();
-  const router = useRouter();
   const { showAlert } = useAlert();
 
   // Inline alert shown inside the sheet to avoid being occluded by the sheet's Modal
@@ -369,7 +371,6 @@ function ReservationSheetContent({
   );
   const [tempPickupDate, setTempPickupDate] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [loginModalVisible, setLoginModalVisible] = useState(false);
   const [startDateReservedSlots, setStartDateReservedSlots] = useState<
     {
       startDate: string;
@@ -530,7 +531,7 @@ function ReservationSheetContent({
         process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API ||
         "https://succesvan.vercel.app/api/reservations/by-office";
 
-      fetch(
+      safeFetch(
         `${baseUrl}?office=${selectedOffice}&startDate=${startDateStr}&type=start`,
         {
           method: "GET",
@@ -575,7 +576,7 @@ function ReservationSheetContent({
         process.env.EXPO_PUBLIC_RESERVATIONS_BY_OFFICE_API ||
         "https://succesvan.vercel.app/api/reservations/by-office";
 
-      fetch(
+      safeFetch(
         `${baseUrl}?office=${selectedOffice}&endDate=${endDateStr}&type=end`,
         {
           method: "GET",
@@ -839,26 +840,6 @@ function ReservationSheetContent({
       }
     }
 
-    // Check if user is logged in
-    if (!user) {
-      await AsyncStorage.setItem(
-        "pendingReservationForm",
-        JSON.stringify({
-          office: selectedOffice,
-          type: selectedType,
-          pickupDate: createLondonDateTime(pickupDate!, pickupTime),
-          returnDate: createLondonDateTime(returnDate!, returnTime),
-          startDateDisplay: formatDateForStorage(pickupDate!),
-          endDateDisplay: formatDateForStorage(returnDate!),
-          pickupTime,
-          returnTime,
-          driverAge,
-        }),
-      );
-      setLoginModalVisible(true);
-      return;
-    }
-
     setIsSubmitting(true);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -897,8 +878,8 @@ function ReservationSheetContent({
 
     try {
       const [officeResponse, categoriesResponse] = await Promise.all([
-        fetch(`${process.env.EXPO_PUBLIC_OFFICES_API}/${selectedOffice}`),
-        fetch(`${process.env.EXPO_PUBLIC_CATEGORIES_API}?status=active` || ""),
+        safeFetch(`${process.env.EXPO_PUBLIC_OFFICES_API}/${selectedOffice}`),
+        safeFetch(buildUrl(process.env.EXPO_PUBLIC_CATEGORIES_API || "", { status: "active" })),
       ]);
 
       const [officeData, categoriesData] = await Promise.all([
@@ -959,15 +940,6 @@ function ReservationSheetContent({
       setVansModalVisible(true);
     }
   };
-
-  // Custom Login Modal handlers
-  const handleLoginPress = () => {
-    setLoginModalVisible(false);
-    onClose();
-    router.push("/register");
-  };
-
-  const handleCancelLogin = () => setLoginModalVisible(false);
 
   const renderInput = (
     placeholder: string,
@@ -1746,7 +1718,7 @@ function ReservationSheetContent({
                                     sheetStyles.timeExtensionPriceSelected,
                                 ]}
                               >
-                                +£{extensionPrice}
+                                +£{extensionPrice.toFixed(2)}
                               </Text>
                             )}
                           </View>
@@ -2175,13 +2147,7 @@ function ReservationSheetContent({
           };
         })()}
         onReservationComplete={onClose}
-      />
-
-      <LoginRequiredModal
-        visible={loginModalVisible}
-        message="Please login or register to continue with your reservation."
-        onLogin={handleLoginPress}
-        onCancel={handleCancelLogin}
+        onAuthRedirect={onClose}
       />
     </>
   );

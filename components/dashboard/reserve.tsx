@@ -8,9 +8,11 @@ import { Ionicons } from "@expo/vector-icons";
 import GlassView from "@/components/global/GlassView";
 import { useToast } from "@/components/global/AppToast";
 import ReservationJourneyModal from "@/components/dashboard/ReservationJourneyModal";
+import ReservationPriceBreakdown from "@/components/dashboard/ReservationPriceBreakdown";
+import { DEFAULT_SERVICE_CHARGE } from "@/utils/bookingPrice";
 import PendingReservationEditSheet from "@/components/dashboard/PendingReservationEditSheet";
 import { statusLabel, statusTone } from "@/constants/reservationStatus";
-import { buildReservationJourney } from "@/utils/reservationJourney";
+import { buildReservationJourney, formatMoney } from "@/utils/reservationJourney";
 import {
   getInclusiveLondonDeadline,
   getMinimumPickupDateInput,
@@ -801,7 +803,7 @@ export default function UserReservations({
         <View style={styles.compactActions}>
           <View style={styles.compactHiddenPrice}>
             <Text style={styles.priceLabel}>Total Price</Text>
-            <Text style={styles.priceValue}>£{item.totalPrice}</Text>
+            <Text style={styles.priceValue}>{item.perInvoice ? "Per Invoice" : formatMoney(item.totalPrice)}</Text>
           </View>
 
           <View style={styles.cardActions}>
@@ -1171,6 +1173,9 @@ export default function UserReservations({
                 <View style={styles.detailSection}>
                   <Text style={styles.sectionTitle}>Price Breakdown</Text>
                   {(() => {
+                    if (!isEditing) {
+                      return <ReservationPriceBreakdown reservation={selectedReservation} />;
+                    }
                     const start =
                       isEditing && editPickupDate
                         ? new Date(editPickupDate)
@@ -1291,13 +1296,13 @@ export default function UserReservations({
                               fontWeight: "700",
                             }}
                           >
-                            £{price.toFixed(0)}
+                            £{price.toFixed(2)}
                           </Text>
                         </View>,
                       );
                     });
 
-                    const vanPrice = totalPrice - addOnsPrice;
+                    const vanPrice = totalPrice - addOnsPrice - DEFAULT_SERVICE_CHARGE;
 
                     return (
                       <>
@@ -1338,11 +1343,16 @@ export default function UserReservations({
                               fontWeight: "700",
                             }}
                           >
-                            £{vanPrice.toFixed(0)}
+                            £{vanPrice.toFixed(2)}
                           </Text>
                         </View>
 
                         {addonItems}
+
+                        <View style={styles.priceBreakdownRow}>
+                          <Text style={{ fontSize: 12, color: "#d1d5db" }}>Service charge</Text>
+                          <Text style={{ fontSize: 14, color: "#f9fafb", fontWeight: "700" }}>{formatMoney(DEFAULT_SERVICE_CHARGE)}</Text>
+                        </View>
 
                         <View
                           style={{
@@ -1375,7 +1385,7 @@ export default function UserReservations({
                               fontWeight: "900",
                             }}
                           >
-                            £{totalPrice.toFixed(0)}
+                            £{totalPrice.toFixed(2)}
                           </Text>
                         </View>
                       </>
@@ -1418,7 +1428,7 @@ export default function UserReservations({
                             fontWeight: "900",
                           }}
                         >
-                          £{dynamicPrice.toFixed(0)}
+                          £{dynamicPrice.toFixed(2)}
                         </Text>
                       </View>
                     </View>
@@ -1722,7 +1732,7 @@ export default function UserReservations({
                                 marginTop: 2,
                               }}
                             >
-                              +£{extensionPrice}
+                              +£{extensionPrice.toFixed(2)}
                             </Text>
                           )}
                         </View>

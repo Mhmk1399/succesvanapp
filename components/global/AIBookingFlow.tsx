@@ -540,7 +540,7 @@ export default function AIBookingFlow({
                       <Text style={styles.gearOptionTitle}>{type.charAt(0).toUpperCase() + type.slice(1)}</Text>
                       {extraCost > 0 ? (
                         <Text style={styles.gearOptionPrice}>
-                          +£{extraCost}/day (£{totalExtraCost} total)
+                          +£{extraCost.toFixed(2)}/day (£{totalExtraCost.toFixed(2)} total)
                         </Text>
                       ) : (
                         <Text style={styles.gearOptionIncluded}>Included</Text>
@@ -697,6 +697,11 @@ export default function AIBookingFlow({
               <Text style={styles.receiptText}>
                 {agentState.booking.priceBreakdown || "Calculating..."}
               </Text>
+              {(agentState.booking.selectedAddOns || []).map((addon) => (
+                <Text key={addon.addOnId} style={styles.receiptText}>
+                  {addon.name}: £{addon.totalPrice.toFixed(2)}
+                </Text>
+              ))}
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total:</Text>
                 <Text style={styles.totalValue}>

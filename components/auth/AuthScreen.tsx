@@ -5,6 +5,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import GlassView from "@/components/global/GlassView";
 import HeaderBackButton from "@/components/global/HeaderBackButton";
 import { useToast } from "@/components/global/AppToast";
+import { PENDING_BOOKING_KEY } from "@/utils/pendingBooking";
+import SecurityCheck from "./SecurityCheck";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -46,6 +48,10 @@ export default function AuthScreen() {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [securityToken, setSecurityToken] = useState<string | null>(null);
+  const [securityResetKey, setSecurityResetKey] = useState(0);
+  const sendCodeInFlight = React.useRef(false);
+  const handleSecurityToken = React.useCallback((token: string | null) => setSecurityToken(token), []);
   const codeInputRef = React.useRef<TextInput>(null);
   const shakeAnims = React.useRef<Record<string, Animated.Value>>({
     phone: new Animated.Value(0),
@@ -113,9 +119,20 @@ export default function AuthScreen() {
   });
 
   const finishAuthFlow = async () => {
+    const token = await AsyncStorage.getItem("authToken");
+    if (!token) {
+      showToast({ type: "error", title: "Sign in incomplete", message: "Please sign in again to continue your booking." });
+      return;
+    }
     await refreshUser();
+    const pendingDraft = await AsyncStorage.getItem(PENDING_BOOKING_KEY);
     const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
     const pendingForm = await AsyncStorage.getItem("pendingReservationForm");
+
+    if (pendingDraft) {
+      router.replace({ pathname: "/vans", params: { resumeBooking: "1" } });
+      return;
+    }
 
     if (pendingVan) {
       router.replace("/vans");
@@ -139,12 +156,15 @@ export default function AuthScreen() {
       return;
     }
 
+    if (!securityToken || sendCodeInFlight.current) return;
+    sendCodeInFlight.current = true;
+
     setIsSubmitting(true);
     setErrors({});
 
     try {
       const fullPhone = `+44${phone}`;
-      const result = await authService.sendCode(fullPhone);
+      const result = await authService.sendCode(fullPhone, securityToken);
 
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -167,6 +187,9 @@ export default function AuthScreen() {
         false,
       );
     } finally {
+      sendCodeInFlight.current = false;
+      setSecurityToken(null);
+      setSecurityResetKey((current) => current + 1);
       setIsSubmitting(false);
     }
   };
@@ -386,9 +409,12 @@ export default function AuthScreen() {
                     </Text>
                   </View>
 
+                  <SecurityCheck onTokenChange={handleSecurityToken} resetKey={securityResetKey} />
+
                   <PrimaryActionButton
                     label="Send Code"
                     loading={isSubmitting}
+                    disabled={!securityToken}
                     onPress={handleSendCode}
                   />
                 </>
@@ -776,21 +802,23 @@ type PrimaryActionButtonProps = {
   label: string;
   loading: boolean;
   onPress: () => void;
+  disabled?: boolean;
 };
 
 function PrimaryActionButton({
   label,
   loading,
   onPress,
+  disabled = false,
 }: PrimaryActionButtonProps) {
   return (
     <Pressable
       onPress={onPress}
-      disabled={loading}
+      disabled={loading || disabled}
       style={({ pressed }) => [
         styles.submitBtn,
         pressed && styles.submitBtnPressed,
-        loading && styles.submitBtnDisabled,
+        (loading || disabled) && styles.submitBtnDisabled,
       ]}
     >
       <LinearGradient

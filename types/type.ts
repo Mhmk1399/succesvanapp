@@ -282,6 +282,19 @@ export interface ReservationAddOn {
   selectedTierIndex?: number;
 }
 
+export interface CancellationCalculation {
+  paymentOption?: "full" | "secure";
+  paidAmount?: number;
+  hoursBeforePickup?: number;
+  window?: "over_72_hours" | "between_24_and_72_hours" | "under_24_hours";
+  policyDeductionPercent?: number;
+  agreedDeductionPercent?: number;
+  deductionAmount?: number;
+  refundAmount?: number;
+  cancellationProtected?: boolean;
+  calculatedAt?: string;
+}
+
 export interface Reservation extends MongoTimestamps {
   _id?: string;
   reservationCode?: string;
@@ -296,6 +309,23 @@ export interface Reservation extends MongoTimestamps {
   pickupTime?: string;
   returnTime?: string;
   totalPrice: number;
+  serviceCharge?: number;
+  adminDiscountAmount?: number;
+  adminDiscountPercent?: number;
+  cancellationRequest?: {
+    status?: "pending" | "approved" | "rejected";
+    reason?: string;
+    reviewNote?: string;
+    attachment?: { url?: string; filename?: string; contentType?: string };
+    reviewAttachment?: { url?: string; filename?: string; contentType?: string };
+    calculation?: CancellationCalculation;
+    policyAcceptedAt?: string;
+  };
+  cancellationSettlement?: CancellationCalculation;
+  vehicleIssueNotes?: Array<{ _id?: string; note: string; imageUrl: string; status: "pending" | "accepted" | "refused"; reviewReason?: string; createdAt?: string }>;
+  rentalExtensions?: Array<{ contractNumber?: string; newReturnDateTime?: string; agreedPrice?: number; signedAt?: string }>;
+  additionalDriver?: { name?: string; licenceNumber?: string };
+  invoiceFinalPrice?: { amount?: number; confirmedAt?: string };
   status: ReservationStatus;
   statusHistory?: Array<{
     status: ReservationStatus | string;
@@ -325,6 +355,8 @@ export interface Reservation extends MongoTimestamps {
     failureReason?: string;
     discountPercent?: number;
     discountAmount?: number;
+    cancellationPolicyAcceptedAt?: string;
+    cancellationPolicyVersion?: string;
     priceAdjustment?: {
       status?: "payment_due" | "credit_due" | "balanced";
       paidAmount?: number;
@@ -405,7 +437,7 @@ export interface Reservation extends MongoTimestamps {
       missingEquipment?: number;
       other?: number;
     };
-    additionalCharges?: Array<{ reason?: string; amount?: number }>;
+    additionalCharges?: Array<{ reason?: string; amount?: number; evidenceUrl?: string; ticketReference?: string }>;
   };
   cancelReason?: string;
   driverAge?: number;

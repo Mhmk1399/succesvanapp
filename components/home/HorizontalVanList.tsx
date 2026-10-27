@@ -490,7 +490,7 @@ function VanCard({
                   <View style={styles.priceRow}>
                     <Text style={styles.currency}>£</Text>
                     <Text style={styles.price}>
-                      {Number(van.pricePerHour || 0).toFixed(0)}
+                      {Number(van.pricePerHour || 0).toFixed(2)}
                     </Text>
                     <Text style={styles.priceUnit}>/day</Text>
                   </View>

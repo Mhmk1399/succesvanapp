@@ -1,17 +1,24 @@
 // components/dashboard/UserProfileCard.tsx
 import { useAuth } from "@/contexts/AuthContext";
+import { BRAND_LOGO_URI } from "@/constants/branding";
 import { useToast } from "@/components/global/AppToast";
+import { ImageViewerProvider, useImageViewer } from "@/components/global/ImageViewer";
 import { safeFetch } from "@/services/apiClient";
+import type { User } from "@/types/type";
+import { customerJourneyService, type LicenceDetailsReview } from "@/services/customerJourneyService";
+import { LicenceDetailsReviewModal } from "@/components/dashboard/LicenseUploadModal";
 import { uploadToS3 } from "@/utils/s3Upload";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
+import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -23,8 +30,7 @@ import {
 const ACCENT = "#fe9a00";
 
 export default function UserProfileCard() {
-  const { user, refreshUser } = useAuth();
-  const { showToast } = useToast();
+  const { user } = useAuth();
 
   if (!user) {
     return (
@@ -33,6 +39,14 @@ export default function UserProfileCard() {
       </View>
     );
   }
+
+  return <ImageViewerProvider><LoadedUserProfileCard user={user} /></ImageViewerProvider>;
+}
+
+function LoadedUserProfileCard({ user }: { user: User }) {
+  const { refreshUser } = useAuth();
+  const { showToast } = useToast();
+  const { openDocument } = useImageViewer();
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -64,6 +78,7 @@ export default function UserProfileCard() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingAvatar, setIsDeletingAvatar] = useState(false);
   const [isUploadingLicenses, setIsUploadingLicenses] = useState(false);
+  const [licenceReview, setLicenceReview] = useState<{ front: string; back: string; details: LicenceDetailsReview } | null>(null);
   const [isDeletingLicense, setIsDeletingLicense] = useState({
     front: false,
     back: false,
@@ -270,7 +285,7 @@ export default function UserProfileCard() {
     try {
       const token = await AsyncStorage.getItem("authToken");
       const API_URL = process.env.EXPO_PUBLIC_USERS_API || "";
-      const requestBody: any = { licenceAttached: {} };
+      const requestBody: any = { licenceAttached: { ...user.licenceAttached } };
 
       if (licenseFront?.uri) {
         const url = await uploadToS3(licenseFront, "license-front");
@@ -314,6 +329,15 @@ export default function UserProfileCard() {
         await refreshUser();
         setLicenseFront(null);
         setLicenseBack(null);
+        const { front, back } = requestBody.licenceAttached;
+        if (front && back) {
+          try {
+            const details = await customerJourneyService.extractStoredLicence(front, back);
+            setLicenceReview({ front, back, details });
+          } catch (error) {
+            showToast({ type: "error", title: "Licence scan failed", message: error instanceof Error ? error.message : "Please try scanning again." });
+          }
+        }
       } else {
         showToast({
           type: "error",
@@ -441,7 +465,7 @@ export default function UserProfileCard() {
         }
         Haptics.selectionAsync();
       }
-    } catch (error) {
+    } catch {
       showToast({
         type: "error",
         title: "Image not selected",
@@ -450,11 +474,21 @@ export default function UserProfileCard() {
     }
   };
 
+  const pickLicensePdf = async (side: "front" | "back") => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
+      if (result.canceled || !result.assets[0]) return;
+      const file = result.assets[0];
+      const asset: ImagePicker.ImagePickerAsset = { uri: file.uri, fileName: file.name, mimeType: file.mimeType || "application/pdf", fileSize: file.size, width: 0, height: 0 };
+      if (side === "front") { setLicenseFront(asset); setLicensePreviewFront(asset.uri); }
+      else { setLicenseBack(asset); setLicensePreviewBack(asset.uri); }
+    } catch {
+      showToast({ type: "error", title: "File not selected", message: "Could not select the PDF." });
+    }
+  };
+
   const hasLicenseChanges = !!licenseFront || !!licenseBack;
 
-  const fullAddress =
-    [user.address, user.city, user.postalCode].filter(Boolean).join(", ") ||
-    null;
   const userAvatar =
     typeof avatarPreview === "string" && avatarPreview.trim()
       ? avatarPreview.trim()
@@ -480,15 +514,17 @@ export default function UserProfileCard() {
             style={styles.avatarRing}
           >
             <Pressable
-              disabled={!isEditing || isSaving || isDeletingAvatar}
-              onPress={pickAvatarImage}
+              disabled={isSaving || isDeletingAvatar || (!isEditing && !userAvatar)}
+              accessibilityRole="button"
+              accessibilityLabel={isEditing ? "Change profile photo" : "View profile photo"}
+              onPress={() => { if (isEditing) void pickAvatarImage(); else if (userAvatar) openDocument({ uri: userAvatar, title: "Profile photo" }); }}
               style={styles.avatarInner}
             >
               <Image
                 source={
                   userAvatar
                     ? { uri: userAvatar }
-                    : require("../../assets/images/logo.png")
+                    : { uri: BRAND_LOGO_URI }
                 }
                 style={[styles.avatar, userAvatar && styles.avatarPhoto]}
                 resizeMode={userAvatar ? "cover" : "contain"}
@@ -748,11 +784,13 @@ export default function UserProfileCard() {
             <Text style={styles.licenseLabel}>Front Side</Text>
             {licensePreviewFront ? (
               <View style={styles.licensePreview}>
-                <Image
+                <Pressable accessibilityRole="button" accessibilityLabel="View front licence" onPress={() => openDocument({ uri: licensePreviewFront, title: "Driving licence - front", mimeType: licenseFront?.mimeType })}>
+                {licenseFront?.mimeType === "application/pdf" || /\.pdf(?:\?|$)/i.test(licensePreviewFront) ? <View style={[styles.licenseImage, { alignItems: "center", justifyContent: "center" }]}><Ionicons name="document-text-outline" size={36} color={ACCENT} /></View> : <Image
                   source={{ uri: licensePreviewFront }}
                   style={styles.licenseImage}
                   resizeMode="cover"
-                />
+                />}
+                </Pressable>
                 <View style={styles.licensePreviewActions}>
                   <Pressable
                     onPress={() => handleDeleteLicense("front")}
@@ -799,17 +837,20 @@ export default function UserProfileCard() {
                 <Text style={styles.uploadButtonText}>Upload Front</Text>
               </Pressable>
             )}
+            <Pressable onPress={() => pickLicensePdf("front")} disabled={isUploadingLicenses} style={{ paddingVertical: 8 }}><Text style={{ color: ACCENT }}>Choose front PDF</Text></Pressable>
           </View>
 
           <View style={styles.licenseUploadArea}>
             <Text style={styles.licenseLabel}>Back Side</Text>
             {licensePreviewBack ? (
               <View style={styles.licensePreview}>
-                <Image
+                <Pressable accessibilityRole="button" accessibilityLabel="View back licence" onPress={() => openDocument({ uri: licensePreviewBack, title: "Driving licence - back", mimeType: licenseBack?.mimeType })}>
+                {licenseBack?.mimeType === "application/pdf" || /\.pdf(?:\?|$)/i.test(licensePreviewBack) ? <View style={[styles.licenseImage, { alignItems: "center", justifyContent: "center" }]}><Ionicons name="document-text-outline" size={36} color={ACCENT} /></View> : <Image
                   source={{ uri: licensePreviewBack }}
                   style={styles.licenseImage}
                   resizeMode="cover"
-                />
+                />}
+                </Pressable>
                 <View style={styles.licensePreviewActions}>
                   <Pressable
                     onPress={() => handleDeleteLicense("back")}
@@ -856,6 +897,7 @@ export default function UserProfileCard() {
                 <Text style={styles.uploadButtonText}>Upload Back</Text>
               </Pressable>
             )}
+            <Pressable onPress={() => pickLicensePdf("back")} disabled={isUploadingLicenses} style={{ paddingVertical: 8 }}><Text style={{ color: ACCENT }}>Choose back PDF</Text></Pressable>
           </View>
 
           {hasLicenseChanges && (
@@ -904,21 +946,37 @@ export default function UserProfileCard() {
             </View>
             <View style={styles.licenseGrid}>
               {user.licenceAttached.front && (
-                <View style={styles.licenseViewItem}>
+                <Pressable accessibilityRole="button" accessibilityLabel="View front licence" onPress={() => openDocument({ uri: user.licenceAttached!.front!, title: "Driving licence - front" })} style={styles.licenseViewItem}>
                   <Ionicons name="checkmark-circle" size={17} color="#32d47c" />
-                  <Text style={styles.licenseViewText}>Front uploaded</Text>
-                </View>
+                  <Text style={styles.licenseViewText}>View front</Text>
+                </Pressable>
               )}
               {user.licenceAttached.back && (
-                <View style={styles.licenseViewItem}>
+                <Pressable accessibilityRole="button" accessibilityLabel="View back licence" onPress={() => openDocument({ uri: user.licenceAttached!.back!, title: "Driving licence - back" })} style={styles.licenseViewItem}>
                   <Ionicons name="checkmark-circle" size={17} color="#32d47c" />
-                  <Text style={styles.licenseViewText}>Back uploaded</Text>
-                </View>
+                  <Text style={styles.licenseViewText}>View back</Text>
+                </Pressable>
               )}
             </View>
           </View>
         )
       )}
+      <Modal visible={Boolean(licenceReview)} transparent animationType="fade" onRequestClose={() => setLicenceReview(null)}>
+        <ImageViewerProvider>
+        <LicenceDetailsReviewModal visible={Boolean(licenceReview)} imagePreview={licenceReview?.front} details={licenceReview?.details || null} saving={isUploadingLicenses} onCancel={() => setLicenceReview(null)} onConfirm={async (details) => {
+          if (!licenceReview) return;
+          setIsUploadingLicenses(true);
+          try {
+            await customerJourneyService.updateUserLicence(user._id, { front: licenceReview.front, back: licenceReview.back }, details);
+            await refreshUser();
+            setLicenceReview(null);
+            showToast({ type: "success", title: "Licence confirmed", message: "Your licence details have been saved." });
+          } catch (error) {
+            showToast({ type: "error", title: "Could not save licence", message: error instanceof Error ? error.message : "Please try again." });
+          } finally { setIsUploadingLicenses(false); }
+        }} />
+        </ImageViewerProvider>
+      </Modal>
     </View>
   );
 }
@@ -1086,7 +1144,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#0a1424",
     borderWidth: 2,
     borderColor: "#0a1424",
   },

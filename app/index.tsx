@@ -26,6 +26,7 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 import ReservationForm from "@/components/global/ReservationForm";
+import { BRAND_LOGO_URI } from "@/constants/branding";
 
 const ACCENT = "#fe9a00";
 const ACCENT_LIGHT = "#ffd38a";
@@ -33,31 +34,44 @@ const ACCENT_SOFT = "#ffb83d";
 const DARK = "#07111f";
 
 const AUTOPLAY_MS = 3500;
- const BRAND_LOGO_URI =
-  "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png";
 
 type VanSlide = {
   uri: string;
   name: string;
   tag: string;
+  title: string;
+  accent: string;
+  description: string;
+  kind: "brand" | "vehicle";
 };
 
-// Replace only these URIs when you send the final slider images.
 const VAN_IMAGES: VanSlide[] = [
   {
-    uri: "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/shortee.png",
-    name: "Short wheel",
-    tag: "City delivery",
+    uri: BRAND_LOGO_URI,
+    name: "Success Van Hire",
+    tag: "Van hire in London",
+    title: "",
+    accent: "",
+    description: "successvanhire.co.uk",
+    kind: "brand",
   },
   {
     uri: "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/14seater.png",
     name: "14 seater",
     tag: "Group travel",
+    title: "Group",
+    accent: "travel",
+    description: "Travel together comfortably, with space for family, friends and luggage.",
+    kind: "vehicle",
   },
   {
     uri: "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/louton.png",
     name: "Luton van",
     tag: "Home moves",
+    title: "Moving ",
+    accent: "made easy",
+    description: "Make moving simpler with extra space for furniture, boxes and deliveries.",
+    kind: "vehicle",
   },
 ];
 
@@ -285,6 +299,7 @@ type HeroSliderProps = {
 
 function HeroSlider({ compact, tiny, width }: HeroSliderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const activeIndexRef = useRef(0);
   const flatListRef = useRef<FlatList<VanSlide>>(null);
   const autoplayTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -304,13 +319,12 @@ function HeroSlider({ compact, tiny, width }: HeroSliderProps) {
     autoplayTimer.current = setInterval(() => {
       if (isUserInteracting.current) return;
 
-      setActiveIndex((currentIndex) => {
-        const nextIndex = (currentIndex + 1) % VAN_IMAGES.length;
-        flatListRef.current?.scrollToIndex({
-          index: nextIndex,
-          animated: true,
-        });
-        return nextIndex;
+      const nextIndex = (activeIndexRef.current + 1) % VAN_IMAGES.length;
+      activeIndexRef.current = nextIndex;
+      setActiveIndex(nextIndex);
+      flatListRef.current?.scrollToIndex({
+        index: nextIndex,
+        animated: true,
       });
     }, AUTOPLAY_MS);
   }, [clearAutoplay]);
@@ -349,11 +363,12 @@ function HeroSlider({ compact, tiny, width }: HeroSliderProps) {
     if (resumeTimer.current) clearTimeout(resumeTimer.current);
   }, [clearAutoplay]);
 
-  const onMomentumEnd = useCallback(
+  const onScrollSettled = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const rawIndex = Math.round(event.nativeEvent.contentOffset.x / width);
       const nextIndex = Math.min(VAN_IMAGES.length - 1, Math.max(0, rawIndex));
 
+      activeIndexRef.current = nextIndex;
       setActiveIndex(nextIndex);
       scheduleAutoplay();
     },
@@ -364,6 +379,7 @@ function HeroSlider({ compact, tiny, width }: HeroSliderProps) {
     (index: number) => {
       isUserInteracting.current = true;
       clearAutoplay();
+      activeIndexRef.current = index;
       setActiveIndex(index);
 
       flatListRef.current?.scrollToIndex({ index, animated: true });
@@ -394,7 +410,8 @@ function HeroSlider({ compact, tiny, width }: HeroSliderProps) {
           { useNativeDriver: true },
         )}
         onScrollBeginDrag={onDragStart}
-        onMomentumScrollEnd={onMomentumEnd}
+        onScrollEndDrag={onScrollSettled}
+        onMomentumScrollEnd={onScrollSettled}
         onScrollToIndexFailed={({ index }) => {
           flatListRef.current?.scrollToOffset({
             offset: index * width,
@@ -495,24 +512,8 @@ function HeroCard({
   scrollX,
 }: HeroCardProps) {
   const cardHeight = tiny ? 218 : compact ? 246 : 274;
-  const vanAnim = useRef(new Animated.Value(0)).current;
   const shineAnim = useRef(new Animated.Value(-1)).current;
   const livePulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (!active) return;
-
-    vanAnim.setValue(0);
-    const animation = Animated.spring(vanAnim, {
-      toValue: 1,
-      tension: 50,
-      friction: 10,
-      useNativeDriver: true,
-    });
-
-    animation.start();
-    return () => animation.stop();
-  }, [active, vanAnim]);
 
   useEffect(() => {
     if (!active) {
@@ -589,21 +590,20 @@ function HeroCard({
     extrapolate: "clamp",
   });
 
-  const vanTranslate = vanAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [44, 0],
+  const vanTranslate = scrollX.interpolate({
+    inputRange,
+    outputRange: [18, 0, -18],
+    extrapolate: "clamp",
   });
-  const vanLift = vanAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [8, 0],
+  const vanLift = scrollX.interpolate({
+    inputRange,
+    outputRange: [4, 0, 4],
+    extrapolate: "clamp",
   });
-  const vanScale = vanAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.94, 1],
-  });
-  const vanOpacity = vanAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
+  const vanScale = scrollX.interpolate({
+    inputRange,
+    outputRange: [0.97, 1, 0.97],
+    extrapolate: "clamp",
   });
 
   const shineTranslate = shineAnim.interpolate({
@@ -693,6 +693,25 @@ function HeroCard({
           />
         </Animated.View>
 
+        {data.kind === "brand" ? (
+          <Animated.View
+            style={[
+              styles.brandSlideContent,
+              { transform: [{ translateY: vanLift }, { scale: vanScale }] },
+            ]}
+          >
+            <Text style={styles.brandSlideEyebrow}>LONDON VAN HIRE</Text>
+            <Image
+              source={{ uri: data.uri }}
+              style={styles.brandSlideLogo}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+              accessibilityLabel="Success Van Hire logo"
+            />
+            <Text style={styles.brandSlideName}>{data.name}</Text>
+            <Text style={styles.brandSlideDescription}>{data.description}</Text>
+          </Animated.View>
+        ) : <>
         <View style={styles.livePill}>
           <View style={styles.liveDotWrap}>
             <Animated.View
@@ -703,18 +722,16 @@ function HeroCard({
             />
             <View style={styles.liveDot} />
           </View>
-          <Text style={styles.liveText}>Ready today in London</Text>
+          <Text style={styles.liveText}>Van hire in London</Text>
         </View>
 
-        <View style={styles.heroCopy}>
+        <View style={[styles.heroCopy, { width: width * 0.43 }]}>
           <Text style={[styles.title, compact && styles.titleCompact]}>
-            Book a Van{"\n"}
-            <Text style={styles.titleAccent}>in Minutes</Text>
+            {data.title}  
+            <Text style={styles.titleAccent}>{data.accent}</Text>
           </Text>
           <Text style={[styles.subtitle, compact && styles.subtitleCompact]}>
-            Reliable vans for moves,{"\n"}
-            deliveries and business trips{"\n"}— ready in{" "}
-            <Text style={styles.subtitleAccent}>under 60 minutes.</Text>
+            {data.description}
           </Text>
         </View>
 
@@ -743,7 +760,8 @@ function HeroCard({
             styles.vanStage,
             tiny && styles.vanStageTiny,
             {
-              opacity: vanOpacity,
+              width: width * 0.54,
+              right: 0,
               transform: [
                 { translateX: vanTranslate },
                 { translateY: vanLift },
@@ -757,11 +775,12 @@ function HeroCard({
             source={{ uri: data.uri }}
             style={[styles.vanImage, tiny && styles.vanImageTiny]}
             contentFit="contain"
-            transition={280}
+            transition={0}
             cachePolicy="memory-disk"
             accessibilityLabel={data.name}
           />
         </Animated.View>
+        </>}
       </View>
     </Animated.View>
   );
@@ -1004,52 +1023,6 @@ function HomeTopBar({
         style={styles.topBarOrangeGlow}
       />
 
-      <View pointerEvents="none" style={styles.topBarHighlight} />
-      <View pointerEvents="none" style={styles.topBarBottomShade} />
-
-      <View style={styles.brandBlock}>
-        <View style={styles.appIconOuter}>
-          <LinearGradient
-            colors={["#ffffff", "#fff8e8", "#ffc55a", "#f08a00"]}
-            locations={[0, 0.52, 0.82, 1]}
-            start={{ x: 0.1, y: 0 }}
-            end={{ x: 0.9, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-
-          <View style={styles.appIcon}>
-            <Image
-              source={{ uri: BRAND_LOGO_URI }}
-              style={styles.appIconImage}
-              contentFit="contain"
-              transition={250}
-              cachePolicy="memory-disk"
-              accessibilityLabel="Success Van Hire logo"
-            />
-          </View>
-        </View>
-
-        <View style={styles.brandCopy}>
-          <View style={styles.brandTitleRow}>
-            <Text style={styles.brandTitle} numberOfLines={1}>
-              Success Van Hire
-            </Text>
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark" size={8} color={DARK} />
-            </View>
-          </View>
-
-          <View style={styles.brandStatusRow}>
-            <View style={styles.brandStatusDot} />
-            <Text style={styles.brandMeta} numberOfLines={1}>
-              Fleet available in London
-            </Text>
-            <View style={styles.brandStatusDivider} />
-            <Text style={styles.brandLive}>Live</Text>
-          </View>
-        </View>
-      </View>
-
       <View style={styles.headerActions}>
         <HeaderButton
           icon="car-sport-outline"
@@ -1063,6 +1036,16 @@ function HomeTopBar({
           label="Open account"
           displayLabel="Account"
           onPress={onProfilePress}
+        />
+      </View>
+      <View pointerEvents="none" style={styles.centerBrand}>
+        <Image
+          source={{ uri: BRAND_LOGO_URI }}
+          style={styles.centerBrandImage}
+          contentFit="contain"
+          transition={250}
+          cachePolicy="memory-disk"
+          accessibilityLabel="Success Van Hire logo"
         />
       </View>
     </View>
@@ -1278,27 +1261,15 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   appIconOuter: {
-    width: 44,
-    height: 44,
+    width: 50,
+    height: 50,
     borderRadius: 13,
     padding: 1.2,
     overflow: "hidden",
-    ...Platform.select({
-      ios: {
-        shadowColor: ACCENT,
-        shadowOpacity: 0.22,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 3 },
-      },
-      android: { elevation: 4 },
-    }),
   },
   appIcon: {
     flex: 1,
-    borderRadius: 11.8,
     overflow: "hidden",
-    padding: 2.5,
-    backgroundColor: "#ffffff",
   },
   appIconImage: {
     width: "100%",
@@ -1371,8 +1342,23 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginLeft: 2,
+    justifyContent: "space-between",
+    width: "100%",
+    zIndex: 2,
+  },
+  centerBrand: {
+    position: "absolute",
+    left: 54,
+    right: 54,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  centerBrandImage: {
+    width: "100%",
+    maxWidth: 184,
+    height: 68,
   },
   headerActionItem: {
     width: 39,
@@ -1501,6 +1487,37 @@ const styles = StyleSheet.create({
     bottom: -90,
     width: 84,
   },
+  brandSlideContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  brandSlideEyebrow: {
+    color: "#ffbd62",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  brandSlideLogo: {
+    width: "100%",
+    maxWidth: 250,
+    height: 112,
+  },
+  brandSlideName: {
+    color: "#ffffff",
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  brandSlideDescription: {
+    color: "#e2e8f0",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   livePill: {
     position: "absolute",
     top: 12,
@@ -1546,17 +1563,17 @@ const styles = StyleSheet.create({
     position: "absolute",
     zIndex: 5,
     left: 14,
-    top: 54,
+    top: 50,
     width: 174,
   },
   title: {
     color: "#ffffff",
-    fontSize: 31,
-    lineHeight: 32,
+    fontSize: 25,
+    lineHeight: 28,
     fontWeight: "900",
-    letterSpacing: -0.8,
+    letterSpacing: 0,
   },
-  titleCompact: { fontSize: 28, lineHeight: 29 },
+  titleCompact: { fontSize: 23, lineHeight: 26 },
   titleRule: {
     width: 34,
     height: 3,
@@ -1576,12 +1593,12 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     color: "rgba(232,238,247,0.72)",
-    fontSize: 9.5,
-    lineHeight: 14.5,
+    fontSize: 10,
+    lineHeight: 14,
     fontWeight: "600",
     marginTop: 8,
   },
-  subtitleCompact: { fontSize: 9, lineHeight: 13.5 },
+  subtitleCompact: { fontSize: 9.5, lineHeight: 13.5 },
   titleAccent: { color: ACCENT },
   subtitleAccent: { color: ACCENT_SOFT, fontWeight: "800" },
   trustBadge: {
@@ -1639,7 +1656,7 @@ const styles = StyleSheet.create({
   vanShadow: {
     position: "absolute",
     width: "74%",
-     borderRadius: 60,
+    borderRadius: 60,
     right: 20,
     bottom: 12,
     backgroundColor: "rgba(0,0,0,0.38)",

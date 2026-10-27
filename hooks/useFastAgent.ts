@@ -1,4 +1,5 @@
 import { useToast } from "@/components/global/AppToast";
+import { safeFetch } from "@/services/apiClient";
 import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -30,11 +31,11 @@ export interface CategorySuggestion {
     | string;
   seats: number;
   doors: number;
-  pricingTiers: Array<{
+  pricingTiers: {
     minDays: number;
     maxDays: number;
     pricePerDay: number;
-  }>;
+  }[];
   extrahoursRate?: number;
   matchScore: number;
   matchReason: string;
@@ -58,11 +59,11 @@ export interface AddOnOption {
   };
   tieredPrice?: {
     isPerDay: boolean;
-    tiers: Array<{
+    tiers: {
       minDays: number;
       maxDays: number;
       price: number;
-    }>;
+    }[];
   };
 }
 
@@ -145,7 +146,7 @@ export function useFastAgent() {
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [messages, setMessages] = useState<
-    Array<{ role: "user" | "assistant"; content: string }>
+    { role: "user" | "assistant"; content: string }[]
   >([]);
   const [agentState, setAgentState] = useState<FastAgentState>({
     phase: "ask_needs",
@@ -185,11 +186,11 @@ export function useFastAgent() {
     try {
       const apiUrl =
         process.env.EXPO_PUBLIC_FAST_AGENT_API ||
-        "https://succesvan.vercel.app/api/fast-agent";
+        `${(process.env.EXPO_PUBLIC_API_BASE_URL || "").replace(/\/$/, "")}/fast-agent`;
       
       console.log("📍 Fetching offices from:", apiUrl);
       
-      const res = await fetch(apiUrl);
+      const res = await safeFetch(apiUrl);
       
       if (!res.ok) {
         console.warn("⚠️ Offices fetch failed:", res.status);
@@ -234,7 +235,7 @@ export function useFastAgent() {
         message: "Failed to start recording.",
       });
     }
-  }, []);
+  }, [showToast]);
 
   // Stop recording and get audio data
   const stopRecording = useCallback(async (): Promise<string | null> => {
@@ -326,12 +327,12 @@ export function useFastAgent() {
       try {
         const apiUrl =
           process.env.EXPO_PUBLIC_FAST_AGENT_API ||
-          "https://succesvan.vercel.app/api/fast-agent";
+          `${(process.env.EXPO_PUBLIC_API_BASE_URL || "").replace(/\/$/, "")}/fast-agent`;
 
         console.log("📤 Sending to API:", apiUrl);
         console.log("📝 Payload:", { message, action, hasAudio: !!audioBase64 });
 
-        const res = await fetch(apiUrl, {
+        const res = await safeFetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GlassView from "@/components/global/GlassView";
+import { BRAND_LOGO_URI } from "@/constants/branding";
 import * as Haptics from "expo-haptics";
 
 // Premium color palette
@@ -148,9 +149,7 @@ export default function Footer() {
               <View style={styles.logoWrapper}>
                 <View style={styles.logoGlow} />
                 <Image
-                  source={{
-                    uri: "https://svh-bucket-s3.s3.eu-west-2.amazonaws.com/images/newww.png",
-                  }}
+                  source={{ uri: BRAND_LOGO_URI }}
                   style={styles.logo}
                   resizeMode="contain"
                 />

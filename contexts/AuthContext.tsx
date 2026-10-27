@@ -52,6 +52,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.success) {
         setUser(result.data);
         await AsyncStorage.setItem("user", JSON.stringify(result.data));
+      } else if (storedToken) {
+        const storedUser = await AsyncStorage.getItem("user");
+        if (storedUser) setUser(JSON.parse(storedUser));
       }
     } catch (error) {
       console.log("Refresh user error:", error);

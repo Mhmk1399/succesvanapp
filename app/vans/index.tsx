@@ -29,6 +29,7 @@ import { Category } from "@/types/type";
 import { categoryService } from "@/services/categoryService";
 import BookingModal from "@/components/global/BookingModal";
 import type { Van } from "@/components/global/vanlist";
+import { PENDING_BOOKING_KEY, type PendingBookingDraft } from "@/utils/pendingBooking";
 
 const ACCENT = "#fe9a00";
 const ACCENT_LIGHT = "#ffc14f";
@@ -47,7 +48,7 @@ const SORT_LABELS: Record<SortMode, string> = {
 };
 
 export default function VansScreen() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const params = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -56,6 +57,9 @@ export default function VansScreen() {
   const [selectedVan, setSelectedVan] = useState<Van | null>(null);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
   const [bookingVan, setBookingVan] = useState<Van | null>(null);
+  const [resumeDraft, setResumeDraft] = useState<PendingBookingDraft | null>(null);
+  const resumeChecked = useRef(false);
+  const legacyChecked = useRef(false);
   const [vans, setVans] = useState<Van[]>([]);
   const [loading, setLoading] = useState(true);
   const flatListRef = useRef<FlatList<Van>>(null);
@@ -137,10 +141,16 @@ export default function VansScreen() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      checkPendingBooking();
+    if (!user || !token || loading) return;
+    if (params.resumeBooking === "1") {
+      if (resumeChecked.current) return;
+      resumeChecked.current = true;
+    } else {
+      if (legacyChecked.current) return;
+      legacyChecked.current = true;
     }
-  }, [user]);
+    checkPendingBooking();
+  }, [user, token, loading, params.resumeBooking]);
 
   useEffect(() => {
     if (params.selectedVanId && displayedVans.length > 0) {
@@ -165,6 +175,18 @@ export default function VansScreen() {
 
   const checkPendingBooking = async () => {
     try {
+      if (params.resumeBooking === "1") {
+        const saved = await AsyncStorage.getItem(PENDING_BOOKING_KEY);
+        if (saved) {
+          const draft = JSON.parse(saved) as PendingBookingDraft;
+          if (draft.version === 1 && draft.van?.id) {
+            setResumeDraft(draft);
+            setBookingVan(vans.find((van) => van.id === draft.van.id) || draft.van);
+            setBookingModalVisible(true);
+            return;
+          }
+        }
+      }
       const pendingVan = await AsyncStorage.getItem("pendingBookingVan");
 
       if (pendingVan) {
@@ -255,10 +277,9 @@ export default function VansScreen() {
   };
 
   const handleBookVan = (van: Van) => {
-    if (user) {
-      setBookingVan(van);
-      setBookingModalVisible(true);
-    }
+    setResumeDraft(null);
+    setBookingVan(van);
+    setBookingModalVisible(true);
   };
 
   const handleBack = () => {
@@ -373,11 +394,20 @@ export default function VansScreen() {
       />
 
       <BookingModal
+        key={`${bookingVan?.id ?? "none"}-${resumeDraft ? "resume" : "new"}`}
         visible={bookingModalVisible}
         van={bookingVan}
-        onClose={() => setBookingModalVisible(false)}
+        onClose={() => {
+          setBookingModalVisible(false);
+          if (resumeDraft) {
+            resumeChecked.current = false;
+            router.setParams({ resumeBooking: undefined });
+          }
+          setResumeDraft(null);
+        }}
+        resumeDraft={resumeDraft}
         prefilledData={
-          params.office && params.pickupDate
+          resumeDraft?.prefilledData ?? (params.office && params.pickupDate
             ? {
                 office: params.office as string,
                 category: params.category as string,
@@ -387,7 +417,7 @@ export default function VansScreen() {
                 returnTime: params.returnTime as string,
                 driverAge: params.driverAge as string,
               }
-            : undefined
+            : undefined)
         }
       />
     </View>
@@ -827,14 +857,12 @@ function SpecChip({ icon, text }: SpecChipProps) {
 }
 
 function getVanPriceNumber(van: Van) {
-  const offer = Number(van.selloffer || 0);
   const regular = Number(van.showPrice || 0);
-  const value = offer > 0 ? offer : regular;
-  return Number.isFinite(value) ? value : 0;
+  return Number.isFinite(regular) ? regular : 0;
 }
 
 function getVanPrice(van: Van) {
-  return Math.round(getVanPriceNumber(van)).toString();
+  return getVanPriceNumber(van).toFixed(2);
 }
 
 function normalizeText(value: unknown) {

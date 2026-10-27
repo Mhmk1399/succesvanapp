@@ -4,8 +4,10 @@ import BookingCalendarChrome, {
 } from "@/components/global/BookingCalendarChrome";
 import { addonService } from "@/services/addonService";
 import { reservationService } from "@/services/reservationService";
+import { safeFetch } from "@/services/apiClient";
 import type { AddOn, Office, Reservation } from "@/types/type";
 import { getAddonImageUri } from "@/utils/addonImage";
+import { getReservationServiceCharge } from "@/utils/reservationPriceBreakdown";
 import {
   type AddOnSelection,
   calculateBookingPrice,
@@ -30,6 +32,7 @@ import {
   syncServerClock,
 } from "@/utils/londonTime";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -121,9 +124,7 @@ const buildLocalDateTime = (date: Date | null, time: string) => {
   if (!date || !time) return null;
   const [hour, minute] = time.split(":").map(Number);
   if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-  const next = new Date(date);
-  next.setHours(hour, minute, 0, 0);
-  return next;
+  return new Date(createLondonDateTime(date, time));
 };
 
 const extractAddonData = (result: any): AddOn[] => {
@@ -304,6 +305,7 @@ export default function PendingReservationEditSheet({
             ? category.gear.automaticExtraCost || 0
             : 0,
         addOnsPrice,
+        serviceCharge: reservation ? getReservationServiceCharge(reservation) : undefined,
         sellOffer: category?.selloffer || 0,
       }),
     [
@@ -318,6 +320,7 @@ export default function PendingReservationEditSheet({
       extensionPrices.returnExtension,
       localEndDate,
       localStartDate,
+      reservation?.serviceCharge,
       selectedGear,
     ],
   );
@@ -459,10 +462,12 @@ export default function PendingReservationEditSheet({
           return;
         }
 
-        const response = await fetch(
+        const token = await AsyncStorage.getItem("authToken");
+        const response = await safeFetch(
           `${baseUrl}?office=${office._id}&${
             type === "start" ? "startDate" : "endDate"
-          }=${dateStr}&type=${type}`,
+          }=${dateStr}&type=${type}${reservation?._id ? `&excludeReservation=${reservation._id}` : ""}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
         );
         const data = await response.json();
         const slots = Array.isArray(data?.data?.reservedSlots)
@@ -483,7 +488,7 @@ export default function PendingReservationEditSheet({
     };
 
     fetchReservedSlots();
-  }, [office?._id, pickupDate, returnDate, timeModalField, timeModalVisible]);
+  }, [office?._id, pickupDate, returnDate, reservation?._id, timeModalField, timeModalVisible]);
 
   useEffect(() => {
     Animated.sequence([
@@ -552,7 +557,8 @@ export default function PendingReservationEditSheet({
   };
 
   const handleDateSelect = (dateString: string) => {
-    const date = new Date(dateString);
+    const [year, month, day] = dateString.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
     if (office && isDateDisabled(date, office)) {
       Alert.alert("Office closed", "The selected date is not available.");
       return;
@@ -917,7 +923,7 @@ export default function PendingReservationEditSheet({
                     isSelected && styles.extensionTextSelected,
                   ]}
                 >
-                  +GBP {extensionPrice}
+                  +GBP {extensionPrice.toFixed(2)}
                 </Text>
               ) : null}
             </Pressable>
@@ -1146,7 +1152,7 @@ export default function PendingReservationEditSheet({
                             Another option of this type is selected
                           </Text>
                         ) : null}
-                        <Text style={styles.addonPrice}>GBP {price.toFixed(0)}</Text>
+                        <Text style={styles.addonPrice}>GBP {price.toFixed(2)}</Text>
                       </Pressable>
                     );
                   })}
@@ -1166,6 +1172,26 @@ export default function PendingReservationEditSheet({
                 />
               </View>
 
+              {bookingPrice && (
+                <View style={styles.breakdown}>
+                  <Text style={styles.sectionTitle}>Price breakdown</Text>
+                  {[
+                    { label: "Van hire", value: bookingPrice.daysPrice },
+                    ...(bookingPrice.extraHoursPrice > 0 ? [{ label: "Extra hours", value: bookingPrice.extraHoursPrice }] : []),
+                    ...(bookingPrice.gearExtraPrice > 0 ? [{ label: "Automatic gearbox", value: bookingPrice.gearExtraPrice }] : []),
+                    ...addonLineItems.map((item) => ({ label: item.name, value: item.price })),
+                    ...(bookingPrice.pickupExtensionPrice > 0 ? [{ label: "Pickup extension", value: bookingPrice.pickupExtensionPrice }] : []),
+                    ...(bookingPrice.returnExtensionPrice > 0 ? [{ label: "Return extension", value: bookingPrice.returnExtensionPrice }] : []),
+                    { label: "Service charge", value: bookingPrice.serviceCharge },
+                  ].map((item, index) => (
+                    <View key={`${item.label}-${index}`} style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>{item.label}</Text>
+                      <Text style={styles.breakdownValue}>GBP {item.value.toFixed(2)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               <View style={styles.pricePanel}>
                 <View>
                   <Text style={styles.priceLabel}>Updated total</Text>
@@ -1176,7 +1202,7 @@ export default function PendingReservationEditSheet({
                   </Text>
                 </View>
                 <Text style={styles.priceValue}>
-                  GBP {(bookingPrice?.totalPrice || reservation?.totalPrice || 0).toFixed(0)}
+                  GBP {(bookingPrice?.totalPrice ?? reservation?.totalPrice ?? 0).toFixed(2)}
                 </Text>
               </View>
 
@@ -1703,6 +1729,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(34,197,94,0.24)",
   },
+  breakdown: { paddingHorizontal: 2, marginBottom: 10 },
+  breakdownRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, paddingVertical: 4 },
+  breakdownLabel: { flex: 1, color: "#cbd5e1", fontSize: 12 },
+  breakdownValue: { color: "#f8fafc", fontSize: 12, fontWeight: "700" },
   priceLabel: {
     color: "#bbf7d0",
     fontSize: 11,
