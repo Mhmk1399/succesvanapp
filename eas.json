@@ -7,6 +7,7 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "environment": "development",
       "android": {
         "buildType": "apk"
       },
@@ -17,14 +18,15 @@
     },
     "preview": {
       "distribution": "internal",
+      "environment": "preview",
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+        "buildType": "apk"
       },
       "channel": "preview"
     },
     "production": {
       "distribution": "store",
+      "environment": "production",
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
