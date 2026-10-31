@@ -47,6 +47,11 @@ export function isProblemStatus(status: ReservationStatus) {
   return (RESERVATION_PROBLEM_STATUSES as readonly string[]).includes(status);
 }
 
+export function isActiveReservationStatus(value: unknown) {
+  const status = normalizeReservationStatus(value);
+  return Boolean(status && status !== "completed" && !isProblemStatus(status));
+}
+
 export const PUBLIC_JOURNEY_STEPS = [
   "submitted",
   "confirmed",

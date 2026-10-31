@@ -29,7 +29,9 @@ import {
 
 const ACCENT = "#fe9a00";
 
-export default function UserProfileCard() {
+type ProfileProps = { onLicenceLayout?: (y: number) => void; onAddLicence?: () => void };
+
+export default function UserProfileCard(props: ProfileProps) {
   const { user } = useAuth();
 
   if (!user) {
@@ -40,10 +42,10 @@ export default function UserProfileCard() {
     );
   }
 
-  return <ImageViewerProvider><LoadedUserProfileCard user={user} /></ImageViewerProvider>;
+  return <ImageViewerProvider><LoadedUserProfileCard user={user} {...props} /></ImageViewerProvider>;
 }
 
-function LoadedUserProfileCard({ user }: { user: User }) {
+function LoadedUserProfileCard({ user, onLicenceLayout, onAddLicence }: { user: User } & ProfileProps) {
   const { refreshUser } = useAuth();
   const { showToast } = useToast();
   const { openDocument } = useImageViewer();
@@ -773,7 +775,7 @@ function LoadedUserProfileCard({ user }: { user: User }) {
       </View>
 
       {isEditing ? (
-        <View style={[styles.sectionCard, styles.licenseSectionCard]}>
+        <View testID="profile-licence-section" style={[styles.sectionCard, styles.licenseSectionCard]} onLayout={(event) => onLicenceLayout?.(event.nativeEvent.layout.y)}>
           <View style={styles.sectionHeader}>
             <Ionicons name="card-outline" size={15} color={ACCENT} />
             <Text style={styles.sectionTitle}>Licence Documents</Text>
@@ -937,29 +939,33 @@ function LoadedUserProfileCard({ user }: { user: User }) {
           )}
         </View>
       ) : (
-        (user?.licenceAttached?.front || user?.licenceAttached?.back) && (
-          <View style={[styles.sectionCard, styles.licenseSectionCard]}>
+          <View testID="profile-licence-section" style={[styles.sectionCard, styles.licenseSectionCard]} onLayout={(event) => onLicenceLayout?.(event.nativeEvent.layout.y)}>
             <View style={styles.sectionHeader}>
               <Ionicons name="card-outline" size={15} color={ACCENT} />
               <Text style={styles.sectionTitle}>Licence Documents</Text>
               <View style={styles.sectionHeaderLine} />
             </View>
             <View style={styles.licenseGrid}>
-              {user.licenceAttached.front && (
+              {user.licenceAttached?.front && (
                 <Pressable accessibilityRole="button" accessibilityLabel="View front licence" onPress={() => openDocument({ uri: user.licenceAttached!.front!, title: "Driving licence - front" })} style={styles.licenseViewItem}>
                   <Ionicons name="checkmark-circle" size={17} color="#32d47c" />
                   <Text style={styles.licenseViewText}>View front</Text>
                 </Pressable>
               )}
-              {user.licenceAttached.back && (
+              {user.licenceAttached?.back && (
                 <Pressable accessibilityRole="button" accessibilityLabel="View back licence" onPress={() => openDocument({ uri: user.licenceAttached!.back!, title: "Driving licence - back" })} style={styles.licenseViewItem}>
                   <Ionicons name="checkmark-circle" size={17} color="#32d47c" />
                   <Text style={styles.licenseViewText}>View back</Text>
                 </Pressable>
               )}
+              {!user.licenceAttached?.front || !user.licenceAttached?.back ? (
+                <Pressable accessibilityRole="button" onPress={onAddLicence} style={styles.licenseViewItem}>
+                  <Ionicons name="cloud-upload-outline" size={17} color={ACCENT} />
+                  <Text style={styles.licenseViewText}>Upload licence</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
-        )
       )}
       <Modal visible={Boolean(licenceReview)} transparent animationType="fade" onRequestClose={() => setLicenceReview(null)}>
         <ImageViewerProvider>

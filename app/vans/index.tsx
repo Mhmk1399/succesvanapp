@@ -28,6 +28,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Category } from "@/types/type";
 import { categoryService } from "@/services/categoryService";
 import BookingModal from "@/components/global/BookingModal";
+import HeaderBackButton from "@/components/global/HeaderBackButton";
 import type { Van } from "@/components/global/vanlist";
 import { PENDING_BOOKING_KEY, type PendingBookingDraft } from "@/utils/pendingBooking";
 
@@ -80,7 +81,7 @@ export default function VansScreen() {
     },
   ).current;
 
-  const contentWidth = Math.min(width - 28, 390);
+  const contentWidth = Math.min(width - 32, 390);
   const compact = width < 370;
 
   // Keep the original safety guard exactly as before.
@@ -327,7 +328,7 @@ export default function VansScreen() {
           styles.listContent,
           {
             width: contentWidth,
-            paddingTop: Math.max(insets.top, 18) + 12,
+            paddingTop: Math.max(insets.top, 18) + 6,
             paddingBottom: Math.max(insets.bottom, 18) + 122,
           },
         ]}
@@ -474,18 +475,7 @@ function FleetHeader({
   return (
     <View style={styles.headerSection}>
       <View style={styles.titleRow}>
-        <Pressable
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          style={({ pressed }) => [
-            styles.roundHeaderButton,
-            pressed && styles.headerButtonPressed,
-          ]}
-        >
-          <Ionicons name="arrow-back" size={18} color="#f8fafc" />
-        </Pressable>
+        <HeaderBackButton onPress={onBack} />
 
         <View style={styles.titleBlock}>
           <Text style={styles.pageTitle}>Choose Your Van</Text>
@@ -1535,17 +1525,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-  },
-  roundHeaderButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(11,24,38,0.88)",
-    borderWidth: 1,
-    borderColor: "rgba(119,151,184,0.18)",
-    overflow: "hidden",
   },
   headerButtonPressed: {
     opacity: 0.72,

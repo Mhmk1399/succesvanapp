@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -103,9 +104,11 @@ export default function ContractsContent({
 
           if (updated.status === "completed") {
             showToast({
-              type: "success",
+              type: updated.files?.signed ? "success" : "info",
               title: "Agreement signed",
-              message: "Your agreement is now marked as signed.",
+              message: updated.files?.signed
+                ? "Your signed agreement is ready."
+                : "Your signed PDF is still being prepared. Use Retry documents shortly.",
             });
             return;
           }
@@ -179,6 +182,13 @@ export default function ContractsContent({
       setContracts((prev) =>
         prev.map((item) => (item._id === updated._id ? updated : item)),
       );
+      if (updated.status === "completed") {
+        showToast({
+          type: updated.files?.signed ? "success" : "info",
+          title: updated.files?.signed ? "Signed agreement ready" : "Documents not ready",
+          message: updated.files?.signed ? "You can now download your signed agreement." : "Please try again shortly or contact support.",
+        });
+      }
     } catch (error) {
       showToast({
         type: "error",
@@ -197,17 +207,12 @@ export default function ContractsContent({
   ) => {
     setDownloadBusy({ contractId: contract._id, kind });
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
       await customerJourneyService.downloadContractDocument(contract, kind);
       showToast({
-        type: "success",
-        title: "Agreement downloaded",
-        message:
-          kind === "source"
-            ? "The unsigned agreement is ready."
-            : kind === "certificate"
-              ? "The completion certificate is ready."
-              : "The signed agreement is ready.",
+        type: Platform.OS === "web" ? "success" : "info",
+        title: "Agreement ready",
+        message: Platform.OS === "web" ? "Your PDF download has started." : "Use the share menu to open or save the PDF.",
       });
     } catch (error) {
       showToast({
@@ -348,14 +353,14 @@ export default function ContractsContent({
                       )}
                     </Pressable>
                   )}
-                  {contract.docusign?.envelopeId && !completed && (
+                  {contract.docusign?.envelopeId && (!completed || !contract.files?.signed || !contract.files?.certificate) && (
                     <Pressable
                       disabled={busy}
                       onPress={() => refreshStatus(contract)}
                       style={[styles.secondaryAction, busy && styles.disabled]}
                     >
                       <Ionicons name="refresh-outline" size={15} color="#f8fafc" />
-                      <Text style={styles.secondaryActionText}>Check status</Text>
+                      <Text style={styles.secondaryActionText}>{completed ? "Retry documents" : "Check status"}</Text>
                     </Pressable>
                   )}
                   {checking && (
@@ -366,9 +371,9 @@ export default function ContractsContent({
                       </Text>
                     </View>
                   )}
-                  {contract.files.source && (
+                  {contract.files?.source && (
                     <Pressable
-                      disabled={isDownloading("source")}
+                      disabled={Boolean(downloadBusy)}
                       onPress={() => downloadDocument(contract, "source")}
                       style={[
                         styles.secondaryAction,
@@ -381,13 +386,13 @@ export default function ContractsContent({
                         <Ionicons name="document-outline" size={15} color={ACCENT} />
                       )}
                       <Text style={[styles.secondaryActionText, { color: ACCENT }]}>
-                        Unsigned
+                        Download unsigned
                       </Text>
                     </Pressable>
                   )}
-                  {completed && contract.files.signed && (
+                  {contract.files?.signed && (
                     <Pressable
-                      disabled={isDownloading("signed")}
+                      disabled={Boolean(downloadBusy)}
                       onPress={() => downloadDocument(contract, "signed")}
                       style={[
                         styles.signedAction,
@@ -403,12 +408,12 @@ export default function ContractsContent({
                           color="#34d399"
                         />
                       )}
-                      <Text style={styles.signedActionText}>Signed</Text>
+                      <Text style={styles.signedActionText}>Download signed</Text>
                     </Pressable>
                   )}
-                  {completed && contract.files.certificate && (
+                  {contract.files?.certificate && (
                     <Pressable
-                      disabled={isDownloading("certificate")}
+                      disabled={Boolean(downloadBusy)}
                       onPress={() => downloadDocument(contract, "certificate")}
                       style={[
                         styles.secondaryAction,
@@ -420,10 +425,13 @@ export default function ContractsContent({
                       ) : (
                         <Ionicons name="ribbon-outline" size={15} color="#f8fafc" />
                       )}
-                      <Text style={styles.secondaryActionText}>Certificate</Text>
+                      <Text style={styles.secondaryActionText}>Download certificate</Text>
                     </Pressable>
                   )}
                 </View>
+                {completed && !contract.files?.signed && (
+                  <Text style={styles.documentNote}>Your signature is complete. The signed PDF is not available yet; retry documents or contact support.</Text>
+                )}
               </View>
             );
           })}
@@ -485,6 +493,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 10,
   },
+  documentNote: { color: "#cbd5e1", fontSize: 11, lineHeight: 16, marginTop: 10 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   primaryAction: {
     minHeight: 38,

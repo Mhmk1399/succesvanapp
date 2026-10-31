@@ -17,52 +17,14 @@ import GlassView from "@/components/global/GlassView";
 import * as Haptics from "expo-haptics";
 
 const ACCENT = "#fe9a00";
-const DARK = "#07111f";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function FloatingContactButton() {
   const dockTranslateY = useRef(new Animated.Value(0)).current;
   const lastDockOffsetY = useRef(0);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const gleamAnim = useRef(new Animated.Value(0)).current;
   const [modalVisible, setModalVisible] = useState(false);
   const modalScale = useRef(new Animated.Value(0)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.04,
-          duration: 2200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2200,
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, []);
-
-  React.useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(gleamAnim, {
-          toValue: 1,
-          duration: 1800,
-          useNativeDriver: true,
-        }),
-        Animated.delay(2200),
-        Animated.timing(gleamAnim, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, [gleamAnim]);
 
   const openModal = () => {
     setModalVisible(true);
@@ -120,12 +82,7 @@ export default function FloatingContactButton() {
           -170,
           Math.min(88, lastDockOffsetY.current + gestureState.dy),
         );
-        Animated.spring(dockTranslateY, {
-          toValue: lastDockOffsetY.current,
-          useNativeDriver: true,
-          tension: 70,
-          friction: 10,
-        }).start();
+        dockTranslateY.setValue(lastDockOffsetY.current);
       },
     }),
   ).current;
@@ -140,11 +97,6 @@ export default function FloatingContactButton() {
     closeModal();
   };
 
-  const gleamTranslate = gleamAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-38, 74],
-  });
-
   return (
     <>
       <View style={styles.container} pointerEvents="box-none">
@@ -152,7 +104,7 @@ export default function FloatingContactButton() {
           style={[
             styles.floatingButton,
             {
-              transform: [{ translateY: dockTranslateY }, { scale: pulseAnim }],
+              transform: [{ translateY: dockTranslateY }],
             },
           ]}
           {...panResponder.panHandlers}
@@ -171,13 +123,6 @@ export default function FloatingContactButton() {
               end={{ x: 1, y: 1 }}
               style={styles.supportDockGradient}
             >
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.supportGleam,
-                  { transform: [{ translateX: gleamTranslate }, { rotate: "18deg" }] },
-                ]}
-              />
               <View pointerEvents="none" style={styles.supportGlow} />
               <View style={styles.onlineDot} />
 
@@ -468,7 +413,6 @@ const styles = StyleSheet.create({
   },
   supportDockPressed: {
     opacity: 0.82,
-    transform: [{ scale: 0.965 }],
   },
   supportDockGradient: {
     width: 46,
@@ -489,13 +433,6 @@ const styles = StyleSheet.create({
     left: -23,
     top: -10,
     backgroundColor: "rgba(254,154,0,0.2)",
-  },
-  supportGleam: {
-    position: "absolute",
-    width: 16,
-    top: -12,
-    bottom: -12,
-    backgroundColor: "rgba(255,255,255,0.2)",
   },
   onlineDot: {
     position: "absolute",

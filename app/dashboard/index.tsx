@@ -6,6 +6,7 @@ import LicenseUploadModal from "@/components/dashboard/LicenseUploadModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { reservationService } from "@/services/reservationService";
 import { Reservation } from "@/types/type";
+import { isActiveReservationStatus } from "@/constants/reservationStatus";
 import { registerBackgroundTask } from "@/utils/backgroundTask";
 import {
   checkStatusChanges,
@@ -18,6 +19,7 @@ import HeaderBackButton from "@/components/global/HeaderBackButton";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -55,6 +57,11 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("reservations");
+  const [reservationFilter, setReservationFilter] = useState<"all" | "active">("all");
+  const profileScrollRef = useRef<ScrollView>(null);
+  const [profileCardY, setProfileCardY] = useState<number | null>(null);
+  const [licenceY, setLicenceY] = useState<number | null>(null);
+  const [scrollToLicence, setScrollToLicence] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [licenseModalVisible, setLicenseModalVisible] = useState(false);
   const router = useRouter();
@@ -116,11 +123,35 @@ export default function ProfileScreen() {
     setTabsRowWidth(width);
   };
 
-  const handleTabChange = async (tab: TabKey) => {
-    await Haptics.selectionAsync();
+  const handleTabChange = (tab: TabKey) => {
+    void Haptics.selectionAsync().catch(() => undefined);
     scrollY.setValue(0);
+    if (tab !== "profile") setScrollToLicence(false);
     setActiveTab(tab);
   };
+
+  const openReservations = (filter: "all" | "active") => {
+    setReservationFilter(filter);
+    void handleTabChange("reservations");
+  };
+
+  const openLicence = () => {
+    if (activeTab !== "profile") {
+      setProfileCardY(null);
+      setLicenceY(null);
+    }
+    setScrollToLicence(true);
+    void handleTabChange("profile");
+  };
+
+  useEffect(() => {
+    if (!scrollToLicence || activeTab !== "profile" || profileCardY === null || licenceY === null) return;
+    const frame = requestAnimationFrame(() => {
+      profileScrollRef.current?.scrollTo({ y: Math.max(0, profileCardY + licenceY - 105), animated: true });
+      setScrollToLicence(false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab, licenceY, profileCardY, scrollToLicence]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -137,24 +168,8 @@ export default function ProfileScreen() {
 
   const hasLicense =
     user?.licenceAttached?.front && user?.licenceAttached?.back;
-  const activeReservations = reservations.filter((reservation) =>
-    [
-      "pending",
-      "confirmed",
-      "deposit_pending",
-      "deposit_paid",
-      "contract_pending",
-      "contract_signed",
-      "ready_for_collection",
-      "handover_in_progress",
-      "delivered",
-      "vehicle_returned",
-      "return_inspection",
-      "deposit_review",
-      "refund_processing",
-      "refund_completed",
-    ].includes(String(reservation.status)),
-  ).length;
+  const activeReservationList = reservations.filter((reservation) => isActiveReservationStatus(reservation.status));
+  const activeReservations = activeReservationList.length;
 
   const floatingHeaderOpacity = scrollY.interpolate({
     inputRange: [36, 96],
@@ -194,6 +209,10 @@ export default function ProfileScreen() {
         total={reservations.length}
         active={activeReservations}
         hasLicense={!!hasLicense}
+        selectedFilter={activeTab === "reservations" ? reservationFilter : null}
+        onBookings={() => openReservations("all")}
+        onActive={() => openReservations("active")}
+        onLicence={openLicence}
       />
 
       <View
@@ -231,6 +250,7 @@ export default function ProfileScreen() {
         </Animated.View>
 
         <Pressable
+          testID="dashboard-tab-reservations"
           onPress={() => handleTabChange("reservations")}
           style={({ pressed }) => [
             styles.tabButton,
@@ -245,6 +265,9 @@ export default function ProfileScreen() {
             color={activeTab === "reservations" ? "#101827" : "#9aa5b6"}
           />
           <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
             style={[
               styles.tabText,
               activeTab === "reservations" && styles.tabTextActive,
@@ -255,6 +278,7 @@ export default function ProfileScreen() {
         </Pressable>
 
         <Pressable
+          testID="dashboard-tab-contracts"
           onPress={() => handleTabChange("contracts")}
           style={({ pressed }) => [
             styles.tabButton,
@@ -271,6 +295,9 @@ export default function ProfileScreen() {
             color={activeTab === "contracts" ? "#101827" : "#9aa5b6"}
           />
           <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
             style={[
               styles.tabText,
               activeTab === "contracts" && styles.tabTextActive,
@@ -281,6 +308,7 @@ export default function ProfileScreen() {
         </Pressable>
 
         <Pressable
+          testID="dashboard-tab-profile"
           onPress={() => handleTabChange("profile")}
           style={({ pressed }) => [
             styles.tabButton,
@@ -293,6 +321,9 @@ export default function ProfileScreen() {
             color={activeTab === "profile" ? "#101827" : "#9aa5b6"}
           />
           <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
             style={[
               styles.tabText,
               activeTab === "profile" && styles.tabTextActive,
@@ -328,6 +359,7 @@ export default function ProfileScreen() {
 
         {activeTab === "profile" ? (
           <ScrollView
+            ref={profileScrollRef}
             style={styles.tabContent}
             contentContainerStyle={styles.profileScrollContent}
             showsVerticalScrollIndicator={false}
@@ -335,8 +367,8 @@ export default function ProfileScreen() {
             scrollEventThrottle={16}
           >
             {dashboardChrome}
-            <View style={styles.profileCardWrap}>
-              <UserProfileCard />
+            <View style={styles.profileCardWrap} onLayout={(event) => setProfileCardY(event.nativeEvent.layout.y)}>
+              <UserProfileCard onLicenceLayout={setLicenceY} onAddLicence={() => setLicenseModalVisible(true)} />
             </View>
           </ScrollView>
         ) : activeTab === "contracts" ? (
@@ -351,7 +383,8 @@ export default function ProfileScreen() {
         ) : (
           <View style={styles.tabContent}>
             <UserReservations
-              reservations={reservations}
+              reservations={reservationFilter === "active" ? activeReservationList : reservations}
+              filterMode={reservationFilter}
               isLoading={isLoading}
               onRefresh={handleRefresh}
               isRefreshing={isRefreshing}
@@ -465,6 +498,7 @@ function DashboardFloatingHeader({
   onBack: () => void;
   onLogout: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   return (
     <Animated.View
       pointerEvents="box-none"
@@ -474,15 +508,9 @@ function DashboardFloatingHeader({
         pointerEvents="box-none"
         intensity={92}
         tint="dark"
-        style={styles.floatingHeaderBlur}
+        style={[styles.floatingHeaderBlur, { paddingTop: Math.max(insets.top, 18) + 12 }]}
       >
-        <HeaderBackButton
-          onPress={onBack}
-          style={({ pressed }) => [
-            styles.floatingIconButton,
-            pressed && styles.floatingIconButtonPressed,
-          ]}
-        />
+        <HeaderBackButton onPress={onBack} />
 
         <Text style={styles.floatingHeaderTitle}>Dashboard</Text>
 
@@ -517,14 +545,15 @@ function DashboardHeader({
   onBack: () => void;
   onLogout: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const initial = name.trim().charAt(0).toUpperCase() || "S";
   const avatarUri =
     typeof avatar === "string" && avatar.trim() ? avatar.trim() : null;
 
   return (
-    <View style={styles.headerWrap}>
+    <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, 18) + 12 }]}>
       <View style={styles.headerTop}>
-        <HeaderBackButton onPress={onBack} style={styles.headerIconButton} />
+        <HeaderBackButton onPress={onBack} />
         <Text style={styles.headerCenterText}>Dashboard</Text>
         <Pressable
           onPress={onLogout}
@@ -597,10 +626,18 @@ function DashboardSummary({
   total,
   active,
   hasLicense,
+  selectedFilter,
+  onBookings,
+  onActive,
+  onLicence,
 }: {
   total: number;
   active: number;
   hasLicense: boolean;
+  selectedFilter: "all" | "active" | null;
+  onBookings: () => void;
+  onActive: () => void;
+  onLicence: () => void;
 }) {
   return (
     <View style={styles.summaryRow}>
@@ -608,13 +645,16 @@ function DashboardSummary({
         icon="calendar-outline"
         label="Bookings"
         value={String(total)}
+        onPress={onBookings}
+        selected={selectedFilter === "all"}
       />
-      <SummaryTile icon="flash-outline" label="Active" value={String(active)} />
+      <SummaryTile icon="flash-outline" label="Active" value={String(active)} onPress={onActive} selected={selectedFilter === "active"} />
       <SummaryTile
         icon={hasLicense ? "checkmark-circle-outline" : "card-outline"}
         label="Licence"
         value={hasLicense ? "Ready" : "Needed"}
         warning={!hasLicense}
+        onPress={onLicence}
       />
     </View>
   );
@@ -625,14 +665,18 @@ function SummaryTile({
   label,
   value,
   warning,
+  onPress,
+  selected,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
   warning?: boolean;
+  onPress: () => void;
+  selected?: boolean;
 }) {
   return (
-    <View style={styles.summaryTile}>
+    <Pressable testID={`summary-${label.toLowerCase()}`} accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.summaryTile, selected && styles.summaryTileSelected, pressed && styles.summaryTilePressed]}>
       <LinearGradient
         colors={["rgba(22,32,54,0.98)", "rgba(12,20,36,0.98)"]}
         start={{ x: 0, y: 0 }}
@@ -650,7 +694,7 @@ function SummaryTile({
         {label}
       </Text>
       {warning && <View style={styles.summaryWarningDot} />}
-    </View>
+    </Pressable>
   );
 }
 
@@ -742,9 +786,7 @@ const styles = StyleSheet.create({
     zIndex: 30,
   },
   floatingHeaderBlur: {
-    minHeight: 91,
-    paddingTop: 47,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
@@ -782,7 +824,6 @@ const styles = StyleSheet.create({
 
   headerWrap: {
     paddingHorizontal: 16,
-    paddingTop: 48,
     paddingBottom: 9,
   },
   headerTop: {
@@ -930,6 +971,7 @@ const styles = StyleSheet.create({
   },
   summaryTile: {
     flex: 1,
+    minWidth: 0,
     minHeight: 91,
     borderRadius: 14,
     overflow: "hidden",
@@ -938,6 +980,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(114,143,182,0.12)",
   },
+  summaryTileSelected: { borderColor: "rgba(254,154,0,0.55)" },
+  summaryTilePressed: { opacity: 0.8 },
   summaryTileEdge: {
     position: "absolute",
     left: 10,
@@ -1022,18 +1066,21 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 7,
+    gap: 3,
     minHeight: 34,
     borderRadius: 18,
     zIndex: 1,
   },
   tabButtonPressed: { opacity: 0.76 },
   tabText: {
+    flexShrink: 1,
+    minWidth: 0,
     color: "#a6afbd",
-    fontSize: 11.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   tabTextActive: { color: "#111827" },

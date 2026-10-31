@@ -56,6 +56,7 @@ type UserReservationsProps = {
   isRefreshing?: boolean;
   ListHeaderComponent?: React.ReactElement | null;
   onScroll?: (event: any) => void;
+  filterMode?: "all" | "active";
 };
 
 type WorkingTime = {
@@ -166,6 +167,7 @@ export default function UserReservations({
   isRefreshing = false,
   ListHeaderComponent,
   onScroll,
+  filterMode = "all",
 }: UserReservationsProps) {
   const { showToast } = useToast();
   const [selectedReservation, setSelectedReservation] =
@@ -672,6 +674,7 @@ export default function UserReservations({
 
     return (
       <Pressable
+        testID="reservation-card"
         onPress={openDetails}
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       >
@@ -686,9 +689,6 @@ export default function UserReservations({
           style={StyleSheet.absoluteFill}
         />
 
-        <View pointerEvents="none" style={styles.cardTopGlow} />
-        <View pointerEvents="none" style={styles.cardEdgeHighlight} />
-
         <View style={styles.cardTopRow}>
           <View style={styles.vehicleImageWrap}>
             <LinearGradient
@@ -701,13 +701,11 @@ export default function UserReservations({
               style={StyleSheet.absoluteFill}
             />
 
-            <View pointerEvents="none" style={styles.vehicleImageGlow} />
-
             {vehicleImageUri ? (
               <Image
                 source={{ uri: vehicleImageUri }}
                 style={styles.vehicleImage}
-                contentFit="cover"
+                contentFit="contain"
                 transition={220}
               />
             ) : (
@@ -909,12 +907,9 @@ export default function UserReservations({
         {ListHeaderComponent}
         <View style={styles.emptyState}>
           <EmptyReservationArtwork />
-          <Text style={styles.emptyTitle}>No reservations yet</Text>
+          <Text style={styles.emptyTitle}>{filterMode === "active" ? "No active bookings" : "No reservations yet"}</Text>
           <Text style={styles.emptySubtitle}>
-            When you book a van, your
-            {`
-`}
-            reservations will appear here.
+            {filterMode === "active" ? "Your ongoing bookings will appear here." : "When you book a van, your reservations will appear here."}
           </Text>
         </View>
       </ScrollView>
@@ -1817,15 +1812,15 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingBottom: 7,
     marginBottom: 14,
-    borderRadius: 18,
+    borderRadius: 8,
     backgroundColor: "#08111f",
     borderWidth: 1,
-    borderColor: "rgba(254,154,0,0.5)",
+    borderColor: "rgba(148,163,184,0.18)",
     shadowColor: ACCENT,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.17,
-    shadowRadius: 18,
-    elevation: 7,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
   cardPressed: {
@@ -1854,16 +1849,16 @@ const styles = StyleSheet.create({
 
   cardTopRow: {
     flexDirection: "row",
-    alignItems: "stretch",
-    minHeight: 91,
+    alignItems: "center",
   },
 
   vehicleImageWrap: {
     position: "relative",
-    width: 94,
-    minHeight: 91,
+    width: 96,
+    height: 90,
+    flexShrink: 0,
     overflow: "hidden",
-    borderRadius: 14,
+    borderRadius: 8,
     marginRight: 12,
     backgroundColor: "#0b1626",
     borderWidth: 1,
@@ -1883,7 +1878,6 @@ const styles = StyleSheet.create({
   vehicleImage: {
     width: "100%",
     height: "100%",
-    transform: [{ scale: 1.06 }],
   },
 
   vehicleImageFallback: {
@@ -1915,8 +1909,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
     maxWidth: "72%",
     color: "#f8fafc",
-    fontSize: 12.5,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: "900",
     letterSpacing: 0,
   },
@@ -1973,7 +1967,8 @@ const styles = StyleSheet.create({
   compactInfoRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 1,
+    flexWrap: "wrap",
+    gap: 4,
     marginTop: 7,
   },
 
@@ -2036,7 +2031,7 @@ const styles = StyleSheet.create({
 
   dateValue: {
     color: "#edf2f8",
-    fontSize: 9.5,
+    fontSize: 10.5,
     lineHeight: 14,
     fontWeight: "800",
   },

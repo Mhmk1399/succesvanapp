@@ -6,30 +6,39 @@ import { ToastProvider } from "@/components/global/AppToast";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
 import { useFirstLaunch } from "@/utils/useFirstLaunch";
+import * as SplashScreen from "expo-splash-screen";
 import { View } from "react-native";
+
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function AppContent() {
   const { isFirstLaunch, isLoading, completeFirstLaunch } = useFirstLaunch();
 
   if (isLoading) {
-    return <View style={{ flex: 1, backgroundColor: "#080a10" }} />;
-  }
-
-  if (isFirstLaunch) {
-    return <FirstLaunchOnboarding onFinish={completeFirstLaunch} />;
+    return null;
   }
 
   return (
-    <>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="vans/index" />
-        <Stack.Screen name="dashboard/index" />
-      </Stack>
-      {/* <ScreenEdgeBlur /> */}
-      <DynamicIsland />
-      <FloatingContactButton />
-    </>
+    <View
+      style={{ flex: 1, backgroundColor: "#081523" }}
+      onLayout={() => {
+        void SplashScreen.hideAsync().catch(() => undefined);
+      }}
+    >
+      {isFirstLaunch ? (
+        <FirstLaunchOnboarding onFinish={completeFirstLaunch} />
+      ) : (
+        <>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="vans/index" />
+            <Stack.Screen name="dashboard/index" />
+          </Stack>
+          <DynamicIsland />
+          <FloatingContactButton />
+        </>
+      )}
+    </View>
   );
 }
 

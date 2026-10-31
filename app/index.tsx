@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   Animated,
@@ -20,7 +20,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, {
   Defs,
-  LinearGradient as SvgLinearGradient,
   RadialGradient as SvgRadialGradient,
   Rect,
   Stop,
@@ -29,7 +28,6 @@ import ReservationForm from "@/components/global/ReservationForm";
 import { BRAND_LOGO_URI } from "@/constants/branding";
 
 const ACCENT = "#fe9a00";
-const ACCENT_LIGHT = "#ffd38a";
 const ACCENT_SOFT = "#ffb83d";
 const DARK = "#07111f";
 
@@ -74,10 +72,6 @@ const VAN_IMAGES: VanSlide[] = [
     kind: "vehicle",
   },
 ];
-
-const AnimatedSvgRect = Animated.createAnimatedComponent(
-  Rect,
-) as React.ComponentType<any>;
 
 type SoftGlowProps = {
   color: string;
@@ -154,6 +148,11 @@ export default function HomeScreen() {
       }),
     ]);
 
+    entrance.start();
+    return () => entrance.stop();
+  }, [fadeIn, slideUp]);
+
+  useFocusEffect(useCallback(() => {
     const ambientLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(ambient, {
@@ -161,24 +160,21 @@ export default function HomeScreen() {
           duration: 5200,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
+          isInteraction: false,
         }),
         Animated.timing(ambient, {
           toValue: 0,
           duration: 5200,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
+          isInteraction: false,
         }),
       ]),
     );
 
-    entrance.start();
     ambientLoop.start();
-
-    return () => {
-      entrance.stop();
-      ambientLoop.stop();
-    };
-  }, [ambient, fadeIn, slideUp]);
+    return () => ambientLoop.stop();
+  }, [ambient]));
 
   const leftGlowX = ambient.interpolate({
     inputRange: [0, 1],
@@ -304,6 +300,7 @@ function HeroSlider({ compact, tiny, width }: HeroSliderProps) {
   const autoplayTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isUserInteracting = useRef(false);
+  const isFocused = useRef(false);
   const scrollX = useRef(new Animated.Value(0)).current;
 
   const clearAutoplay = useCallback(() => {
@@ -315,6 +312,7 @@ function HeroSlider({ compact, tiny, width }: HeroSliderProps) {
 
   const startAutoplay = useCallback(() => {
     clearAutoplay();
+    if (!isFocused.current) return;
 
     autoplayTimer.current = setInterval(() => {
       if (isUserInteracting.current) return;
@@ -341,14 +339,17 @@ function HeroSlider({ compact, tiny, width }: HeroSliderProps) {
     [startAutoplay],
   );
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    isFocused.current = true;
     startAutoplay();
 
     return () => {
+      isFocused.current = false;
       clearAutoplay();
       if (resumeTimer.current) clearTimeout(resumeTimer.current);
+      isUserInteracting.current = false;
     };
-  }, [clearAutoplay, startAutoplay]);
+  }, [clearAutoplay, startAutoplay]));
 
   useEffect(() => {
     flatListRef.current?.scrollToOffset({
@@ -512,37 +513,7 @@ function HeroCard({
   scrollX,
 }: HeroCardProps) {
   const cardHeight = tiny ? 218 : compact ? 246 : 274;
-  const shineAnim = useRef(new Animated.Value(-1)).current;
   const livePulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (!active) {
-      shineAnim.stopAnimation();
-      shineAnim.setValue(-1);
-      return;
-    }
-
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.delay(650),
-        Animated.timing(shineAnim, {
-          toValue: 1,
-          duration: 1250,
-          easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.delay(1800),
-        Animated.timing(shineAnim, {
-          toValue: -1,
-          duration: 1,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    loop.start();
-    return () => loop.stop();
-  }, [active, shineAnim]);
 
   useEffect(() => {
     if (!active) {
@@ -606,10 +577,6 @@ function HeroCard({
     extrapolate: "clamp",
   });
 
-  const shineTranslate = shineAnim.interpolate({
-    inputRange: [-1, 1],
-    outputRange: [-190, width + 190],
-  });
   const liveScale = livePulse.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 1.45],
@@ -668,30 +635,6 @@ function HeroCard({
           radius="72%"
           style={styles.heroLight}
         />
-
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.heroShine,
-            {
-              transform: [{ translateX: shineTranslate }, { rotate: "18deg" }],
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={[
-              "rgba(255,255,255,0)",
-              "rgba(255,255,255,0.02)",
-              "rgba(255,218,150,0.13)",
-              "rgba(255,255,255,0.02)",
-              "rgba(255,255,255,0)",
-            ]}
-            locations={[0, 0.25, 0.5, 0.75, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
 
         {data.kind === "brand" ? (
           <Animated.View
@@ -793,203 +736,19 @@ type PrecisionGlowBorderProps = {
 
 function PrecisionGlowBorder({
   children,
-  radius = 20,
+  radius = 24,
 }: PrecisionGlowBorderProps) {
-  const travel = useRef(new Animated.Value(0)).current;
-  const pulse = useRef(new Animated.Value(0)).current;
-  const [size, setSize] = useState({ width: 0, height: 0 });
-
-  useEffect(() => {
-    const travelLoop = Animated.loop(
-      Animated.timing(travel, {
-        toValue: 1,
-        duration: 2600,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }),
-    );
-
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 1100,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 1100,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
-      ]),
-    );
-
-    travel.setValue(0);
-    travelLoop.start();
-    pulseLoop.start();
-
-    return () => {
-      travelLoop.stop();
-      pulseLoop.stop();
-    };
-  }, [pulse, travel]);
-
-  // OUTSET only enlarges the SVG canvas. The actual path remains locked to
-  // the exact outside edge of the orange CTA, with no visual gap.
-  const OUTSET = 6;
-  const TRACK_INSET = 1.35;
-  const TRACK_WIDTH = 2.7;
-
-  const rectWidth = Math.max(0, size.width - TRACK_INSET * 2);
-  const rectHeight = Math.max(0, size.height - TRACK_INSET * 2);
-  const rectRadius = Math.max(
-    0,
-    Math.min(radius - TRACK_INSET, rectWidth / 2, rectHeight / 2),
-  );
-
-  const perimeter = Math.max(
-    1,
-    2 * (rectWidth + rectHeight - 4 * rectRadius) + 2 * Math.PI * rectRadius,
-  );
-
-  const mainSparkLength = Math.min(124, Math.max(70, perimeter * 0.17));
-  const coreSparkLength = Math.min(28, Math.max(16, perimeter * 0.04));
-
-  const mainDashOffset = travel.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -perimeter],
-  });
-  const coreDashOffset = travel.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-perimeter * 0.08, -perimeter * 1.08],
-  });
-  const auraOpacity = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.12, 0.24],
-  });
-  const sparkOpacity = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.82, 1],
-  });
-
-  const borderReady = size.width > 0 && size.height > 0;
-  const trackX = OUTSET + TRACK_INSET;
-  const trackY = OUTSET + TRACK_INSET;
-
   return (
-    <View
+    <LinearGradient
+      colors={["#fff4cc", "#ffc45e", "#f28a00", "#ffcf70"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={[styles.glowBorderWrap, { borderRadius: radius }]}
-      onLayout={(event) => {
-        const { width, height } = event.nativeEvent.layout;
-        setSize((current) => {
-          if (
-            Math.abs(current.width - width) < 0.5 &&
-            Math.abs(current.height - height) < 0.5
-          ) {
-            return current;
-          }
-          return { width, height };
-        });
-      }}
     >
-      <View style={[styles.glowInner, { borderRadius: radius }]}>
+      <View style={[styles.glowInner, { borderRadius: radius - 2 }]}>
         {children}
       </View>
-
-      {borderReady && (
-        <Svg
-          pointerEvents="none"
-          width={size.width + OUTSET * 2}
-          height={size.height + OUTSET * 2}
-          style={[styles.glowSvg, { left: -OUTSET, top: -OUTSET }]}
-        >
-          <Defs>
-            <SvgLinearGradient id="precisionGlow" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor="#ffffff" stopOpacity="1" />
-              <Stop offset="0.18" stopColor="#fff2cf" stopOpacity="1" />
-              <Stop offset="0.48" stopColor={ACCENT_LIGHT} stopOpacity="1" />
-              <Stop offset="0.76" stopColor={ACCENT} stopOpacity="1" />
-              <Stop offset="1" stopColor="#ff6a00" stopOpacity="0.96" />
-            </SvgLinearGradient>
-          </Defs>
-
-          {/* quiet baseline, exactly touching the CTA border */}
-          <Rect
-            x={trackX}
-            y={trackY}
-            width={rectWidth}
-            height={rectHeight}
-            rx={rectRadius}
-            ry={rectRadius}
-            fill="none"
-            stroke="rgba(255,236,196,0.26)"
-            strokeWidth={1}
-          />
-
-          {/* tightly attached orange aura */}
-          <AnimatedSvgRect
-            x={trackX}
-            y={trackY}
-            width={rectWidth}
-            height={rectHeight}
-            rx={rectRadius}
-            ry={rectRadius}
-            fill="none"
-            stroke={ACCENT}
-            strokeOpacity={auraOpacity}
-            strokeWidth={7}
-            strokeLinecap="round"
-            strokeDasharray={[
-              mainSparkLength,
-              Math.max(1, perimeter - mainSparkLength),
-            ]}
-            strokeDashoffset={mainDashOffset}
-          />
-
-          {/* main moving light */}
-          <AnimatedSvgRect
-            x={trackX}
-            y={trackY}
-            width={rectWidth}
-            height={rectHeight}
-            rx={rectRadius}
-            ry={rectRadius}
-            fill="none"
-            stroke="url(#precisionGlow)"
-            strokeOpacity={sparkOpacity}
-            strokeWidth={TRACK_WIDTH}
-            strokeLinecap="round"
-            strokeDasharray={[
-              mainSparkLength,
-              Math.max(1, perimeter - mainSparkLength),
-            ]}
-            strokeDashoffset={mainDashOffset}
-          />
-
-          {/* compact white core creates the electric sparkle */}
-          <AnimatedSvgRect
-            x={trackX}
-            y={trackY}
-            width={rectWidth}
-            height={rectHeight}
-            rx={rectRadius}
-            ry={rectRadius}
-            fill="none"
-            stroke="#ffffff"
-            strokeOpacity={0.98}
-            strokeWidth={1.35}
-            strokeLinecap="round"
-            strokeDasharray={[
-              coreSparkLength,
-              Math.max(1, perimeter - coreSparkLength),
-            ]}
-            strokeDashoffset={coreDashOffset}
-          />
-        </Svg>
-      )}
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -1480,13 +1239,6 @@ const styles = StyleSheet.create({
     right: -72,
     bottom: 10,
   },
-  heroShine: {
-    position: "absolute",
-    zIndex: 3,
-    top: -90,
-    bottom: -90,
-    width: 84,
-  },
   brandSlideContent: {
     flex: 1,
     alignItems: "center",
@@ -1770,12 +1522,13 @@ const styles = StyleSheet.create({
   },
   glowBorderWrap: {
     position: "relative",
+    padding: 1.5,
     overflow: "visible",
     backgroundColor: "transparent",
     ...Platform.select({
       ios: {
         shadowColor: ACCENT,
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.35,
         shadowRadius: 12,
         shadowOffset: { width: 0, height: 4 },
       },
@@ -1786,9 +1539,5 @@ const styles = StyleSheet.create({
     position: "relative",
     zIndex: 2,
     overflow: "hidden",
-  },
-  glowSvg: {
-    position: "absolute",
-    zIndex: 4,
   },
 });

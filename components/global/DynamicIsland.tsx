@@ -6,10 +6,9 @@ import {
   Pressable,
   Platform,
   Animated,
-  Easing,
 } from "react-native";
 import { useRouter, usePathname, Href } from "expo-router";
-import * as Haptics from "expo-haptics";
+import Reanimated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Svg, {
@@ -20,7 +19,6 @@ import Svg, {
   LinearGradient as SvgLinearGradient,
   Rect,
   Circle,
-  G,
 } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -109,6 +107,8 @@ const NAV_ITEMS: NavItem[] = [
 const ISLAND_W =
   NAV_ITEMS.length * ITEM_WIDTH + (NAV_ITEMS.length - 1) * GAP + PAD_H * 2;
 const ISLAND_H = ITEM_HEIGHT + PAD_V * 2;
+const AnimatedPath = Reanimated.createAnimatedComponent(Path);
+const AnimatedRadialGradient = Reanimated.createAnimatedComponent(SvgRadialGradient);
 
 /* ═══════════════════
    شکل نوار با برآمدگی دایره‌ای واقعی
@@ -122,6 +122,7 @@ const buildBarPath = (
   bumpR: number, // شعاع بیرونی برآمدگی
   topY: number,
 ) => {
+  "worklet";
   // مرکز عمودی برآمدگی با مرکز دایره نارنجی یکی است.
   const bumpCenterY = topY - ACTIVE_LIFT + ACTIVE_RADIUS;
 
@@ -175,27 +176,9 @@ export default function DynamicIsland() {
   const entranceY = useRef(new Animated.Value(60)).current;
   const entranceOpacity = useRef(new Animated.Value(0)).current;
   const indicatorScale = useRef(new Animated.Value(0)).current;
-  const glowPulse = useRef(new Animated.Value(0.85)).current;
 
-  // مرکز آیکون فعال (یک Animated.Value مرکزی برای سینک همه چیز)
-  const activeCenterX = useRef(
-    new Animated.Value(
-      activeIndex >= 0
-        ? PAD_H + activeIndex * (ITEM_WIDTH + GAP) + ITEM_WIDTH / 2
-        : ISLAND_W / 2,
-    ),
-  ).current;
-  const activeCenterXVisual = useRef(
-    new Animated.Value(
-      activeIndex >= 0
-        ? PAD_H + activeIndex * (ITEM_WIDTH + GAP) + ITEM_WIDTH / 2
-        : ISLAND_W / 2,
-    ),
-  ).current;
-
-  // برای مسیر SVG نیاز به مقدار عددی مرکز برآمدگی داریم (چون AnimatedPath.d از rn-svg رو باگ داره روی بعضی نسخه‌ها)
-  // پس با listener سینک می‌کنیم
-  const [bumpCx, setBumpCx] = useState<number>(
+  // One UI-thread value keeps the bar, glow and active icon in sync.
+  const bumpCx = useSharedValue(
     activeIndex >= 0
       ? PAD_H + activeIndex * (ITEM_WIDTH + GAP) + ITEM_WIDTH / 2
       : ISLAND_W / 2,
@@ -212,22 +195,8 @@ export default function DynamicIsland() {
   const getItemCenter = (i: number) =>
     PAD_H + i * (ITEM_WIDTH + GAP) + ITEM_WIDTH / 2;
 
-  /* مرکز برآمدگی و دایره فعال با یک Animated.Value سینک هستند */
-  useEffect(() => {
-    const id = activeCenterX.addListener(({ value }) => {
-      setBumpCx(value);
-    });
-    return () => activeCenterX.removeListener(id);
-  }, []);
-
   /* entrance */
   useEffect(() => {
-    if (activeIndex >= 0) {
-      activeCenterX.setValue(getItemCenter(activeIndex));
-      activeCenterXVisual.setValue(getItemCenter(activeIndex));
-      setBumpCx(getItemCenter(activeIndex));
-    }
-
     Animated.parallel([
       Animated.spring(entranceY, {
         toValue: 0,
@@ -249,28 +218,7 @@ export default function DynamicIsland() {
       }).start();
     });
 
-    const glowLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowPulse, {
-          toValue: 1,
-          duration: 1800,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowPulse, {
-          toValue: 0.75,
-          duration: 1800,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    glowLoop.start();
-
-    return () => {
-      glowLoop.stop();
-    };
-  }, []);
+  }, [entranceOpacity, entranceY, indicatorScale]);
 
   /* tab change */
   useEffect(() => {
@@ -278,35 +226,19 @@ export default function DynamicIsland() {
     prevIndex.current = activeIndex;
     if (prev === activeIndex || activeIndex < 0) return;
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     const nextCenter = getItemCenter(activeIndex);
-
-    // activeCenterX feeds SVG/listeners, activeCenterXVisual feeds native transforms.
-    Animated.parallel([
-      Animated.spring(activeCenterX, {
-        toValue: nextCenter,
-        tension: 130,
-        friction: 14,
-        useNativeDriver: false,
-      }),
-      Animated.spring(activeCenterXVisual, {
-        toValue: nextCenter,
-        tension: 130,
-        friction: 14,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [activeIndex]);
+    bumpCx.value = withTiming(nextCenter, {
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [activeIndex, bumpCx]);
 
   /* press */
   const onPressIn = useCallback(
     (i: number) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Animated.spring(itemAnims[i].scale, {
+      Animated.timing(itemAnims[i].scale, {
         toValue: 0.9,
-        tension: 400,
-        friction: 10,
+        duration: 90,
         useNativeDriver: true,
       }).start();
     },
@@ -315,10 +247,9 @@ export default function DynamicIsland() {
 
   const onPressOut = useCallback(
     (i: number) => {
-      Animated.spring(itemAnims[i].scale, {
+      Animated.timing(itemAnims[i].scale, {
         toValue: 1,
-        tension: 200,
-        friction: 8,
+        duration: 120,
         useNativeDriver: true,
       }).start();
     },
@@ -327,7 +258,6 @@ export default function DynamicIsland() {
 
   const onPress = useCallback(
     async (route: NavItem["route"]) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       if (route === "/dashboard") {
         const token = await AsyncStorage.getItem("authToken");
         if (!token) {
@@ -357,27 +287,20 @@ export default function DynamicIsland() {
   const BAR_TOP_Y = SVG_EXTRA_TOP; // Y نوار در SVG
   const ACTIVE_CENTER_Y = BAR_TOP_Y - ACTIVE_LIFT + ACTIVE_RADIUS;
 
-  const barPath = buildBarPath(
-    SVG_W,
-    ISLAND_H,
-    RADIUS,
-    bumpCx,
-    BUMP_R,
-    BAR_TOP_Y,
-  );
+  const barPathProps = useAnimatedProps(() => ({
+    d: buildBarPath(ISLAND_W, ISLAND_H, RADIUS, bumpCx.value, BUMP_R, SVG_EXTRA_TOP),
+  }));
+  const bumpGlowProps = useAnimatedProps(() => ({
+    cx: `${(bumpCx.value / ISLAND_W) * 100}%`,
+  }));
 
-  // موقعیت دایره فعال (translateX): مرکز - شعاع
-  const circleTranslateX = Animated.subtract(
-    activeCenterXVisual,
-    new Animated.Value(ACTIVE_SIZE / 2),
-  );
-
-  // موقعیت گلو (translateX): مرکز - نصف عرض glow
   const GLOW_SIZE = 180;
-  const glowTranslateX = Animated.subtract(
-    activeCenterXVisual,
-    new Animated.Value(GLOW_SIZE / 2),
-  );
+  const circlePosition = useAnimatedStyle(() => ({
+    transform: [{ translateX: bumpCx.value - ACTIVE_SIZE / 2 }],
+  }));
+  const glowPosition = useAnimatedStyle(() => ({
+    transform: [{ translateX: bumpCx.value - GLOW_SIZE / 2 }],
+  }));
 
   return (
     <Animated.View
@@ -396,7 +319,7 @@ export default function DynamicIsland() {
       <View pointerEvents="box-none" style={[st.wrapper, { width: ISLAND_W, height: SVG_H + 8 }]}>
         {/* ═══ گلو محیطی پشت دایره (پشت‌زمینه) ═══ */}
         {activeIndex >= 0 && (
-          <Animated.View
+          <Reanimated.View
             pointerEvents="none"
             style={[
               st.bgGlow,
@@ -404,9 +327,9 @@ export default function DynamicIsland() {
                 width: GLOW_SIZE,
                 height: GLOW_SIZE,
                 top: BAR_TOP_Y - ACTIVE_LIFT - GLOW_SIZE / 2 + ACTIVE_SIZE / 2,
-                opacity: glowPulse,
-                transform: [{ translateX: glowTranslateX }],
+                opacity: 0.85,
               },
+              glowPosition,
             ]}
           >
             <Svg width={GLOW_SIZE} height={GLOW_SIZE}>
@@ -426,7 +349,7 @@ export default function DynamicIsland() {
                 fill="url(#bgGlow)"
               />
             </Svg>
-          </Animated.View>
+          </Reanimated.View>
         )}
 
         {/* ═══ نوار اصلی با برآمدگی متصل به آیکون فعال ═══ */}
@@ -443,28 +366,28 @@ export default function DynamicIsland() {
                 <Stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
               </SvgLinearGradient>
               {/* گرادیانت داخلی برای درخشش اطراف برآمدگی */}
-              <SvgRadialGradient
+              <AnimatedRadialGradient
                 id="bumpGlow"
-                cx={`${(bumpCx / SVG_W) * 100}%`}
+                animatedProps={bumpGlowProps}
                 cy={`${(ACTIVE_CENTER_Y / SVG_H) * 100}%`}
                 r="18%"
               >
                 <Stop offset="0%" stopColor={ACCENT} stopOpacity="0.35" />
                 <Stop offset="60%" stopColor={ACCENT} stopOpacity="0.06" />
                 <Stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
-              </SvgRadialGradient>
+              </AnimatedRadialGradient>
             </Defs>
 
             {/* بدنه اصلی نوار */}
-            <Path
-              d={barPath}
+            <AnimatedPath
+              animatedProps={barPathProps}
               fill="#151515"
               stroke="#373333"
               strokeWidth={0.8}
             />
 
             {/* لایه درخشش نارنجی داخل نوار (پشت آیکون‌ها) */}
-            <Path d={barPath} fill="url(#bumpGlow)" />
+            <AnimatedPath animatedProps={barPathProps} fill="url(#bumpGlow)" />
           </Svg>
 
           {/* محتوای نوار (آیکون‌ها) */}
@@ -518,19 +441,17 @@ export default function DynamicIsland() {
 
         {/* ═══ دایره نارنجی فعال، شناور بالای نوار ═══ */}
         {activeIndex >= 0 && (
-          <Animated.View
+          <Reanimated.View
             pointerEvents="none"
             style={[
               st.floatingActive,
               {
                 top: BAR_TOP_Y - ACTIVE_LIFT,
-                transform: [
-                  { translateX: circleTranslateX },
-                  { scale: indicatorScale },
-                ],
               },
+              circlePosition,
             ]}
           >
+            <Animated.View style={{ width: ACTIVE_SIZE, height: ACTIVE_SIZE, transform: [{ scale: indicatorScale }] }}>
             {/* هاله رینگ نازک دور دایره */}
             <View style={st.ringHalo} pointerEvents="none">
               <Svg width={ACTIVE_SIZE + 30} height={ACTIVE_SIZE + 30}>
@@ -565,9 +486,8 @@ export default function DynamicIsland() {
               {/* ته‌رنگ تیره پایین */}
               <View style={st.glossBottom} pointerEvents="none" />
             </LinearGradient>
-
-
-          </Animated.View>
+            </Animated.View>
+          </Reanimated.View>
         )}
       </View>
     </Animated.View>

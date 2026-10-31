@@ -9,13 +9,13 @@ import {
   Easing,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BRAND_LOGO_URI } from "@/constants/branding";
 
 const ACCENT = "#ff9f0a";
 const NAVY = "#081523";
@@ -81,13 +81,10 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
 
   const activeSlide = SLIDES[index];
   const isLast = index === SLIDES.length - 1;
-  const compactHeight = height < 720;
-  const panelWidth = Math.min(width - 26, 390);
-  const panelHeight = Math.min(
-    Math.max(height - Math.max(insets.top + insets.bottom, 20) - 24, 620),
-    780,
-  );
-  const vanHeight = compactHeight ? 235 : 300;
+  const compactHeight = height - insets.top - insets.bottom < 700;
+  const shortHeight = height - insets.top - insets.bottom < 600;
+  const narrowWidth = width < 360;
+  const vanHeight = shortHeight ? 118 : compactHeight ? 150 : 200;
   useEffect(() => {
     void Image.prefetch(
       SLIDES.map((slide) => slide.image),
@@ -172,22 +169,8 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="dark" />
-      <LinearGradient
-        colors={["#ffe6b4", "#ffd085", "#fff3d3"]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-
-      <View
-        style={[
-          styles.panel,
-          {
-            minHeight: panelHeight,
-          },
-        ]}
-      >
+      <StatusBar style="light" />
+      <View style={styles.panel}>
         <LinearGradient
           colors={[NAVY, "#07101d", "#0b1724", "#7d500f", "#d88313"]}
           locations={[0, 0.38, 0.62, 0.86, 1]}
@@ -197,33 +180,22 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
         <View style={styles.orbitLarge} pointerEvents="none" />
         <View style={styles.orbitSmall} pointerEvents="none" />
         <View style={styles.swoosh} pointerEvents="none" />
-        <Ionicons
-          name="star"
-          size={10}
-          color="rgba(255,159,10,0.48)"
-          style={styles.starTop}
-        />
-        <Ionicons
-          name="star"
-          size={13}
-          color="rgba(255,159,10,0.45)"
-          style={styles.starMid}
-        />
-        <View style={styles.sparkDot} />
-
-        <View
-          style={[
+        <ScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
             styles.panelContent,
             {
-              paddingTop: compactHeight ? 24 : 38,
-              paddingBottom: compactHeight ? 18 : 24,
+              paddingHorizontal: narrowWidth ? 20 : 28,
+              paddingTop: insets.top + (shortHeight ? 12 : compactHeight ? 18 : 28),
+              paddingBottom: insets.bottom + (shortHeight ? 10 : compactHeight ? 16 : 22),
             },
           ]}
         >
           <View style={styles.brand}>
             <Image
-              source={{ uri: BRAND_LOGO_URI }}
-              style={styles.logo}
+              source={require("../../assets/images/site-logo-splash.png")}
+              style={[styles.logo, shortHeight && styles.logoShort]}
               contentFit="contain"
             />
           </View>
@@ -231,6 +203,7 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
           <Animated.View
             style={[
               styles.copyBlock,
+              compactHeight && styles.copyBlockCompact,
               {
                 opacity: fadeAnim,
                 transform: [{ translateX: slideAnim }],
@@ -238,7 +211,7 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
             ]}
           >
             <Text style={styles.eyebrow}>{activeSlide.eyebrow}</Text>
-            <Text style={[styles.title, compactHeight && styles.titleCompact]}>
+            <Text style={[styles.title, (compactHeight || narrowWidth) && styles.titleCompact]}>
               {activeSlide.titleTop}
               {"\n"}
               <Text style={styles.titleAccent}>{activeSlide.titleAccent}</Text>
@@ -256,7 +229,7 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
             </Text>
           </Animated.View>
 
-          <View style={styles.visualArea}>
+          <View style={[styles.visualArea, { minHeight: vanHeight }]}>
             <Animated.View
               style={[
                 styles.vanWrap,
@@ -278,7 +251,7 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
           </View>
 
           <View style={styles.footer}>
-            <View style={styles.dots}>
+            <View style={[styles.dots, shortHeight && styles.dotsShort]}>
               {SLIDES.map((slide, slideIndex) => (
                 <View
                   key={slide.titleBottom}
@@ -288,6 +261,8 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
             </View>
 
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={isLast ? "Start booking" : "Next slide"}
               onPress={handleNext}
               onPressIn={() => {
                 Animated.spring(buttonScale, {
@@ -315,7 +290,7 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
                   style={styles.buttonGradient}
                 >
                   <Text style={styles.buttonText}>
-                    {isLast ? "Start Booking" : "Get Started"}
+                    {isLast ? "Start Booking" : "Next"}
                   </Text>
                   <View style={styles.buttonIcon}>
                     <Ionicons
@@ -328,7 +303,7 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
               </Animated.View>
             </Pressable>
 
-            <View style={styles.trustRow}>
+            <View style={[styles.trustRow, shortHeight && styles.trustRowShort]}>
               <Ionicons
                 name="shield-checkmark-outline"
                 size={17}
@@ -339,7 +314,7 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
               </Text>
             </View>
           </View>
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -348,31 +323,18 @@ export default function FirstLaunchOnboarding({ onFinish }: Props) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#ffd790",
+    backgroundColor: NAVY,
   },
   panel: {
     flex: 1,
-    borderRadius: 34,
+    minHeight: 0,
     overflow: "hidden",
     backgroundColor: NAVY,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#271604",
-        shadowOpacity: 0.28,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 14 },
-      },
-      android: {
-        elevation: 14,
-      },
-    }),
   },
   panelContent: {
-    flex: 1,
-    paddingHorizontal: 34,
+    flexGrow: 1,
   },
+  scroll: { flex: 1 },
   orbitLarge: {
     position: "absolute",
     width: 230,
@@ -402,32 +364,14 @@ const styles = StyleSheet.create({
     bottom: -112,
     transform: [{ rotate: "-17deg" }],
   },
-  starTop: {
-    position: "absolute",
-    top: 66,
-    left: 36,
-  },
-  starMid: {
-    position: "absolute",
-    top: 232,
-    right: 76,
-  },
-  sparkDot: {
-    position: "absolute",
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#ff2f3d",
-    top: 306,
-    right: 118,
-  },
   brand: {
     alignItems: "center",
   },
   logo: {
-    width: 150,
-    height: 64,
+    width: 128,
+    height: 50,
   },
+  logoShort: { width: 120, height: 42 },
   brandText: {
     color: "#f8fafc",
     fontSize: 12,
@@ -437,8 +381,9 @@ const styles = StyleSheet.create({
   },
   copyBlock: {
     alignItems: "flex-start",
-    marginTop: 32,
+    marginTop: 22,
   },
+  copyBlockCompact: { marginTop: 12 },
   eyebrow: {
     color: "rgba(255,255,255,0.42)",
     fontSize: 12,
@@ -447,14 +392,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#ffffff",
-    fontSize: 42,
-    lineHeight: 50,
+    fontSize: 38,
+    lineHeight: 45,
     fontWeight: "900",
     letterSpacing: 0,
   },
   titleCompact: {
-    fontSize: 37,
-    lineHeight: 43,
+    fontSize: 32,
+    lineHeight: 38,
   },
   titleAccent: {
     color: ACCENT,
@@ -464,11 +409,11 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: ACCENT,
-    marginTop: 18,
-    marginBottom: 18,
+    marginTop: 12,
+    marginBottom: 12,
   },
   description: {
-    width: "82%",
+    maxWidth: 310,
     color: "rgba(255,255,255,0.72)",
     fontSize: 15,
     lineHeight: 24,
@@ -479,14 +424,12 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   visualArea: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "flex-end",
-    minHeight: 220,
-    marginHorizontal: -34,
   },
   vanWrap: {
     justifyContent: "flex-end",
-    marginBottom: -10,
+    marginBottom: 0,
   },
   vanShadow: {
     position: "absolute",
@@ -499,7 +442,7 @@ const styles = StyleSheet.create({
     transform: [{ scaleX: 1.05 }],
   },
   vanImage: {
-    width: "108%",
+    width: "100%",
     alignSelf: "center",
   },
   footer: {
@@ -511,8 +454,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 9,
-    marginBottom: 24,
+    marginBottom: 12,
   },
+  dotsShort: { marginBottom: 8 },
   dot: {
     width: 8,
     height: 8,
@@ -540,7 +484,7 @@ const styles = StyleSheet.create({
     }),
   },
   buttonGradient: {
-    minHeight: 61,
+    minHeight: 54,
     borderRadius: 30,
     paddingLeft: 22,
     paddingRight: 7,
@@ -556,9 +500,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   buttonIcon: {
-    width: 51,
-    height: 51,
-    borderRadius: 26,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#071523",
@@ -569,8 +513,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
-    marginTop: 12,
+    marginTop: 6,
   },
+  trustRowShort: { minHeight: 28, marginTop: 3 },
   trustText: {
     color: "rgba(255,255,255,0.62)",
     fontSize: 13,

@@ -272,12 +272,18 @@ export const customerJourneyService = {
   ) {
     const url = this.getContractDocumentUrl(contract._id, kind);
     const headers = await authHeaders();
+    if (!headers.Authorization) throw new Error("Please sign in again to download your agreement.");
     const fileName = contractDocumentFileName(contract, kind);
 
     if (Platform.OS === "web") {
       const response = await safeFetch(url, { headers });
       if (!response.ok) throw new Error(await readDocumentError(response));
+      const contentType = response.headers.get("content-type") || "";
+      if (!/application\/(pdf|octet-stream)/i.test(contentType)) {
+        throw new Error("The server did not return a PDF agreement. Please try again.");
+      }
       const blob = await response.blob();
+      if (!blob.size) throw new Error("The agreement file is empty. Please try again.");
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = objectUrl;
@@ -285,7 +291,7 @@ export const customerJourneyService = {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(objectUrl);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
       return fileName;
     }
 
@@ -293,11 +299,28 @@ export const customerJourneyService = {
       FileSystem.Paths.document,
       fileName,
     );
-    const downloadedFile = await FileSystem.File.downloadFileAsync(
-      normalizeUrl(url),
-      destination,
-      { headers, idempotent: true },
-    );
+    let downloadedFile: Awaited<ReturnType<typeof FileSystem.File.downloadFileAsync>>;
+    try {
+      downloadedFile = await FileSystem.File.downloadFileAsync(
+        normalizeUrl(url), destination, { headers, idempotent: true },
+      );
+    } catch {
+      let response: Response;
+      try {
+        response = await safeFetch(url, { headers });
+      } catch {
+        throw new Error("Could not connect to download the agreement. Check your connection and try again.");
+      }
+      if (!response.ok) throw new Error(await readDocumentError(response));
+      const contentType = response.headers.get("content-type") || "";
+      if (!/application\/(pdf|octet-stream)/i.test(contentType)) {
+        throw new Error("The server did not return a PDF agreement. Please try again.");
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (!bytes.length) throw new Error("The agreement file is empty. Please try again.");
+      destination.write(bytes);
+      downloadedFile = destination;
+    }
 
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(downloadedFile.uri, {
@@ -306,7 +329,7 @@ export const customerJourneyService = {
         UTI: "com.adobe.pdf",
       });
     } else {
-      await Linking.openURL(downloadedFile.uri);
+      await Linking.openURL(Platform.OS === "android" ? downloadedFile.contentUri : downloadedFile.uri);
     }
 
     return downloadedFile.uri;

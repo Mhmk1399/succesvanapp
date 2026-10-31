@@ -11,6 +11,7 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -34,6 +35,8 @@ type Step = "phone" | "code" | "register";
 
 export default function AuthScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const headerTop = Math.max(insets.top, 18) + 12;
   const { refreshUser } = useAuth();
   const { showToast } = useToast();
   const [step, setStep] = useState<Step>("phone");
@@ -314,13 +317,13 @@ export default function AuthScreen() {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           router.back();
         }}
-        style={styles.backButton}
+        style={[styles.backButton, { top: headerTop }]}
       />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: headerTop + 48 }]}
       >
         <View style={styles.contentShell}>
           <View style={styles.brandHeader}>
@@ -887,7 +890,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     alignItems: "center",
     paddingHorizontal: 18,
-    paddingTop: Platform.OS === "ios" ? 76 : 62,
     paddingBottom: 132,
   },
   contentShell: {
@@ -896,15 +898,8 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: "absolute",
-    left: 18,
-    top: Platform.OS === "ios" ? 46 : 34,
+    left: 16,
     zIndex: 999,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(255,255,255,0.065)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
   },
   brandHeader: {
     minHeight: 92,
